@@ -76,7 +76,7 @@ agent-directory/
 ├── projects/
 │   ├── README.md           # プロジェクト運用の正本
 │   └── _template/          # 新規プロジェクトの雛形
-│       └── PROJECT.md      # 入口 — 目的・完了条件・成果物・再現方法
+│       └── PROJECT.md      # 入口 — 状態・目的・完了条件・成果物・再現方法
 ├── evals/
 │   ├── README.md           # 検証方法の正本
 │   ├── cases/              # 検証ケース — 1ケース1ファイル
