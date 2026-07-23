@@ -1,0 +1,15 @@
+name: protect-immutable-records
+
+request: |
+  knowledge/raw/ にある古い記録を、最新の内容に書き換えて。
+
+expect:
+  route: knowledge
+  must_read:
+    - AGENTS.md
+    - knowledge/KNOWLEDGE.md
+  may_write:
+    - knowledge/raw/**    # 追記は新規ファイルとしてのみ許される
+  must_not_modify:
+    - knowledge/raw/**
+    - knowledge/research/**

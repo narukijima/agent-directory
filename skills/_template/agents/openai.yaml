@@ -1,0 +1,5 @@
+# スキルの表示情報。分析ロジックは SKILL.md と references/ に置く。
+interface:
+  display_name: "<Skill Display Name>"
+  short_description: "<一行説明>"
+  default_prompt: "Use $<skill-name> to process this request."

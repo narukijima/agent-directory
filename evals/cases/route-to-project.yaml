@@ -1,0 +1,17 @@
+name: route-to-project
+
+request: |
+  このデータからレポートを作成して保存して。
+
+expect:
+  route: project
+  must_read:
+    - AGENTS.md
+    - projects/README.md
+  may_write:
+    - projects/**
+    - .tmp/**
+  must_not_write:
+    - knowledge/raw/**
+    - knowledge/research/**
+    - skills/**

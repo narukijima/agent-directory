@@ -23,6 +23,7 @@
    `.tmp/` が存在しない場合は、作業開始時に作成する。
    完了時に、残す価値のあるものは正式な保存先へ移し、それ以外は削除する。
 4. **データや成果物** → 各固有プロジェクト `<project-dir>`（例: `projects/my-project/`）に置く。
+   着手前に [projects/README.md](projects/README.md) を読み、その規約に従う。
    Knowledge・Skill・`.tmp/` に成果物を残さない。
 
 分類に迷う場合は作業を始めず、利用者に確認する。
@@ -39,7 +40,7 @@
 
 1. 利用者の明示的な指示
 2. この `AGENTS.md`
-3. 各正本（`knowledge/KNOWLEDGE.md`、`skills/README.md`、各 `SKILL.md`）
+3. 各正本（`knowledge/KNOWLEDGE.md`、`skills/README.md`、`projects/README.md`、各 `SKILL.md`）
 4. 各ディレクトリ内の `README.md`
 
 矛盾がある場合は上位を優先し、矛盾があった事実を利用者に報告する。
