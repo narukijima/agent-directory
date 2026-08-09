@@ -1,0 +1,15 @@
+diff --git a/tools/validate-agent-directory.sh b/tools/validate-agent-directory.sh
+--- a/tools/validate-agent-directory.sh
++++ b/tools/validate-agent-directory.sh
+@@ -1737,8 +1737,7 @@
+-  push_invocations="$(grep -Ec 'git[^#]*[[:space:]]push[[:space:]]' "$backup_tool" || true)"
++  push_invocations="$(grep -Ec '^[[:space:]]*push[[:space:]]+--porcelain' "$backup_tool" || true)"
+   if (( push_invocations != 1 )); then
+-    fail "tools/backup-to-github.sh must contain exactly one git push invocation (found $push_invocations)"
++    fail "tools/backup-to-github.sh must contain exactly one shared-wrapper push invocation (found $push_invocations)"
+   fi
+-  if ! grep -Eq 'git[^#]*[[:space:]]push[[:space:]]+--porcelain[[:space:]]+"\$remote"[[:space:]]+"HEAD:refs/heads/\$branch"' \
+-    "$backup_tool"; then
++  if ! grep -Eq '^[[:space:]]*push[[:space:]]+--porcelain[[:space:]]+"\$remote"[[:space:]]+"HEAD:refs/heads/\$branch"' "$backup_tool"; then
+     fail 'tools/backup-to-github.sh must push only the explicit HEAD:refs/heads/$branch refspec'
+   fi
