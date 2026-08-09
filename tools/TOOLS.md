@@ -107,6 +107,7 @@ Tool呼び出しへまとめ、成功時出力は短く保つ。現在目標、�
 | `find-context.sh` | Route確定後の候補検索（metadata最大5件） | `tools/REFERENCE.md` |
 | `prepare-context.sh` | Context Packetとclass→profile写像 | `tools/REFERENCE.md` |
 | `finalize-task.sh` | work/state専用の決定的終端（検証・commit・backup） | `tools/REFERENCE.md` |
+| `run-evals.py` | 隔離adapter実行と実traceのPASS / FAIL / UNVERIFIED採点 | `evals/EVALS.md` |
 | `append-knowledge-log.sh` | LOG追記とローテーション | `tools/REFERENCE.md` |
 | `backup-to-github.sh` | root backup remoteへpushする唯一の標準経路 | `tools/REFERENCE.md` |
 | `report-upstream-issue.sh` | 上流Issue送信の唯一の経路（宛先許可リスト固定・添付なし） | `tools/UPSTREAM.md` |

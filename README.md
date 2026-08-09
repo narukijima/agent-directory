@@ -159,6 +159,7 @@ bash tools/validate-agent-directory.sh --changed          # 通常work: 変更�
 bash tools/validate-agent-directory.sh
 bash tools/validate-agent-directory.sh --strict --full
 bash tools/validate-agent-directory.sh --full --base main
+python3 tools/run-evals.py score --case <case> --trace <trace.jsonl>
 ```
 
 validatorは構造、`AGENTS.md`と`CLAUDE.md`の三層、frontmatter、Project契約、状態、Project docsの境界と
@@ -167,6 +168,8 @@ validatorは構造、`AGENTS.md`と`CLAUDE.md`の三層、frontmatter、Project�
 あるなら`--base <sha>`で開始点からworking treeまでを検査する。不変原資料・閉鎖済みlogの編集や削除、
 Knowledgeページの削除は通常workとして通らない。meta正本への変更は全体静的検査へ自動fallbackする。
 依存関係、CI、GitHub接続を必要としない。
+行動evalは[evals/EVALS.md](evals/EVALS.md)のtrace契約を`tools/run-evals.py`で採点できる。外部AIは
+必須ではなく、観測されていない期待は自己申告でPASSにせず`UNVERIFIED`に残す。
 
 commit・push境界は[tools/CONTROL.md](tools/CONTROL.md)のpolicyを`tools/check-boundary.sh`が判定し、
 導入済みのgit hooks（pre-commit / pre-push）が強制する。hookが実行するのはworking tree版ではなく

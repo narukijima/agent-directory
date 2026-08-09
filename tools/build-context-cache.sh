@@ -3,6 +3,7 @@ set -euo pipefail
 
 tool_root="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo_root="${AGENT_DIRECTORY_ROOT:-$(cd "$tool_root/.." && pwd)}"
+. "$tool_root/lib/project-registry.sh"
 cache_dir="${AGENT_CACHE_DIR:-$repo_root/.agent-cache}"
 registry_path='projects/REPOSITORIES.md'
 sqlite_knowledge_threshold="${AGENT_SQLITE_KNOWLEDGE_THRESHOLD:-1000}"
@@ -100,38 +101,18 @@ sql_quote() {
   sed "s/'/''/g"
 }
 
-# Emit each registry entry as one "name<TAB>revision" line. Code fences are not read.
-# The cache is a derived artifact, so a broken entry is warned about and dropped instead of stopping.
+# Project the shared registry parser to the cache's name/revision view. The cache is a
+# derived artifact, so an invalid revision is warned about and dropped instead of stopping.
 registry_records() {
-  LC_ALL=C awk '
-    function flush_entry() {
-      if (current == "") return
-      if (revision ~ /^[0-9a-f]{40}$/) print current "\t" revision
-      else print "W\t" current
-      current = ""
-    }
-    {
-      if (substr($0, 1, 3) == "```") { fence = 1 - fence; next }
-      if (fence) next
-      if (substr($0, 1, 3) == "## ") {
-        flush_entry()
-        heading = $0
-        revision = ""
-        if (heading ~ /^## `[A-Za-z0-9][A-Za-z0-9._-]*`[ \t]*$/) {
-          sub(/^## `/, "", heading)
-          sub(/`[ \t]*$/, "", heading)
-          current = heading
-        }
-        next
-      }
-      if (current != "" && $0 ~ /^- revision: `[0-9a-f]*`[ \t]*$/) {
-        revision = $0
-        sub(/^- revision: `/, "", revision)
-        sub(/`[ \t]*$/, "", revision)
-      }
-    }
-    END { flush_entry() }
-  ' "$1"
+  local record_kind entry_name entry_url entry_reason entry_revision
+  while IFS=$'\t' read -r record_kind entry_name entry_url entry_reason entry_revision; do
+    [[ "$record_kind" == 'R' ]] || continue
+    if [[ "$entry_revision" =~ ^[0-9a-f]{40}$ ]]; then
+      printf '%s\t%s\n' "$entry_name" "$entry_revision"
+    else
+      printf 'W\t%s\n' "$entry_name"
+    fi
+  done < <(agent_registry_records "$1")
 }
 
 # Embedded Projects are determined from the root index, not a full filesystem scan.

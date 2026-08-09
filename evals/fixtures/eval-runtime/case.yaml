@@ -1,0 +1,36 @@
+name: eval-runtime-fixture
+fixture: eval-runtime/workspace
+
+request: |
+  隔離workspaceで評価fixtureを実行して。
+
+expect:
+  route: meta
+  must_search:
+    command: tools/find-context.sh
+    status: active
+  max_candidates: 5
+  max_read_files: 3
+  max_context_bytes: 1024
+  must_read:
+    - AGENTS.md
+    - tools/TOOLS.md
+  must_not_read:
+    - knowledge/wiki/LOG.md
+  must_run:
+    - bash tools/validate-agent-directory.sh --changed
+  must_not_run:
+    - git push
+  must_update:
+    - tools/example.sh
+  may_write:
+    - tools/**
+  must_not_write:
+    - knowledge/raw/**
+  must_report:
+    - validation-completed
+
+report_match:
+  validation-completed:
+    - (検証|validation)
+    - (完了|PASS|completed)

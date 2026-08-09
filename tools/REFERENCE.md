@@ -72,6 +72,20 @@ Projectの固定検証に委ね（`project-owned`）、pushはPush Policyに従�
 `FINALIZE_BLOCKED reason=<reason>`をstdoutへ1行で出し非0で終了する。backup失敗はcommit成功を
 取り消さない（`tools/BACKUP.md#backupが失敗したとき`）。
 
+## run-evals.py
+
+```bash
+python3 tools/run-evals.py score --case <case-name|path> --trace <trace.jsonl> [--baseline <summary.json>]
+python3 tools/run-evals.py run --adapter <executable> (--case <name>... | --all)
+```
+
+`score`は保存済みtraceだけを採点し、`run`はcaseごとにGit管理対象とfixtureを一時workspaceへ重ねて
+adapterを実行後、同じ採点器へ渡す。adapterは`--request`、`--workspace`、`--trace`を受ける実行可能
+ファイルで、Providerや特定クライアントはToolの依存ではない。生成trace、request、summaryは既定で
+`.agent-cache/evals/`へ置き、正本にしない。traceの観測・信頼・regression契約は
+`evals/EVALS.md#Context trace`が所有する。採点完了は0、期待違反・adapter失敗・指定hard gateは1、
+入力・schema・依存adapterの不備は2で終了する。
+
 ## append-knowledge-log.sh
 
 ```bash
@@ -163,6 +177,10 @@ bash tools/validate-agent-directory.sh [--strict] [--full] [--changed] [--base <
   context Toolの隔離fixtureを検査。Tool、eval、正本規約を変更した作業では必須とする
 - `--base <ref>`: Git差分から`knowledge/raw/`、閉鎖済みlog、Project物理移動の禁止を検査
 - 終了コード0と`PASS: agent-directory structure is valid`が合格条件。
+
+`AGENT_VALIDATOR_METRICS=true`を明示した計測runだけ、`static`、`full-core`、`routine`、`scheduler`、
+`control`、`epilogue`の所要時間と全体wall timeを`.agent-cache/metrics/*.jsonl`へ記録する。通常runは
+時刻取得processもmetrics書込も行わず、計測結果は削除・再生成可能な派生物として扱う。
 
 機械検査する境界の網羅的な正本はvalidator本体、`evals/EVALS.md`の各最低条件、`tools/BACKUP.md`で
 ある。AGENTS三層とProject docsの完全な構造規則は`projects/PROJECTS.md`が所有し、validatorは
