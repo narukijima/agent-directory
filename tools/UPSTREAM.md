@@ -29,20 +29,24 @@
 
 ## 認証
 
-送信は`gh`が行い、認証は次の順で解決する。Keychain等の人間向けcredential storeを
-Agent実行の前提にしない。
+`tools/lib/github-auth.sh`がIssueとbackupの唯一のresolverで、次の順に解決する。
 
-1. `GH_TOKEN` — 環境変数、無ければ`.env`の`GH_TOKEN=`（Toolが既知キーだけを安全に読む。
-   `.env`をshellとして評価せず、値をログへ出さない）。Agent専用のfine-grained PATを推奨し、
-   権限は`#宛先許可リスト`のrepositoryだけ・`Issues: Read and write`だけに限定する。
-   `GH_TOKEN`が在れば`gh`は保存済み認証より優先して使う（headless実行の標準経路）。
-2. `gh`の保存済み認証（Keychain等） — 対話環境でのfallback。
-3. どちらも成立しなければ送信せず、下書き保存で停止する（`UPSTREAM_REPORT_DRAFTED`）。
+1. process `GH_TOKEN`
+2. process `GITHUB_TOKEN`
+3. Workspace `.env`の`GH_TOKEN`（特定Workspaceだけのoverride）
+4. `${XDG_CONFIG_HOME:-$HOME/.config}/agent-directory/github.env`（マシン共通の標準）
+5. `gh`の保存済み認証（fallback）
 
-成立判定は`gh auth status`（認証状態の表示）ではなく実API疎通（`gh api user`）で行い、
-不成立の原因を`gh-missing` / `github-auth-unavailable` / `github-permission-denied` /
-`github-api-unreachable`に区別してreasonへ残す。tokenの実値は`.env`だけに置き、
-正本にもcommitにも含めない（`AGENTS.md#禁止事項`）。
+`.env`全体をsource/evalせず既知キーだけを読み、token値を出力しない。マシン共通directoryは`0700`、
+fileは`0600`とし、緩いpermission・不正形式はfail closedする。各マシンで一度だけ
+`bash tools/setup-github-auth.sh --install-from-gh --expected-login narukijima`を実行する。同一マシンの
+Agentごとに繰り返さず、別マシンでは各一度必要である。
+
+`GH_TOKEN`等のprocess環境不在や`gh auth status`は不成立の証拠にしない。`GH_HOST=github.com`を固定し、
+実`gh api user`のloginと実Git remote readで判定する。不成立時はdoctor→安全なrepair 1回→送信再試行1回に
+限定し、なお失敗なら未送信としてexit 3にする。reasonは`auth-store-missing`、
+`auth-store-permissions`、`account-mismatch`、`github-auth-unavailable`、`github-permission-denied`、
+`github-api-unreachable`、`git-credential-unavailable`を区別する。
 
 ## 事前承認済み送信
 
@@ -145,9 +149,9 @@ commit SHA等）へ置き換える。再現方法は固有情報を除いた最�
    DETAILへ列挙して新規Issueを作成する（観測を捨てない。重複の統合は上流側の責務）。
 3. 本文を作成して送信する。検査で止まったら（`UPSTREAM_REPORT_BLOCKED`）、退避された下書きを
    抽象化して同じToolで再試行する。
-4. `#認証`のどの経路も成立しない環境では下書き保存だけで停止する
-   （`UPSTREAM_REPORT_DRAFTED reason=<原因>`）。これは失敗ではなく、送信はしない。
-   reasonが`github-auth-unavailable`なら解除方法は`GH_TOKEN`の設定である（`#認証`）。
+4. 認証不能時はdoctor→安全なrepair 1回→report再試行1回を行う。なお不成立なら内容hashで既存下書きを
+   再利用し、`UPSTREAM_REPORT_DRAFTED reason=<原因> path=<path>`を出してexit 3で停止する。
+   `DRAFTED`は未送信であり成功・完了として報告しない。
 5. 送信結果（Issue URL）を作業報告へ含める。修正が上流で成立しても、取り込みは別作業とし
    自動でpull・更新しない。
 
@@ -176,11 +180,11 @@ bash tools/report-upstream-issue.sh --search "<主要語>" [--repo <owner/repo>]
 - 出力（stdout最終1行）: `UPSTREAM_REPORT_OK issue=<url>` / `UPSTREAM_REPORT_COMMENTED issue=<url>` /
   `UPSTREAM_REPORT_DRY_RUN_OK` / `UPSTREAM_REPORT_DRAFTED reason=<reason> path=<path>` /
   `UPSTREAM_REPORT_SEARCH_OK count=<n>` / `UPSTREAM_REPORT_SEARCH_DRY_RUN_OK`。
-  停止は`UPSTREAM_REPORT_BLOCKED reason=<reason>`をstderrへ出し非0で終了する。
-- 認証・疎通の不成立reasonは`gh-missing` / `github-auth-unavailable` /
-  `github-permission-denied` / `github-api-unreachable`に区別する（`#認証`）。report modeは
-  下書き保存（`UPSTREAM_REPORT_DRAFTED`）、search modeは`UPSTREAM_REPORT_BLOCKED`で同じ
-  reasonを使う。一律の`gh-unavailable`へ潰さない。
+  終了コードは、実送信・コメント・検索・明示dry-run成功=`0`、policy・入力・匿名化・宛先拒否=`1`、
+  usage=`2`、認証・権限・通信問題で未送信=`3`。`DRAFTED`は必ず`3`である。
+- 認証・疎通のreasonは`#認証`の区分を使う。report modeは内容hashで再利用する下書き
+  （`UPSTREAM_REPORT_DRAFTED`）、search modeは`UPSTREAM_REPORT_BLOCKED`で同じreasonを使い、
+  一律の`gh-unavailable`へ潰さない。
 - 検査違反のDETAILは規則名だけを出し、一致した値そのものを出力しない。
 
 ## セキュリティ問題

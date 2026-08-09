@@ -1,0 +1,15 @@
+name: backup-shared-github-auth
+
+request: |
+  backup remoteを、Issue報告と同じGitHub認証resolverでdry-run検証して。
+
+expect:
+  route: meta
+  must_read:
+    - AGENTS.md
+    - tools/BACKUP.md
+  must_run:
+    - bash tools/backup-to-github.sh --dry-run
+  must_report:
+    - shared-github-auth-resolver
+    - remote-read-result

@@ -111,6 +111,9 @@ Tool呼び出しへまとめ、成功時出力は短く保つ。現在目標、�
 | `append-knowledge-log.sh` | LOG追記とローテーション | `tools/REFERENCE.md` |
 | `backup-to-github.sh` | root backup remoteへpushする唯一の標準経路 | `tools/REFERENCE.md` |
 | `report-upstream-issue.sh` | 上流Issue送信の唯一の経路（宛先許可リスト固定・添付なし） | `tools/UPSTREAM.md` |
+| `lib/github-auth.sh` / `setup-github-auth.sh` | Issueとbackup共通の認証resolver、1台1回のsetup、doctor | `tools/REFERENCE.md` |
+| `migrate-github-auth.sh` | 既存Workspaceへ認証実装だけを安全に移植 | `tools/REFERENCE.md` |
+| `test-github-auth.sh` | 認証resolver・API分類・draft契約の隔離fixture | `tools/REFERENCE.md` |
 | `materialize-project-repositories.sh` | registryからclone再現（復旧・移行・partial解消） | `tools/REFERENCE.md` |
 | `run-routine.sh` | Scheduler起点のRoutine Executor | `tools/REFERENCE.md` |
 | `manage-routine-schedule.sh` | user crontab / LaunchAgentのSchedule管理 | `tools/REFERENCE.md` |

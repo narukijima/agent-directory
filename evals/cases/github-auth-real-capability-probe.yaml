@@ -1,0 +1,18 @@
+name: github-auth-real-capability-probe
+
+request: |
+  gh auth statusや環境変数表示ではなく、実APIと実remote readで利用可否を判定して。
+
+expect:
+  route: meta
+  must_read:
+    - AGENTS.md
+    - tools/REFERENCE.md
+  must_run:
+    - gh api user
+    - git ls-remote
+  must_not_run:
+    - env | grep GH_TOKEN
+  must_report:
+    - actual-api-capability
+    - actual-git-capability

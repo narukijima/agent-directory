@@ -244,6 +244,17 @@ Privateリポジトリを1つ用意し、公開スケルトンへ実運用デー
 単位であり、同じrepositoryへ同時に書き込む稼働コピーを持たない。異なるIndependent repositoryは
 並行して進めてよい。
 
+GitHub認証はWorkspaceごとの`.env`ではなく、マシン共通credentialを標準とする。Mac mini、MacBook等、
+各マシンで次を一度だけ実行すれば、そのマシン上のAgent Workspaceが同じ安全なresolverを利用する。
+process `GH_TOKEN` / `GITHUB_TOKEN`は一時override、Workspace `.env`は限定override、`gh`保存認証は
+fallbackである。token値はGitへ追跡せず、既定pathは
+`${XDG_CONFIG_HOME:-$HOME/.config}/agent-directory/github.env`（directory `0700`、file `0600`）。
+
+```bash
+bash tools/setup-github-auth.sh --install-from-gh --expected-login narukijima
+bash tools/setup-github-auth.sh --check --expected-login narukijima
+```
+
 ```bash
 # セットアップ（GitHubで空のPrivateリポジトリを作成してから実行する）
 git remote rename origin template

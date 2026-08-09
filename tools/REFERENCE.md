@@ -111,6 +111,26 @@ pushせず、`--dry-run`はremoteへ書き込まない。成功とdry-runはstdo
 停止reason、divergence、Independent監査項目、復旧・移行手順は`tools/BACKUP.md`が所有し、
 扱うときだけ読む。
 
+## GitHub認証Tool
+
+`tools/lib/github-auth.sh`はIssue送信とbackupが共通利用する唯一のresolverで、process `GH_TOKEN` →
+process `GITHUB_TOKEN` → Workspace `.env` → マシン共通`github.env` → `gh`保存認証の順に解決する。
+値は出力せず、machine directory `0700`・file `0600`以外をfail closedする。APIは`gh api user`、Gitは
+実remote readで能力を判定し、GitHub HTTPSだけ`gh auth git-credential`をchild Gitへ適用する。
+SSHとGitHub以外のhostへGitHub credentialを渡さない。
+
+```bash
+bash tools/setup-github-auth.sh --install-from-gh --expected-login narukijima
+bash tools/setup-github-auth.sh --check --expected-login narukijima
+bash tools/setup-github-auth.sh --repair-from-gh --expected-login narukijima
+bash tools/migrate-github-auth.sh --workspace /absolute/path [--check]
+bash tools/test-github-auth.sh
+```
+
+doctor成功は`GITHUB_AUTH_OK source=<source> login=<login> api=ok git=ok`、失敗は
+`GITHUB_AUTH_BLOCKED reason=<reason>`。migrationはsignature、Git root、auth fileのclean状態、対応version、
+patch適用可否を先に検査し、tokenやAgent固有設定を扱わない。
+
 ## report-upstream-issue.sh
 
 許可リスト内の公開上流（既定`claudagt/agent-directory`、`--repo`でリスト内から選択）へ

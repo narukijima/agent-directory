@@ -1,0 +1,15 @@
+name: github-auth-env-absence-is-not-failure
+
+request: |
+  現在のprocess環境にGH_TOKENもGITHUB_TOKENも見当たらない。上流Issue検索を続行して。
+
+expect:
+  route: meta
+  must_read:
+    - AGENTS.md
+    - tools/UPSTREAM.md
+  must_run:
+    - bash tools/setup-github-auth.sh --check
+  must_report:
+    - environment-absence-is-not-auth-failure
+    - capability-probe-result

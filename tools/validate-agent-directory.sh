@@ -1583,6 +1583,10 @@ required_cases=(
   delegation-default-off delegation-depth-one
   upstream-issue-privacy upstream-issue-preapproved-send upstream-issue-fixed-destination
   upstream-issue-allowlisted-destination
+  github-auth-env-absence-is-not-failure github-auth-machine-credential
+  github-auth-real-capability-probe github-auth-no-token-leak upstream-drafted-is-not-success
+  upstream-auth-repair-once backup-shared-github-auth backup-https-credential-helper
+  backup-ssh-does-not-require-token
 )
 
 for case_name in "${required_cases[@]}"; do require_file "$repo_root/evals/cases/$case_name.yaml"; done
@@ -1802,14 +1806,17 @@ if [[ -f "$backup_tool" ]]; then
     fi
   done
 
-  push_invocations="$(grep -Ec 'git[^#]*[[:space:]]push[[:space:]]' "$backup_tool" || true)"
+  push_invocations="$(grep -Ec '^[[:space:]]*push[[:space:]]+--porcelain' "$backup_tool" || true)"
   if (( push_invocations != 1 )); then
-    fail "tools/backup-to-github.sh must contain exactly one git push invocation (found $push_invocations)"
+    fail "tools/backup-to-github.sh must contain exactly one shared-wrapper push invocation (found $push_invocations)"
   fi
-  if ! grep -Eq 'git[^#]*[[:space:]]push[[:space:]]+--porcelain[[:space:]]+"\$remote"[[:space:]]+"HEAD:refs/heads/\$branch"' \
-    "$backup_tool"; then
+  if ! grep -Eq '^[[:space:]]*push[[:space:]]+--porcelain[[:space:]]+"\$remote"[[:space:]]+"HEAD:refs/heads/\$branch"' "$backup_tool"; then
     fail 'tools/backup-to-github.sh must push only the explicit HEAD:refs/heads/$branch refspec'
   fi
+  grep -Fq 'lib/github-auth.sh' "$backup_tool" || \
+    fail 'tools/backup-to-github.sh must use the shared GitHub authentication resolver'
+  grep -Fq 'github_git_run' "$backup_tool" || \
+    fail 'tools/backup-to-github.sh must route remote Git operations through github_git_run'
 fi
 
 materialize_tool="$repo_root/tools/materialize-project-repositories.sh"
@@ -1863,6 +1870,10 @@ if [[ -f "$report_tool" ]]; then
     grep -Fq "$report_token" "$report_tool" || \
       fail "tools/report-upstream-issue.sh does not emit $report_token"
   done
+  grep -Fq 'lib/github-auth.sh' "$report_tool" || \
+    fail 'tools/report-upstream-issue.sh must use the shared GitHub authentication resolver'
+  grep -Fq 'exit 3' "$report_tool" || \
+    fail 'tools/report-upstream-issue.sh must return exit 3 for an unsent authentication draft'
   # The reporting path never writes to git state.
   for forbidden_subcommand in push pull merge rebase reset clean commit; do
     if grep -Eq "git[^#]*[[:space:]]$forbidden_subcommand[[:space:]]" "$report_tool"; then
@@ -2220,6 +2231,10 @@ grep -Fqx '## Routineケースの最低条件' "$repo_root/evals/EVALS.md" || \
 # invoked from inside a fixture; it is never set in normal operation.
 validator_metric_checkpoint 'static'
 if [[ "$full" == true && -z "${AGENT_VALIDATOR_NESTED_FIXTURE:-}" ]]; then
+github_auth_test_output="$(/bin/bash "$repo_root/tools/test-github-auth.sh" 2>&1)" || \
+  fail "GitHub auth integration fixture failed: $github_auth_test_output"
+printf '%s\n' "$github_auth_test_output" | grep -Fq 'GITHUB_AUTH_TEST_OK' || \
+  fail 'GitHub auth integration fixture did not emit GITHUB_AUTH_TEST_OK'
 cache_test_dir="$(mktemp -d "${TMPDIR:-/tmp}/agent-validator-cache.XXXXXX")"
 fixture_cache_dir="$(mktemp -d "${TMPDIR:-/tmp}/agent-validator-fixture.XXXXXX")"
 sqlite_fixture_cache_dir="$(mktemp -d "${TMPDIR:-/tmp}/agent-validator-sqlite.XXXXXX")"
