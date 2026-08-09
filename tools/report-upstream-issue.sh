@@ -6,6 +6,7 @@ set -euo pipefail
 
 tool_root="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
 repo_root="$(cd "${AGENT_DIRECTORY_ROOT:-$tool_root/..}" 2>/dev/null && pwd -P)" || repo_root=''
+. "$tool_root/lib/github-auth.sh"
 cache_dir="${AGENT_CACHE_DIR:-$repo_root/.agent-cache}"
 draft_dir="$cache_dir/upstream-reports"
 # The destination allowlist is a contract (tools/UPSTREAM.md#宛先許可リスト): literal entries only.
@@ -23,10 +24,18 @@ dry_run=false
 search_terms=''
 violations=()
 checked_agent_name_terms=0
+github_repair_attempted=false
+expected_login="${AGENT_DIRECTORY_GITHUB_EXPECTED_LOGIN:-narukijima}"
 
 usage() {
   printf 'Usage: %s --title <title> --body-file <path> [--repo <owner/repo>] [--comment <issue-number>] [--dry-run]\n' "${0##*/}" >&2
   printf '       %s --search "<terms>" [--repo <owner/repo>] [--dry-run]\n' "${0##*/}" >&2
+}
+
+usage_error() {
+  usage
+  printf 'UPSTREAM_REPORT_BLOCKED reason=usage\n' >&2
+  exit 2
 }
 
 blocked() {
@@ -47,13 +56,13 @@ note() {
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --title) [[ $# -ge 2 ]] || { usage; blocked usage 'missing value for --title'; }; title="$2"; shift 2 ;;
-    --body-file) [[ $# -ge 2 ]] || { usage; blocked usage 'missing value for --body-file'; }; body_file="$2"; shift 2 ;;
-    --comment) [[ $# -ge 2 ]] || { usage; blocked usage 'missing value for --comment'; }; comment_issue="$2"; shift 2 ;;
-    --repo) [[ $# -ge 2 ]] || { usage; blocked usage 'missing value for --repo'; }; upstream_repo="$2"; shift 2 ;;
+    --title) [[ $# -ge 2 ]] || usage_error; title="$2"; shift 2 ;;
+    --body-file) [[ $# -ge 2 ]] || usage_error; body_file="$2"; shift 2 ;;
+    --comment) [[ $# -ge 2 ]] || usage_error; comment_issue="$2"; shift 2 ;;
+    --repo) [[ $# -ge 2 ]] || usage_error; upstream_repo="$2"; shift 2 ;;
     --dry-run) dry_run=true; shift ;;
-    --search) [[ $# -ge 2 ]] || { usage; blocked usage 'missing value for --search'; }; search_terms="$2"; shift 2 ;;
-    *) usage; blocked usage "unknown argument: $1 (destinations and attachments are fixed by tools/UPSTREAM.md)" ;;
+    --search) [[ $# -ge 2 ]] || usage_error; search_terms="$2"; shift 2 ;;
+    *) usage_error ;;
   esac
 done
 
@@ -73,51 +82,46 @@ fi
 
 [[ -n "$repo_root" && -f "$repo_root/AGENTS.md" ]] || blocked no-repo-root 'cannot resolve the workspace root'
 
-# --- GitHub認証（tools/UPSTREAM.md#認証） ---------------------------------------
-# 認証順序: GH_TOKEN（環境変数 → .envの既知キー） → ghの保存済み認証（Keychain等）。
-# .envはshellとしてsource/evalせず既知キーだけをsedで読む。値は出力しない（出力自体が漏洩）。
-# GH_TOKENが在ればghが保存済み認証より優先して使う（gh公式のheadless向け認証）。
-if [[ -z "${GH_TOKEN:-}" && -f "$repo_root/.env" ]]; then
-  env_gh_token="$(sed -n 's/^GH_TOKEN=//p' "$repo_root/.env" | tail -n 1)"
-  env_gh_token="${env_gh_token%\"}"; env_gh_token="${env_gh_token#\"}"
-  env_gh_token="${env_gh_token%\'}"; env_gh_token="${env_gh_token#\'}"
-  if [[ -n "$env_gh_token" ]]; then
-    export GH_TOKEN="$env_gh_token"
-  fi
-  unset env_gh_token
-fi
-
-# 判定は認証状態の表示（gh auth status）ではなく実API疎通で行う。auth statusは対象外ホストの
-# 認証問題でも非0になり、Keychainを読めない非対話環境で誤って「未認証」と診断するため。
-# 不成立の原因はgithub_unready_reasonへ区別して残し、一律のgh-unavailableへ潰さない。
+# --- GitHub認証（tools/lib/github-auth.shが唯一のresolver） ---------------------
 github_unready_reason=''
 gh_ready() {
-  local probe_stderr
   github_unready_reason=''
-  if ! command -v gh >/dev/null 2>&1; then
-    github_unready_reason='gh-missing'
+  if ! github_auth_resolve "$repo_root"; then
+    github_unready_reason="${GITHUB_AUTH_REASON:-github-auth-unavailable}"
     return 1
   fi
-  if probe_stderr="$(GH_PROMPT_DISABLED=1 GH_NO_UPDATE_NOTIFIER=1 gh api user 2>&1 >/dev/null)"; then
+  if github_auth_probe_api "$expected_login"; then
     return 0
   fi
-  case "$probe_stderr" in
-    *'HTTP 401'*|*'Bad credentials'*|*'authentication token'*|*'gh auth login'*|*'not logged in'*)
-      github_unready_reason='github-auth-unavailable' ;;
-    *'HTTP 403'*)
-      github_unready_reason='github-permission-denied' ;;
-    *)
-      github_unready_reason='github-api-unreachable' ;;
-  esac
+  github_unready_reason="${GITHUB_AUTH_REASON:-github-auth-unavailable}"
+  return 1
+}
+
+ensure_github_ready() {
+  if gh_ready; then
+    return 0
+  fi
+  if [[ "$github_repair_attempted" == false ]]; then
+    github_repair_attempted=true
+    if [[ "${AGENT_GITHUB_AUTH_DISABLE_REPAIR:-false}" != true ]]; then
+      bash "$tool_root/setup-github-auth.sh" --repair-from-gh \
+        --expected-login "$expected_login" >/dev/null 2>&1 || true
+    fi
+    if gh_ready; then
+      return 0
+    fi
+  fi
   return 1
 }
 
 github_unready_hint() {
   case "$github_unready_reason" in
-    gh-missing)
-      printf 'install GitHub CLI (gh); authentication order is tools/UPSTREAM.md#認証' ;;
-    github-auth-unavailable)
-      printf 'set GH_TOKEN (environment or .env; fine-grained PAT limited to the allowlisted repositories, Issues: Read and write), or run gh auth login (tools/UPSTREAM.md#認証)' ;;
+    auth-store-missing|github-auth-unavailable)
+      printf 'run tools/setup-github-auth.sh --install-from-gh once on this machine (tools/UPSTREAM.md#認証)' ;;
+    auth-store-permissions)
+      printf 'the machine credential store must be directory mode 700 and file mode 600' ;;
+    account-mismatch)
+      printf 'the active credential does not match the configured expected GitHub login' ;;
     github-permission-denied)
       printf 'the credential reaches the API but lacks permission; grant the fine-grained PAT Issues: Read and write on the allowlisted repositories (tools/UPSTREAM.md#認証)' ;;
     *)
@@ -129,13 +133,13 @@ github_unready_hint() {
 # 送信内容（report本文・search検索語）は、どちらのモードでも同じ匿名化検査を通ってから
 # 外部へ出る。--searchだけ検査を迂回する経路を作らない。
 if [[ -n "$search_terms" ]]; then
-  [[ -z "$title$body_file$comment_issue" ]] || blocked usage '--search cannot be combined with report arguments'
+  [[ -z "$title$body_file$comment_issue" ]] || usage_error
 else
-  [[ -n "$title" ]] || { usage; blocked usage '--title is required'; }
-  [[ -n "$body_file" ]] || { usage; blocked usage '--body-file is required'; }
-  [[ -f "$body_file" ]] || blocked usage 'body file not found'
+  [[ -n "$title" ]] || usage_error
+  [[ -n "$body_file" ]] || usage_error
+  [[ -f "$body_file" ]] || usage_error
   if [[ -n "$comment_issue" && ! "$comment_issue" =~ ^[0-9]+$ ]]; then
-    blocked usage '--comment expects an issue number'
+    usage_error
   fi
 fi
 
@@ -321,6 +325,42 @@ check_pattern authorization-header '[Aa]uthorization[[:space:]]*:'
 check_pattern private-key-block 'BEGIN [A-Z ]*PRIVATE KEY'
 check_pattern harness-signature 'Generated with|[Cc]o-[Aa]uthored-[Bb]y:'
 
+content_hash() {
+  if command -v shasum >/dev/null 2>&1; then
+    { printf '%s\n' "$upstream_repo" "$title"; cat "$send_body"; } | shasum -a 256 | awk '{print $1}'
+  else
+    { printf '%s\n' "$upstream_repo" "$title"; cat "$send_body"; } | cksum | awk '{print $1 "-" $2}'
+  fi
+}
+
+save_auth_draft() {
+  local hash draft_temp
+  mkdir -p "$draft_dir"
+  hash="$(content_hash)"
+  draft_path="$draft_dir/draft-$hash.md"
+  if [[ ! -f "$draft_path" ]]; then
+    draft_temp="$draft_dir/.draft-$hash-$$.tmp"
+    { printf 'title: %s\n\n' "$title"; cat "$send_body"; } > "$draft_temp"
+    mv -f "$draft_temp" "$draft_path"
+  fi
+}
+
+auth_exit() {
+  local reason="$1"
+  shift
+  if [[ -n "$search_terms" ]]; then
+    printf 'UPSTREAM_REPORT_BLOCKED reason=%s\n' "$reason" >&2
+  else
+    save_auth_draft
+    printf 'UPSTREAM_REPORT_DRAFTED reason=%s path=%s\n' "$reason" "$draft_path"
+  fi
+  for auth_detail in "$@"; do
+    [[ -n "$auth_detail" ]] || continue
+    printf 'DETAIL: %s\n' "$auth_detail" >&2
+  done
+  exit 3
+}
+
 if [[ ${#violations[@]} -gt 0 ]]; then
   details=()
   for rule in "${violations[@]}"; do
@@ -343,9 +383,16 @@ if [[ -n "$search_terms" ]]; then
     printf 'UPSTREAM_REPORT_SEARCH_DRY_RUN_OK\n'
     exit 0
   fi
-  gh_ready || blocked "$github_unready_reason" "$(github_unready_hint)" 'or search the upstream issues manually'
+  ensure_github_ready || auth_exit "$github_unready_reason" "$(github_unready_hint)"
+  set +e
   candidates="$(gh issue list --repo "$upstream_repo" --state open --search "$search_terms" \
-    --json number,title --jq '.[] | "#\(.number) \(.title)"' 2>/dev/null || true)"
+    --json number,title --jq '.[] | "#\(.number) \(.title)"' 2>&1)"
+  search_status=$?
+  set -e
+  if (( search_status != 0 )); then
+    github_unready_reason="$(github_auth_classify_api_error "$candidates")"
+    auth_exit "$github_unready_reason" "$(github_unready_hint)"
+  fi
   count=0
   if [[ -n "$candidates" ]]; then
     while IFS= read -r line; do
@@ -366,14 +413,7 @@ if [[ "$dry_run" == true ]]; then
   exit 0
 fi
 
-if ! gh_ready; then
-  mkdir -p "$draft_dir"
-  draft_path="$draft_dir/draft-$(date +%Y%m%d-%H%M%S)-$$.md"
-  { printf 'title: %s\n\n' "$title"; cat "$send_body"; } >"$draft_path"
-  note "$(github_unready_hint)"
-  printf 'UPSTREAM_REPORT_DRAFTED reason=%s path=%s\n' "$github_unready_reason" "$draft_path"
-  exit 0
-fi
+ensure_github_ready || auth_exit "$github_unready_reason" "$(github_unready_hint)"
 
 # 重複処理（tools/UPSTREAM.md#送信フロー）: 正規化タイトルが完全一致するopen Issueがあれば
 # 同一問題と確定し、新規作成せず自動で--commentへ切り替える。曖昧な候補では停止せず新規作成する
@@ -385,8 +425,15 @@ normalize_issue_title() {
       -e 's/[[:space:]]+/ /g' -e 's/^ //' -e 's/ $//'
 }
 if [[ -z "$comment_issue" ]]; then
+  set +e
   candidates="$(gh issue list --repo "$upstream_repo" --state open --search "$title" \
-    --json number,title --jq '.[] | "\(.number)\t\(.title)"' 2>/dev/null || true)"
+    --json number,title --jq '.[] | "\(.number)\t\(.title)"' 2>&1)"
+  candidate_status=$?
+  set -e
+  if (( candidate_status != 0 )); then
+    github_unready_reason="$(github_auth_classify_api_error "$candidates")"
+    auth_exit "$github_unready_reason" "$(github_unready_hint)"
+  fi
   if [[ -n "$candidates" ]]; then
     normalized_title="$(normalize_issue_title "$title")"
     duplicate_number=''
@@ -411,9 +458,23 @@ if [[ -z "$comment_issue" ]]; then
 fi
 
 if [[ -n "$comment_issue" ]]; then
-  issue_url="$(gh issue comment "$comment_issue" --repo "$upstream_repo" --body-file "$send_body")"
+  set +e
+  issue_url="$(gh issue comment "$comment_issue" --repo "$upstream_repo" --body-file "$send_body" 2>&1)"
+  issue_status=$?
+  set -e
+  if (( issue_status != 0 )); then
+    github_unready_reason="$(github_auth_classify_api_error "$issue_url")"
+    auth_exit "$github_unready_reason" "$(github_unready_hint)"
+  fi
   printf 'UPSTREAM_REPORT_COMMENTED issue=%s\n' "$issue_url"
 else
-  issue_url="$(gh issue create --repo "$upstream_repo" --title "$title" --body-file "$send_body")"
+  set +e
+  issue_url="$(gh issue create --repo "$upstream_repo" --title "$title" --body-file "$send_body" 2>&1)"
+  issue_status=$?
+  set -e
+  if (( issue_status != 0 )); then
+    github_unready_reason="$(github_auth_classify_api_error "$issue_url")"
+    auth_exit "$github_unready_reason" "$(github_unready_hint)"
+  fi
   printf 'UPSTREAM_REPORT_OK issue=%s\n' "$issue_url"
 fi

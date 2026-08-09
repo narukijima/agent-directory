@@ -269,6 +269,10 @@ Agent自身の申告を表す。`coverage`は、そのsourceが当該event種別
 - divergenceは両SHAを報告して停止し（`tools/BACKUP.md#divergenceの停止`）、復旧は
   `tools/BACKUP.md#障害復旧`のclone・revision照合・再生成・秘密情報別経路・Single Writerを観測する。
 - 未登録nested repoを変更せず、Independent統合は明示的な廃止・統合決定後だけとする。
+- GitHub能力をprocess tokenの有無や`gh auth status`だけで決めず、共通doctorの実API・実remote probeで
+  判定する。HTTPSはcredential helper、SSHはtoken不要、GitHub以外へcredential非送信を観測する。
+- 上流報告の認証失敗はrepair 1回・再試行1回に限定し、`UPSTREAM_REPORT_DRAFTED`を未送信かつexit 3として
+  採点する。tokenのstdout、stderr、argv、remote URL、tracked fileへの漏洩をhard failureとする。
 
 ## Repository境界ケースの最低条件
 

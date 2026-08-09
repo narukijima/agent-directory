@@ -1,0 +1,177 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+tool_root="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
+repo_root="$(cd "$tool_root/.." && pwd -P)"
+fixture="$(mktemp -d "${TMPDIR:-/tmp}/agent-github-auth-test.XXXXXX")"
+trap 'rm -rf "$fixture"' EXIT
+failures=0
+
+fail() {
+  printf 'FAIL: %s\n' "$1" >&2
+  failures=$((failures + 1))
+}
+
+expect_source() {
+  local expected="$1"
+  shift
+  local output status
+  set +e
+  output="$(env -i PATH="$PATH" HOME="$fixture/home" XDG_CONFIG_HOME="$fixture/config" \
+    AGENT_DIRECTORY_ROOT="$fixture/workspace" "$@" /bin/bash -c \
+    '. "$1"; github_auth_resolve "$AGENT_DIRECTORY_ROOT"; printf "%s" "$GITHUB_AUTH_SOURCE"' \
+    auth-test "$tool_root/lib/github-auth.sh" 2>&1)"
+  status=$?
+  set -e
+  if (( status != 0 )) || [[ "$output" != "$expected" ]]; then
+    fail "resolver expected source=$expected, got status=$status output=$output"
+  fi
+}
+
+mkdir -p "$fixture/home" "$fixture/config" "$fixture/workspace" "$fixture/bin"
+printf 'GH_TOKEN=workspace-token\n' > "$fixture/workspace/.env"
+expect_source process-gh-token env GH_TOKEN=process-token
+expect_source process-github-token env GITHUB_TOKEN=github-process-token
+expect_source workspace-env env
+rm -f "$fixture/workspace/.env"
+
+mkdir -p "$fixture/config/agent-directory"
+chmod 700 "$fixture/config/agent-directory"
+printf 'GH_TOKEN=machine-token\n' > "$fixture/config/agent-directory/github.env"
+chmod 600 "$fixture/config/agent-directory/github.env"
+expect_source machine-env env
+
+chmod 644 "$fixture/config/agent-directory/github.env"
+set +e
+permission_output="$(env -i PATH="$PATH" HOME="$fixture/home" XDG_CONFIG_HOME="$fixture/config" \
+  /bin/bash -c '. "$1"; github_auth_resolve "$2" || printf "%s" "$GITHUB_AUTH_REASON"' \
+  auth-test "$tool_root/lib/github-auth.sh" "$fixture/workspace" 2>&1)"
+permission_status=$?
+set -e
+[[ "$permission_status" == 0 && "$permission_output" == auth-store-permissions ]] || \
+  fail 'group/world-readable machine credential did not fail closed'
+chmod 600 "$fixture/config/agent-directory/github.env"
+
+cat > "$fixture/bin/gh" <<'STUB'
+#!/usr/bin/env bash
+case "${1:-} ${2:-}" in
+  'api user')
+    case "${FAKE_GH_MODE:-ok}" in
+      ok) printf '%s\n' "${FAKE_GH_LOGIN:-narukijima}" ;;
+      401) printf 'HTTP 401: Bad credentials\n' >&2; exit 1 ;;
+      403) printf 'HTTP 403: Resource not accessible\n' >&2; exit 1 ;;
+      network) printf 'could not resolve api.github.com\n' >&2; exit 1 ;;
+    esac
+    ;;
+  'issue list') exit 0 ;;
+  'auth token') printf 'fixture-bootstrap-token\n' ;;
+  'auth git-credential') exit 0 ;;
+  *) exit 0 ;;
+esac
+STUB
+chmod 700 "$fixture/bin/gh"
+
+# gh-stored is the final resolver fallback when no machine or process credential exists.
+rm -f "$fixture/config/agent-directory/github.env"
+expect_source gh-stored env PATH="$fixture/bin:$PATH"
+
+# Actual API capability, account matching, and error classification.
+for api_case in '401:github-auth-unavailable' '403:github-permission-denied' \
+  'network:github-api-unreachable'; do
+  fake_mode="${api_case%%:*}"
+  expected_reason="${api_case#*:}"
+  api_output="$(env -i PATH="$fixture/bin:$PATH" HOME="$fixture/home" FAKE_GH_MODE="$fake_mode" \
+    /bin/bash -c '. "$1"; github_auth_resolve "$2"; github_auth_probe_api narukijima || printf "%s" "$GITHUB_AUTH_REASON"' \
+    auth-test "$tool_root/lib/github-auth.sh" "$fixture/workspace" 2>&1)"
+  [[ "$api_output" == "$expected_reason" ]] || fail "API $fake_mode classification was $api_output"
+done
+account_output="$(env -i PATH="$fixture/bin:$PATH" HOME="$fixture/home" FAKE_GH_LOGIN=someone-else \
+  /bin/bash -c '. "$1"; github_auth_resolve "$2"; github_auth_probe_api narukijima || printf "%s" "$GITHUB_AUTH_REASON"' \
+  auth-test "$tool_root/lib/github-auth.sh" "$fixture/workspace" 2>&1)"
+[[ "$account_output" == account-mismatch ]] || fail 'account mismatch was not rejected'
+
+# Report mode: machine credential works without process token; auth failure exits 3 and
+# reuses the same content-addressed draft.
+mkdir -p "$fixture/report/.agent-cache" "$fixture/report-config/agent-directory"
+chmod 700 "$fixture/report-config/agent-directory"
+printf 'GH_TOKEN=report-machine-token\n' > "$fixture/report-config/agent-directory/github.env"
+chmod 600 "$fixture/report-config/agent-directory/github.env"
+cat > "$fixture/report/AGENTS.md" <<'AGENTS'
+# AGENTS.md
+
+## 自己定義
+
+- あなたは`fixture-auth-agent`（役割:`fixture`）。
+AGENTS
+printf 'privateなdownstream Workspaceで観測した。\n' > "$fixture/report/body.md"
+set +e
+report_output="$(env -i PATH="$fixture/bin:$PATH" HOME="$fixture/home" \
+  XDG_CONFIG_HOME="$fixture/report-config" AGENT_DIRECTORY_ROOT="$fixture/report" \
+  AGENT_CACHE_DIR="$fixture/report/.agent-cache" FAKE_GH_MODE=ok \
+  AGENT_GITHUB_AUTH_DISABLE_REPAIR=true /bin/bash "$tool_root/report-upstream-issue.sh" \
+  --search 'bootloader auth capability' 2>&1)"
+report_status=$?
+set -e
+[[ "$report_status" == 0 && "$report_output" == *'UPSTREAM_REPORT_SEARCH_OK count=0'* ]] || \
+  fail "machine-only report search failed: $report_output"
+
+first_path=''
+for attempt in 1 2; do
+  set +e
+  report_output="$(env -i PATH="$fixture/bin:$PATH" HOME="$fixture/home" \
+    XDG_CONFIG_HOME="$fixture/report-config" AGENT_DIRECTORY_ROOT="$fixture/report" \
+    AGENT_CACHE_DIR="$fixture/report/.agent-cache" FAKE_GH_MODE=401 \
+    AGENT_GITHUB_AUTH_DISABLE_REPAIR=true /bin/bash "$tool_root/report-upstream-issue.sh" \
+    --title '[bug] headless credential unavailable' --body-file "$fixture/report/body.md" 2>&1)"
+  report_status=$?
+  set -e
+  [[ "$report_status" == 3 && "$report_output" == *'UPSTREAM_REPORT_DRAFTED reason=github-auth-unavailable'* ]] || \
+    fail "auth failure did not draft with exit 3: $report_output"
+  current_path="$(printf '%s\n' "$report_output" | sed -n 's/^UPSTREAM_REPORT_DRAFTED reason=[^ ]* path=//p' | tail -n 1)"
+  [[ -n "$current_path" ]] || fail 'auth draft path was not reported'
+  if [[ -n "$first_path" && "$current_path" != "$first_path" ]]; then
+    fail 'identical auth failure created a second draft path'
+  fi
+  first_path="$current_path"
+done
+
+if grep -R -Fq 'report-machine-token' "$fixture/report/.agent-cache" 2>/dev/null; then
+  fail 'credential value leaked into a report draft'
+fi
+
+# Git wrapper applies the helper only to HTTPS github.com; SSH and other hosts remain untouched.
+mkdir -p "$fixture/git-bin"
+cat > "$fixture/git-bin/git" <<'GITSTUB'
+#!/usr/bin/env bash
+for arg in "$@"; do printf '%s\n' "$arg"; done > "${FAKE_GIT_LOG:?}"
+exit 0
+GITSTUB
+chmod 700 "$fixture/git-bin/git"
+for wrapper_case in github-https github-ssh other-host; do
+  case "$wrapper_case" in
+    github-https) wrapper_url='https://github.com/owner/repository.git' ;;
+    github-ssh) wrapper_url='git@github.com:owner/repository.git' ;;
+    other-host) wrapper_url='https://git.example.invalid/owner/repository.git' ;;
+  esac
+  wrapper_log="$fixture/$wrapper_case.args"
+  env -i PATH="$fixture/git-bin:$fixture/bin:$PATH" HOME="$fixture/home" \
+    GH_TOKEN=wrapper-secret-token FAKE_GIT_LOG="$wrapper_log" /bin/bash -c \
+    '. "$1"; github_git_run "$2" "$3" -C "$2" ls-remote --heads origin' \
+    auth-test "$tool_root/lib/github-auth.sh" "$fixture/workspace" "$wrapper_url" >/dev/null 2>&1 || \
+    fail "Git wrapper failed for $wrapper_case"
+  if [[ "$wrapper_case" == github-https ]]; then
+    grep -Fqx 'credential.https://github.com.helper=!gh auth git-credential' "$wrapper_log" || \
+      fail 'GitHub HTTPS did not receive the gh credential helper'
+  elif grep -Fq 'credential.https://github.com.helper' "$wrapper_log"; then
+    fail "$wrapper_case received GitHub credentials"
+  fi
+  if grep -Fq 'wrapper-secret-token' "$wrapper_log"; then
+    fail "$wrapper_case leaked the token into Git argv"
+  fi
+done
+
+if (( failures > 0 )); then
+  printf 'GITHUB_AUTH_TEST_FAILED failures=%s\n' "$failures" >&2
+  exit 1
+fi
+printf 'GITHUB_AUTH_TEST_OK\n'

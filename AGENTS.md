@@ -69,6 +69,10 @@ AIの推論を利用者の決定・事実として保存しない（帰属は`kn
 
 - APIキー・パスワード等を保存・コミットしない（実値は`.env*`のみ）。
 - GitHubを正本・実行基盤にしない。GitHubへはbackup Tool（backup remote）と上流報告Toolのみ書き、pull/merge/rebase/force push不可。
+- `GH_TOKEN` / `GITHUB_TOKEN`のprocess環境不在や`gh auth status`だけでGitHub認証不能と判断しない。
+  `tools/setup-github-auth.sh --check`のdoctorと実API・実remote probeで判定し、Issue送信・backup・pushを
+  省略しない。`UPSTREAM_REPORT_DRAFTED`は未送信であり成功ではない。毎回のlogin・token設定を要求せず、
+  doctor→安全なrepair 1回→再試行1回の後も不成立ならreason付き非0で停止する。
 - 未依頼の機能・抽象化・依存を追加しない。
 - 未検証の事を完了と報告しない。
 - 破壊的操作（削除、移動等）は依頼があっても即実行せず、対象の`status`と

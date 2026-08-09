@@ -48,6 +48,19 @@ ignore状態にかかわらずToolが停止する（backup対象外の派生領�
 - remoteは常にpush先であり、GitHub Web UI、Codespaces、別マシンから直接編集しない。
 - Private可視性はセットアップ契約であり利用者が確認する。Toolは可視性を照会・変更しない。
 
+## GitHub認証
+
+認証順序・setup・doctorは`tools/UPSTREAM.md#認証`と`tools/lib/github-auth.sh`をIssue送信と共有する。
+GitHub HTTPS remoteだけに`gh auth git-credential`を一時的なGit credential helperとして適用し、tokenを
+URL、argv、Git config値へ入れない。`GIT_TERMINAL_PROMPT=0`を固定する。GitHub SSH remoteは既存SSH認証を
+そのまま使いtokenを要求せず、GitHub以外のremoteへGitHub credentialを渡さない。root dry-run、push、
+失敗分類、push後再検証、Independent remote readのすべてを同じwrapperへ通す。
+
+認証失敗はdoctor→安全なrepair 1回→remote操作再試行1回に限定し、`github-auth-unavailable`、
+`github-permission-denied`、`github-api-unreachable`、`git-credential-unavailable`を
+`remote-diverged`、`remote-unreachable`、`push-failed`と区別する。認証失敗でも検証済みlocal commitを
+取り消さない契約は変わらない。
+
 ## backup Tool
 
 Toolは1つだけであり、scopeをoptionで選ぶ。別のbackup Toolを追加しない。
