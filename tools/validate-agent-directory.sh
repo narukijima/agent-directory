@@ -3,12 +3,20 @@ set -euo pipefail
 
 # Normalize to the physical path. A logical pwd does not match git rev-parse --show-toplevel, so checks would be skipped.
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
+. "$repo_root/tools/lib/project-registry.sh"
 failures=0
 warnings=0
 strict=false
 full=false
 changed=false
 base_ref=''
+validator_metrics_enabled="${AGENT_VALIDATOR_METRICS:-false}"
+if [[ -n "${AGENT_VALIDATOR_NESTED_FIXTURE:-}" ]]; then
+  validator_metrics_enabled=false
+fi
+validator_metrics_file=''
+validator_metrics_started_ms=''
+validator_metrics_last_ms=''
 
 # Syntax-check against bash 3.2 as the compatibility floor. Fall back to the PATH bash where /bin/bash is absent.
 syntax_bash='bash'
@@ -33,6 +41,36 @@ cleanup_tmp_paths() {
   done
 }
 trap cleanup_tmp_paths EXIT
+
+validator_now_ms() {
+  if command -v perl >/dev/null 2>&1; then
+    perl -MTime::HiRes=time -e 'printf "%.0f\n", time * 1000'
+  elif command -v python3 >/dev/null 2>&1; then
+    python3 -c 'import time; print(round(time.time() * 1000))'
+  else
+    printf '%s000\n' "$(date +%s)"
+  fi
+}
+
+validator_metric_checkpoint() {
+  local phase="$1"
+  local now duration
+  [[ "$validator_metrics_enabled" == 'true' && -n "$validator_metrics_file" ]] || return 0
+  now="$(validator_now_ms)"
+  duration=$((now - validator_metrics_last_ms))
+  printf '{"event":"phase","name":"%s","duration_ms":%s}\n' "$phase" "$duration" \
+    >> "$validator_metrics_file"
+  validator_metrics_last_ms="$now"
+}
+
+validator_metric_finish() {
+  local now total
+  [[ "$validator_metrics_enabled" == 'true' && -n "$validator_metrics_file" ]] || return 0
+  now="$(validator_now_ms)"
+  total=$((now - validator_metrics_started_ms))
+  printf '{"event":"summary","wall_time_ms":%s}\n' "$total" >> "$validator_metrics_file"
+  printf 'METRICS: %s\n' "$validator_metrics_file"
+}
 
 # Fixed Wiki Markdown files use uppercase names as canon. User-created sources/topics pages are exempt.
 knowledge_index_path='knowledge/wiki/INDEX.md'
@@ -68,6 +106,20 @@ while (( $# > 0 )); do
     *) usage; exit 2 ;;
   esac
 done
+
+if [[ "$bootstrap_status_mode" == true ]]; then
+  validator_metrics_enabled=false
+fi
+if [[ "$validator_metrics_enabled" == 'true' ]]; then
+  validator_metrics_dir="${AGENT_CACHE_DIR:-$repo_root/.agent-cache}/metrics"
+  mkdir -p "$validator_metrics_dir"
+  validator_metrics_file="$validator_metrics_dir/validator-$(date -u '+%Y%m%dT%H%M%SZ')-$$.jsonl"
+  validator_metrics_started_ms="$(validator_now_ms)"
+  validator_metrics_last_ms="$validator_metrics_started_ms"
+  printf '{"event":"trace","source":"harness","tool":"validate-agent-directory.sh","mode":"%s"}\n' \
+    "$([[ "$full" == true ]] && printf full || ([[ "$changed" == true ]] && printf changed || printf standard))" \
+    > "$validator_metrics_file"
+fi
 
 # Status query, not a check: prints the deployment state of this tree and exits 0.
 # template = every core placeholder still present, deployed = none present, partial = otherwise.
@@ -155,62 +207,6 @@ frontmatter_key_count() {
   ' "$1"
 }
 
-# Emit registry entries one per line as "name<TAB>url<TAB>reason<TAB>revision".
-# Skip code-fenced content; report structural errors as "E<TAB>detail".
-# Mirrors the logic of the same-named function in the materializer and the backup Tool.
-registry_records() {
-  LC_ALL=C awk '
-    function flush_entry() {
-      if (current == "") return
-      if (url_count != 1) print "E\t`" current "` must declare repository_url exactly once"
-      if (reason_count != 1) print "E\t`" current "` must declare repository_reason exactly once"
-      if (revision_count != 1) print "E\t`" current "` must declare revision exactly once"
-      print "R\t" current "\t" url "\t" reason "\t" revision
-      current = ""
-    }
-    {
-      if (substr($0, 1, 3) == "```") { fence = 1 - fence; next }
-      if (fence) next
-      if (substr($0, 1, 3) == "## ") {
-        flush_entry()
-        heading = $0
-        url = ""; reason = ""; revision = ""
-        url_count = 0; reason_count = 0; revision_count = 0
-        if (heading ~ /^## `[A-Za-z0-9][A-Za-z0-9._-]*`[ \t]*$/) {
-          sub(/^## `/, "", heading)
-          sub(/`[ \t]*$/, "", heading)
-          current = heading
-          if (current in seen) print "E\tduplicate registry entry: `" current "`"
-          seen[current] = 1
-          if (previous != "" && previous >= current)
-            print "E\tregistry entries must sort ascending: `" previous "` before `" current "`"
-          previous = current
-        } else {
-          print "E\tinvalid registry heading: " $0
-        }
-        next
-      }
-      if (substr($0, 1, 2) == "- ") {
-        field = $0
-        sub(/^- /, "", field)
-        if (field !~ /^[a-z_]+: `[^`]*`[ \t]*$/) next
-        if (current == "") { print "E\tregistry field outside an entry: " $0; next }
-        key = field
-        sub(/:.*$/, "", key)
-        value = field
-        sub(/^[a-z_]+: `/, "", value)
-        sub(/`[ \t]*$/, "", value)
-        if (key == "repository_url") { url = value; url_count++ }
-        else if (key == "repository_reason") { reason = value; reason_count++ }
-        else if (key == "revision") { revision = value; revision_count++ }
-        else print "E\tunsupported registry field in `" current "`: " key
-        next
-      }
-    }
-    END { flush_entry() }
-  ' "$1"
-}
-
 # Validate the managed block structure of projects/.gitignore and emit entries one per line.
 ignore_block_records() {
   [[ -f "$1" ]] || { printf 'E\tmissing file\n'; return 0; }
@@ -234,33 +230,6 @@ ignore_block_records() {
       if (end_count != 1) print "E\tthe managed block must close exactly once"
     }
   ' "$1"
-}
-
-# repository_url rejects option injection, credentials, query/fragment, file://, and local paths.
-repository_url_is_rejected() {
-  local url="$1"
-  local authority userinfo
-  [[ -n "$url" ]] || return 0
-  case "$url" in
-    -*) return 0 ;;
-    *[[:space:]]*|*'`'*) return 0 ;;
-    *'?'*|*'#'*) return 0 ;;
-    file://*|FILE://*) return 0 ;;
-    /*|./*|../*|~*) return 0 ;;
-  esac
-  authority="${url#*://}"
-  authority="${authority%%/*}"
-  case "$authority" in
-    *@*)
-      userinfo="${authority%%@*}"
-      case "$userinfo" in *:*) return 0 ;; esac
-      ;;
-  esac
-  case "$url" in
-    *://*|*:*) ;;
-    *) return 0 ;;
-  esac
-  return 1
 }
 
 value_character_count() {
@@ -998,7 +967,7 @@ if [[ -f "$repo_root/$registry_path" ]]; then
     independent_urls+=("$registry_b")
     independent_reasons+=("$registry_c")
     independent_revisions+=("$registry_d")
-  done < <(registry_records "$repo_root/$registry_path")
+  done < <(agent_registry_records "$repo_root/$registry_path")
 fi
 independent_count="${#independent_names[@]}"
 
@@ -1246,7 +1215,8 @@ required_files=(
   'projects/_template/PROJECT.md' 'projects/_template/STATE.md' 'evals/EVALS.md' 'tools/TOOLS.md'
   'tools/BACKUP.md' 'tools/build-context-cache.sh' 'tools/find-context.sh' 'tools/prepare-context.sh'
   'tools/append-knowledge-log.sh' 'tools/backup-to-github.sh' 'tools/validate-agent-directory.sh'
-  'tools/materialize-project-repositories.sh' 'tools/finalize-task.sh' '.gitignore'
+  'tools/materialize-project-repositories.sh' 'tools/finalize-task.sh' 'tools/run-evals.py'
+  'tools/lib/project-registry.sh' '.gitignore'
   'tools/UPSTREAM.md' 'tools/report-upstream-issue.sh' 'tools/REFERENCE.md'
   'routines/ROUTINES.md' 'routines/maintenance/ROUTINE.md'
   'tools/run-routine.sh' 'tools/manage-routine-schedule.sh' 'tools/routine-reasoner.py'
@@ -1449,7 +1419,7 @@ validate_repositories_registry() {
       automation|distribution|collaboration|access|identity|upstream|retention) ;;
       *) fail "$rel_registry entry \`$entry_name\` has an invalid repository_reason: ${entry_reason:-<empty>}" ;;
     esac
-    if repository_url_is_rejected "$entry_url"; then
+    if agent_repository_url_is_rejected "$entry_url" false; then
       fail "$rel_registry entry \`$entry_name\` repository_url must be a credential-free remote URL without query, fragment or local path"
     fi
     [[ "$entry_revision" =~ ^[0-9a-f]{40}$ ]] || \
@@ -1465,7 +1435,7 @@ validate_repositories_registry() {
         done < <(printf '%s\n' "$tracked_files_snapshot" | grep -E "^projects/${entry_name//./\\.}/" | head -n 5 || true)
       fi
     fi
-  done < <(registry_records "$scope_registry")
+  done < <(agent_registry_records "$scope_registry")
 
   # The managed block is a derived projection of the registry; its set and order must match exactly.
   previous_ignore=''
@@ -1684,6 +1654,90 @@ grep -Fq '"event":"final_response"' "$repo_root/evals/EVALS.md" || \
 grep -q '^report_match:' "$repo_root/evals/cases/external-effect-approval-gate.yaml" || \
   fail 'external-effect-approval-gate does not carry a report_match observation contract'
 
+# The executable eval runtime is model-independent. Its fixture pins trusted PASS, observed
+# FAIL, agent-only UNVERIFIED, malformed input, regression comparison, dirty-tree refusal,
+# missing adapter handling, isolated execution, and workspace cleanup.
+eval_runtime="$repo_root/tools/run-evals.py"
+eval_fixture="$repo_root/evals/fixtures/eval-runtime"
+if [[ -f "$eval_runtime" ]]; then
+  [[ -x "$eval_runtime" ]] || fail 'tools/run-evals.py is not executable'
+  if command -v python3 >/dev/null 2>&1; then
+    python3 -c 'compile(open(__import__("sys").argv[1], encoding="utf-8").read(), __import__("sys").argv[1], "exec")' \
+      "$eval_runtime" 2>/dev/null || fail 'tools/run-evals.py has invalid Python syntax'
+    eval_pass_output="$(python3 "$eval_runtime" score --case "$eval_fixture/case.yaml" \
+      --trace "$eval_fixture/pass.jsonl" --baseline "$eval_fixture/baseline.json" 2>&1)" || \
+      fail "eval runtime fixture: trusted pass trace was rejected: $eval_pass_output"
+    printf '%s\n' "$eval_pass_output" | grep -Fq 'status=PASS' || \
+      fail 'eval runtime fixture: trusted pass trace did not score PASS'
+    printf '%s\n' "$eval_pass_output" | grep -Fq 'regressions=1' || \
+      fail 'eval runtime fixture: baseline performance regression was not reported'
+
+    set +e
+    eval_fail_output="$(python3 "$eval_runtime" score --case "$eval_fixture/case.yaml" \
+      --trace "$eval_fixture/fail.jsonl" 2>&1)"
+    eval_fail_status=$?
+    set -e
+    (( eval_fail_status == 1 )) && printf '%s\n' "$eval_fail_output" | grep -Fq 'status=FAIL' || \
+      fail 'eval runtime fixture: observed violations did not score FAIL with exit 1'
+
+    eval_unverified_output="$(python3 "$eval_runtime" score --case "$eval_fixture/case.yaml" \
+      --trace "$eval_fixture/unverified.jsonl" 2>&1)" || \
+      fail 'eval runtime fixture: agent-only trace returned an infrastructure error'
+    printf '%s\n' "$eval_unverified_output" | grep -Fq 'status=UNVERIFIED' || \
+      fail 'eval runtime fixture: agent-only evidence was promoted above UNVERIFIED'
+
+    set +e
+    python3 "$eval_runtime" score --case "$eval_fixture/case.yaml" \
+      --trace "$eval_fixture/invalid.jsonl" >/dev/null 2>&1
+    eval_invalid_status=$?
+    set -e
+    (( eval_invalid_status == 2 )) || fail 'eval runtime fixture: malformed JSONL did not exit 2'
+
+    eval_runner_root="$(mktemp -d "${TMPDIR:-/tmp}/agent-eval-runner.XXXXXX")"
+    cleanup_paths+=("$eval_runner_root")
+    mkdir -p "$eval_runner_root/tools" "$eval_runner_root/evals/fixtures"
+    cp "$eval_runtime" "$eval_runner_root/tools/run-evals.py"
+    cp -R "$eval_fixture" "$eval_runner_root/evals/fixtures/eval-runtime"
+    eval_runner_env=(HOME="$eval_runner_root" GIT_CONFIG_NOSYSTEM=1
+      GIT_AUTHOR_NAME=fixture GIT_AUTHOR_EMAIL=fixture@example.invalid
+      GIT_COMMITTER_NAME=fixture GIT_COMMITTER_EMAIL=fixture@example.invalid)
+    env "${eval_runner_env[@]}" git -C "$eval_runner_root" init -q
+    env "${eval_runner_env[@]}" git -C "$eval_runner_root" add -A
+    env "${eval_runner_env[@]}" git -C "$eval_runner_root" commit -q -m 'fixture: eval runner'
+    printf 'dirty\n' > "$eval_runner_root/dirty.txt"
+    set +e
+    eval_dirty_output="$(cd "$eval_runner_root" && python3 tools/run-evals.py run \
+      --adapter evals/fixtures/eval-runtime/adapter.sh \
+      --case evals/fixtures/eval-runtime/case.yaml 2>&1)"
+    eval_dirty_status=$?
+    set -e
+    (( eval_dirty_status == 2 )) && printf '%s\n' "$eval_dirty_output" | grep -Fq 'requires a clean Git tree' || \
+      fail 'eval runtime fixture: dirty Git state was not refused'
+    set +e
+    eval_missing_output="$(cd "$eval_runner_root" && python3 tools/run-evals.py run --allow-dirty \
+      --adapter evals/fixtures/eval-runtime/missing.sh \
+      --case evals/fixtures/eval-runtime/case.yaml 2>&1)"
+    eval_missing_status=$?
+    set -e
+    (( eval_missing_status == 2 )) && printf '%s\n' "$eval_missing_output" | grep -Fq 'adapter must be an existing executable' || \
+      fail 'eval runtime fixture: a missing optional adapter was not diagnosed'
+    eval_output_dir="$eval_runner_root/output"
+    eval_run_output="$(cd "$eval_runner_root" && python3 tools/run-evals.py run --allow-dirty \
+      --adapter evals/fixtures/eval-runtime/adapter.sh \
+      --case evals/fixtures/eval-runtime/case.yaml --output-dir "$eval_output_dir" 2>&1)" || \
+      fail "eval runtime fixture: isolated adapter run failed: $eval_run_output"
+    printf '%s\n' "$eval_run_output" | grep -Fq 'pass=1 fail=0 unverified=0 infra=0' || \
+      fail 'eval runtime fixture: isolated adapter run did not report one PASS'
+    [[ -f "$eval_output_dir/summary.json" ]] || \
+      fail 'eval runtime fixture: isolated adapter run omitted summary.json'
+    if find "$eval_output_dir" -maxdepth 1 -type d -name '.workspace-*' | grep -q .; then
+      fail 'eval runtime fixture: isolated workspace was not cleaned up'
+    fi
+  else
+    warn 'python3 is unavailable; executable eval runtime fixtures were not run'
+  fi
+fi
+
 if ! grep -Eq '    - projects/.+/STATE\.md#現在の目標=.+' "$repo_root/evals/cases/project-state-closeout.yaml"; then
   fail 'project-state-closeout does not require advancing the current goal'
 fi
@@ -1697,6 +1751,20 @@ grep -Fq 'projects/site-migration/STATE.md#次の一手=なし（Project完了�
   fail 'project-finite-completion does not close the next action'
 
 backup_tool="$repo_root/tools/backup-to-github.sh"
+registry_lib="$repo_root/tools/lib/project-registry.sh"
+if [[ -f "$registry_lib" ]]; then
+  "$syntax_bash" -n "$registry_lib" 2>/dev/null || fail 'tools/lib/project-registry.sh fails bash -n'
+  grep -Fq 'agent_registry_records()' "$registry_lib" || \
+    fail 'tools/lib/project-registry.sh does not own the registry parser'
+  grep -Fq 'agent_repository_url_is_rejected()' "$registry_lib" || \
+    fail 'tools/lib/project-registry.sh does not own repository URL validation'
+  for registry_consumer in backup-to-github.sh build-context-cache.sh materialize-project-repositories.sh; do
+    grep -Fq '. "$tool_root/lib/project-registry.sh"' "$repo_root/tools/$registry_consumer" || \
+      fail "tools/$registry_consumer does not source the shared Project registry predicates"
+  done
+  grep -Fq '. "$repo_root/tools/lib/project-registry.sh"' "$repo_root/tools/validate-agent-directory.sh" || \
+    fail 'tools/validate-agent-directory.sh does not source the shared Project registry predicates'
+fi
 if [[ -d "$repo_root/.github/workflows" ]]; then
   fail '.github/workflows is forbidden; GitHub is a passive backup, not an execution platform'
 fi
@@ -1822,6 +1890,10 @@ grep -Fq 'backup-to-github.sh' "$repo_root/tools/TOOLS.md" || \
   fail 'tools/TOOLS.md does not register backup-to-github.sh'
 grep -Fq 'report-upstream-issue.sh' "$repo_root/tools/TOOLS.md" || \
   fail 'tools/TOOLS.md does not register report-upstream-issue.sh'
+grep -Fq 'run-evals.py' "$repo_root/tools/TOOLS.md" || \
+  fail 'tools/TOOLS.md does not register run-evals.py'
+grep -Fq 'tools/run-evals.py' "$repo_root/README.md" || \
+  fail 'README.md does not register tools/run-evals.py'
 grep -Fq 'tools/UPSTREAM.md' "$repo_root/AGENTS.md" || \
   fail 'AGENTS.md does not route upstream issue reporting to tools/UPSTREAM.md'
 # The operator interaction language contract is presence-checked like the other bootloader
@@ -2146,6 +2218,7 @@ grep -Fqx '## Routineケースの最低条件' "$repo_root/evals/EVALS.md" || \
 # The default run is limited to static structural checks; Tool changes require --full (owned by tools/TOOLS.md).
 # AGENT_VALIDATOR_NESTED_FIXTURE is an internal marker preventing recursive runs of a validator
 # invoked from inside a fixture; it is never set in normal operation.
+validator_metric_checkpoint 'static'
 if [[ "$full" == true && -z "${AGENT_VALIDATOR_NESTED_FIXTURE:-}" ]]; then
 cache_test_dir="$(mktemp -d "${TMPDIR:-/tmp}/agent-validator-cache.XXXXXX")"
 fixture_cache_dir="$(mktemp -d "${TMPDIR:-/tmp}/agent-validator-fixture.XXXXXX")"
@@ -2246,9 +2319,11 @@ changed_env=(
   HOME="$changed_fixture_dir" GIT_CONFIG_NOSYSTEM=1
   GIT_AUTHOR_NAME=fixture GIT_AUTHOR_EMAIL=fixture@example.invalid
   GIT_COMMITTER_NAME=fixture GIT_COMMITTER_EMAIL=fixture@example.invalid
+  AGENT_VALIDATOR_NESTED_FIXTURE=1
 )
-mkdir -p "$changed_fixture_dir/tools" "$changed_fixture_dir/projects/scoped-proj"
+mkdir -p "$changed_fixture_dir/tools/lib" "$changed_fixture_dir/projects/scoped-proj"
 cp "$repo_root/tools/validate-agent-directory.sh" "$changed_fixture_dir/tools/"
+cp "$repo_root/tools/lib/project-registry.sh" "$changed_fixture_dir/tools/lib/"
 {
   printf '%s\n' '---' 'name: scoped-proj' 'description: scoped validation fixture' \
     'status: active' 'mode: finite' '---' '' '> Scoped validation fixture goal.' '' \
@@ -3397,6 +3472,7 @@ fi
     fi
   fi
 
+  validator_metric_checkpoint 'full-core'
   # --- Routine integration fixture (canon: routines/ROUTINES.md)-----------------------------------
   # Never touch the real crontab, real LaunchAgents, or real Provider APIs; verify only with an isolated copy, mocks, and a temporary HOME.
   routine_fixture_dir="$(mktemp -d "${TMPDIR:-/tmp}/agent-validator-routine.XXXXXX")"
@@ -3690,7 +3766,7 @@ print(server.server_port, flush=True)
 server.serve_forever()
 MOCK_SERVER
     env "${routine_env[@]}" python3 "$routine_fixture_dir/mock-server.py" "$routine_mock_state" \
-      > "$routine_mock_state/port.txt" 2>/dev/null &
+      > "$routine_mock_state/port.txt" 2> "$routine_mock_state/server.err" &
     routine_mock_pid=$!
     cleanup_pids+=("$routine_mock_pid")
     routine_mock_wait=0
@@ -3700,7 +3776,8 @@ MOCK_SERVER
     done
     routine_mock_port="$(head -n 1 "$routine_mock_state/port.txt" 2>/dev/null || true)"
     if [[ ! "$routine_mock_port" =~ ^[0-9]+$ ]]; then
-      fail 'routine fixture: the mock provider endpoint did not start'
+      routine_mock_error="$(head -n 1 "$routine_mock_state/server.err" 2>/dev/null || true)"
+      fail "routine fixture: the localhost mock provider endpoint did not start: ${routine_mock_error:-no diagnostic}"
     else
 
     # Expected patch: build the real diff fixing the probe's status from the canon.
@@ -3965,6 +4042,7 @@ MOCK_RESPONSES
     routine_extra_env=()
   fi
 
+  validator_metric_checkpoint 'routine'
   # --- Scheduler fixture (mock crontab/launchctl, temporary HOME)------------------------------
   routine_schedule_home="$routine_fixture_dir/home"
   routine_mock_bin="$routine_fixture_dir/bin"
@@ -4096,6 +4174,7 @@ MOCK_RESPONSES
     [[ "$(git -C "$repo_root" rev-parse HEAD)" == "$real_head_before_routine_fixture" ]] || \
       fail 'routine fixture: the real repository HEAD changed during the fixture run'
   fi
+  validator_metric_checkpoint 'scheduler'
 fi
 
 # Control boundary fixtures: the verifier, the policy, the installer, and both git hooks are
@@ -4402,5 +4481,10 @@ if [[ "$full" == true && -z "${AGENT_VALIDATOR_NESTED_FIXTURE:-}" ]]; then
     fail 'control fixture: remove deleted an unmanaged hook'
 fi
 
+if [[ "$full" == true && -z "${AGENT_VALIDATOR_NESTED_FIXTURE:-}" ]]; then
+  validator_metric_checkpoint 'control'
+fi
 run_git_boundary_checks
+validator_metric_checkpoint 'epilogue'
+validator_metric_finish
 finish_run
