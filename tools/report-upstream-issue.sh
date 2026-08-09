@@ -73,9 +73,56 @@ fi
 
 [[ -n "$repo_root" && -f "$repo_root/AGENTS.md" ]] || blocked no-repo-root 'cannot resolve the workspace root'
 
+# --- GitHub認証（tools/UPSTREAM.md#認証） ---------------------------------------
+# 認証順序: GH_TOKEN（環境変数 → .envの既知キー） → ghの保存済み認証（Keychain等）。
+# .envはshellとしてsource/evalせず既知キーだけをsedで読む。値は出力しない（出力自体が漏洩）。
+# GH_TOKENが在ればghが保存済み認証より優先して使う（gh公式のheadless向け認証）。
+if [[ -z "${GH_TOKEN:-}" && -f "$repo_root/.env" ]]; then
+  env_gh_token="$(sed -n 's/^GH_TOKEN=//p' "$repo_root/.env" | tail -n 1)"
+  env_gh_token="${env_gh_token%\"}"; env_gh_token="${env_gh_token#\"}"
+  env_gh_token="${env_gh_token%\'}"; env_gh_token="${env_gh_token#\'}"
+  if [[ -n "$env_gh_token" ]]; then
+    export GH_TOKEN="$env_gh_token"
+  fi
+  unset env_gh_token
+fi
+
+# 判定は認証状態の表示（gh auth status）ではなく実API疎通で行う。auth statusは対象外ホストの
+# 認証問題でも非0になり、Keychainを読めない非対話環境で誤って「未認証」と診断するため。
+# 不成立の原因はgithub_unready_reasonへ区別して残し、一律のgh-unavailableへ潰さない。
+github_unready_reason=''
 gh_ready() {
-  command -v gh >/dev/null 2>&1 || return 1
-  gh auth status >/dev/null 2>&1 || return 1
+  local probe_stderr
+  github_unready_reason=''
+  if ! command -v gh >/dev/null 2>&1; then
+    github_unready_reason='gh-missing'
+    return 1
+  fi
+  if probe_stderr="$(GH_PROMPT_DISABLED=1 GH_NO_UPDATE_NOTIFIER=1 gh api user 2>&1 >/dev/null)"; then
+    return 0
+  fi
+  case "$probe_stderr" in
+    *'HTTP 401'*|*'Bad credentials'*|*'authentication token'*|*'gh auth login'*|*'not logged in'*)
+      github_unready_reason='github-auth-unavailable' ;;
+    *'HTTP 403'*)
+      github_unready_reason='github-permission-denied' ;;
+    *)
+      github_unready_reason='github-api-unreachable' ;;
+  esac
+  return 1
+}
+
+github_unready_hint() {
+  case "$github_unready_reason" in
+    gh-missing)
+      printf 'install GitHub CLI (gh); authentication order is tools/UPSTREAM.md#認証' ;;
+    github-auth-unavailable)
+      printf 'set GH_TOKEN (environment or .env; fine-grained PAT limited to the allowlisted repositories, Issues: Read and write), or run gh auth login (tools/UPSTREAM.md#認証)' ;;
+    github-permission-denied)
+      printf 'the credential reaches the API but lacks permission; grant the fine-grained PAT Issues: Read and write on the allowlisted repositories (tools/UPSTREAM.md#認証)' ;;
+    *)
+      printf 'the GitHub API is unreachable from this environment; retry when the network is available' ;;
+  esac
 }
 
 # --- mode validation -----------------------------------------------------------
@@ -296,7 +343,7 @@ if [[ -n "$search_terms" ]]; then
     printf 'UPSTREAM_REPORT_SEARCH_DRY_RUN_OK\n'
     exit 0
   fi
-  gh_ready || blocked gh-unavailable 'install and authenticate gh, or search the upstream issues manually'
+  gh_ready || blocked "$github_unready_reason" "$(github_unready_hint)" 'or search the upstream issues manually'
   candidates="$(gh issue list --repo "$upstream_repo" --state open --search "$search_terms" \
     --json number,title --jq '.[] | "#\(.number) \(.title)"' 2>/dev/null || true)"
   count=0
@@ -323,7 +370,8 @@ if ! gh_ready; then
   mkdir -p "$draft_dir"
   draft_path="$draft_dir/draft-$(date +%Y%m%d-%H%M%S)-$$.md"
   { printf 'title: %s\n\n' "$title"; cat "$send_body"; } >"$draft_path"
-  printf 'UPSTREAM_REPORT_DRAFTED reason=gh-unavailable path=%s\n' "$draft_path"
+  note "$(github_unready_hint)"
+  printf 'UPSTREAM_REPORT_DRAFTED reason=%s path=%s\n' "$github_unready_reason" "$draft_path"
   exit 0
 fi
 
