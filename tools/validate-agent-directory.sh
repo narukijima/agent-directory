@@ -1236,7 +1236,8 @@ for codex_action in \
   'command = "bash tools/validate-agent-directory.sh --changed"' \
   'command = "bash tools/validate-agent-directory.sh --full"' \
   'command = "bash tools/run-routine.sh maintenance --dry-run"' \
-  'command = "bash tools/install-git-hooks.sh --status"'; do
+  'command = "bash tools/install-git-hooks.sh --status"' \
+  'command = "bash tools/setup-github-auth.sh --check --expected-login narukijima"'; do
   grep -Fqx "$codex_action" "$codex_environment" || \
     fail "Codex Local Environment lost its pinned action: $codex_action"
 done
@@ -1252,7 +1253,7 @@ expected = {
     "hooks": {
         "SessionStart": [
             {
-                "matcher": "startup|resume",
+                "matcher": "startup",
                 "hooks": [
                     {
                         "type": "command",

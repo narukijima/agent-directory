@@ -65,7 +65,8 @@ bash tools/setup-local-environment.sh
 
 Codex Desktopの`.codex/environments/agent-directory.toml`とClaude Codeの共有
 `.claude/settings.json`が呼ぶ唯一のローカル初期化Tool。`bash`、`git`、`python3`とGit rootを検査し、
-worktree固有の検索cacheだけを冪等に生成する。依存packageの追加、`.env*`のコピー、Git hook・remote・
+worktree固有の検索cacheだけを冪等に生成する。新鮮なcacheはstat指紋のfast pathで再利用する。
+依存packageの追加、`.env*`のコピー、Git hook・remote・
 scheduleの変更、ネットワーク接続は行わない。成功は`LOCAL_ENVIRONMENT_READY`、停止は
 `LOCAL_ENVIRONMENT_BLOCKED reason=<reason>`を返す。
 

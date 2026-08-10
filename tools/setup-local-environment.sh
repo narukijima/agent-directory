@@ -21,7 +21,10 @@ actual_root="$(CDPATH= cd -- "$actual_root" && pwd -P)"
 [[ -f "$repo_root/AGENTS.md" && -f "$repo_root/tools/validate-agent-directory.sh" ]] || \
   blocked 'not-agent-directory-root'
 
-# worktreeごとにGit管理外の検索cacheを作る。正本、秘密情報、Git設定、remoteには触れない。
-bash "$repo_root/tools/build-context-cache.sh" --routing-only >/dev/null
+# worktreeごとにGit管理外の検索cacheを作る。既存cacheが新鮮なら本文を再読しない。
+# 正本、秘密情報、Git設定、remoteには触れない。
+if ! bash "$repo_root/tools/build-context-cache.sh" --check-routing >/dev/null 2>&1; then
+  bash "$repo_root/tools/build-context-cache.sh" --routing-only >/dev/null
+fi
 
 printf 'LOCAL_ENVIRONMENT_READY cache=routing-current\n'

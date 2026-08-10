@@ -93,12 +93,15 @@ agent-directory/
 |---|---|---|
 | 共通 | `AGENTS.md` / `tools/setup-local-environment.sh` | 規約と冪等な初期化 |
 | Codex Desktop | `.codex/environments/agent-directory.toml` | worktree作成時のSetupと共通Actions |
-| Claude Code | `.claude/settings.json` | `SessionStart`から同じSetupを呼ぶ |
+| Claude Code | `.claude/settings.json` | 新規`SessionStart`から同じSetupを呼ぶ |
 
-Setupは`bash`、`git`、`python3`とGit rootを確認し、Git管理外の検索cacheだけを生成する。`.env*`のコピー、
+Setupは`bash`、`git`、`python3`とGit rootを確認し、Git管理外の検索cacheだけを生成する。既存cacheが
+新鮮なら本文を再読しないfast pathを使う。`.env*`のコピー、
 package追加、Git hook・remote・scheduleの変更、ネットワーク接続は行わない。Git hookの導入は利用開始手順の
 明示コマンドとして分離する。CodexのActionsは限定検証、full検証、Maintenance dry-run、hook状態確認を
-既存Toolへ直接つなぎ、判定ロジックをadapterへ複製しない。Claude Codeの`.worktreeinclude`も既定では置かず、
+既存Toolへ直接つなぎ、GitHub認証状態は既存の`tools/setup-github-auth.sh --check`へ明示的に接続する。
+GitHub認証Actionは実APIと実remoteを検査するが、Setupからは呼ばない。判定ロジックをadapterへ複製しない。
+Claude Codeの`.worktreeinclude`も既定では置かず、
 `.env*`などGit管理外ファイルをworktreeへ複製する必要が確認されたWorkspaceだけで個別に設計する。
 
 ## Attachment境界
