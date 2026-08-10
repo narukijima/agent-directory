@@ -1,0 +1,25 @@
+version = 1
+name = "agent-directory"
+
+[setup]
+script = "bash tools/setup-local-environment.sh"
+
+[[actions]]
+name = "Validate changed"
+icon = "test"
+command = "bash tools/validate-agent-directory.sh --changed"
+
+[[actions]]
+name = "Validate full"
+icon = "test"
+command = "bash tools/validate-agent-directory.sh --full"
+
+[[actions]]
+name = "Maintenance check"
+icon = "tool"
+command = "bash tools/run-routine.sh maintenance --dry-run"
+
+[[actions]]
+name = "Git hook status"
+icon = "debug"
+command = "bash tools/install-git-hooks.sh --status"

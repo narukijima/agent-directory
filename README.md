@@ -16,9 +16,10 @@ Knowledge、Skill、Projectを正本として育てながら、1タスクの読�
    Agent名・役割はbacktickを保ったまま置換する。自己定義の名乗り行（`- あなたは…`）のbacktick語だけが
    上流報告の匿名化遮断語になり、応対言語・使命・ビジョンは遮断語にならない。
 3. `skills/_template/`または`projects/_template/`を、明示された必要に応じてコピーする。
-4. `bash tools/install-git-hooks.sh --install`でcommit・push境界の検査hookを導入する。
-5. `bash tools/validate-agent-directory.sh --strict --full`を実行する。
-6. `tools/find-context.sh --route <route> --limit 5 -- "検索語"`で対象候補を絞って運用する。
+4. Codex DesktopまたはClaude Codeで開く。どちらも`tools/setup-local-environment.sh`を共通の初期化入口に使う。
+5. `bash tools/install-git-hooks.sh --install`でcommit・push境界の検査hookを導入する。
+6. `bash tools/validate-agent-directory.sh --strict --full`を実行する。
+7. `tools/find-context.sh --route <route> --limit 5 -- "検索語"`で対象候補を絞って運用する。
 
 テンプレートのままではプレースホルダーが残るため、通常の検証は合格し、`--strict`は導入完了まで失敗する。
 
@@ -51,6 +52,8 @@ Knowledge、Skill、Projectを正本として育てながら、1タスクの読�
 agent-directory/
 ├── AGENTS.md                     # ブートローダー兼ルーター兼目次
 ├── CLAUDE.md                     # @AGENTS.md
+├── .codex/environments/          # Codex DesktopのLocal Environment
+├── .claude/settings.json         # Claude Codeの共有project hook
 ├── .agent-cache/                 # Git管理外の派生物
 ├── knowledge/
 │   ├── KNOWLEDGE.md
@@ -81,6 +84,22 @@ agent-directory/
 ├── evals/                        # EVALS.md、cases/、fixtures/
 └── tools/                        # TOOLS.md、BACKUP.md、固定Tool一式
 ```
+
+## ローカル実行環境
+
+`AGENTS.md`を共通の判断規約、`tools/`を決定的処理の正本とし、AIクライアント固有設定は薄いadapterにする。
+
+| 層 | 共有入口 | 責務 |
+|---|---|---|
+| 共通 | `AGENTS.md` / `tools/setup-local-environment.sh` | 規約と冪等な初期化 |
+| Codex Desktop | `.codex/environments/agent-directory.toml` | worktree作成時のSetupと共通Actions |
+| Claude Code | `.claude/settings.json` | `SessionStart`から同じSetupを呼ぶ |
+
+Setupは`bash`、`git`、`python3`とGit rootを確認し、Git管理外の検索cacheだけを生成する。`.env*`のコピー、
+package追加、Git hook・remote・scheduleの変更、ネットワーク接続は行わない。Git hookの導入は利用開始手順の
+明示コマンドとして分離する。CodexのActionsは限定検証、full検証、Maintenance dry-run、hook状態確認を
+既存Toolへ直接つなぎ、判定ロジックをadapterへ複製しない。Claude Codeの`.worktreeinclude`も既定では置かず、
+`.env*`などGit管理外ファイルをworktreeへ複製する必要が確認されたWorkspaceだけで個別に設計する。
 
 ## Attachment境界
 

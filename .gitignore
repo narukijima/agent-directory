@@ -3,5 +3,8 @@
 .env*
 !.env.example
 .DS_Store
-# AIクライアント固有のローカル状態。追跡するとbackup前提条件（未追跡ゼロ）を壊す。
-.claude/
+# AIクライアント固有のローカル状態。共有adapterだけ追跡し、個人設定とworktreeは追跡しない。
+.claude/*
+!.claude/settings.json
+.claude/settings.local.json
+.claude/worktrees/

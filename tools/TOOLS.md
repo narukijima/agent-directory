@@ -106,6 +106,7 @@ Tool呼び出しへまとめ、成功時出力は短く保つ。現在目標、�
 | `build-context-cache.sh` | catalog・manifest・検索索引の再生成 | `tools/REFERENCE.md` |
 | `find-context.sh` | Route確定後の候補検索（metadata最大5件） | `tools/REFERENCE.md` |
 | `prepare-context.sh` | Context Packetとclass→profile写像 | `tools/REFERENCE.md` |
+| `setup-local-environment.sh` | Codex / Claude Code共通のローカル初期化 | `tools/REFERENCE.md` |
 | `finalize-task.sh` | work/state専用の決定的終端（検証・commit・backup） | `tools/REFERENCE.md` |
 | `run-evals.py` | 隔離adapter実行と実traceのPASS / FAIL / UNVERIFIED採点 | `evals/EVALS.md` |
 | `append-knowledge-log.sh` | LOG追記とローテーション | `tools/REFERENCE.md` |

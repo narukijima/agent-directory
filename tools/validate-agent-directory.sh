@@ -1209,12 +1209,14 @@ fi
 
 required_files=(
   'AGENTS.md' 'CLAUDE.md' 'projects/AGENTS.md' 'projects/CLAUDE.md'
+  '.codex/environments/agent-directory.toml' '.claude/settings.json'
   'README.md' 'knowledge/KNOWLEDGE.md' "$knowledge_index_path" "$knowledge_log_path"
   'skills/SKILLS.md' 'skills/_template/SKILL.md' 'projects/PROJECTS.md' 'projects/LIFECYCLE.md' 'projects/RECOVERY.md'
   "$registry_path" "$ignore_path"
   'projects/_template/PROJECT.md' 'projects/_template/STATE.md' 'evals/EVALS.md' 'tools/TOOLS.md'
   'tools/BACKUP.md' 'tools/build-context-cache.sh' 'tools/find-context.sh' 'tools/prepare-context.sh'
   'tools/append-knowledge-log.sh' 'tools/backup-to-github.sh' 'tools/validate-agent-directory.sh'
+  'tools/setup-local-environment.sh'
   'tools/materialize-project-repositories.sh' 'tools/finalize-task.sh' 'tools/run-evals.py'
   'tools/lib/project-registry.sh' '.gitignore'
   'tools/UPSTREAM.md' 'tools/report-upstream-issue.sh' 'tools/REFERENCE.md'
@@ -1223,6 +1225,51 @@ required_files=(
   "$knowledge_source_template_path" "$knowledge_topic_template_path"
 )
 for path in "${required_files[@]}"; do require_file "$repo_root/$path"; done
+
+# AIクライアント固有設定は共通Toolを呼ぶ薄いadapterに固定し、ロジックや秘密情報を複製しない。
+codex_environment="$repo_root/.codex/environments/agent-directory.toml"
+grep -Fqx 'version = 1' "$codex_environment" || fail 'Codex Local Environment must declare version = 1'
+grep -Fqx 'name = "agent-directory"' "$codex_environment" || fail 'Codex Local Environment name must be agent-directory'
+grep -Fqx 'script = "bash tools/setup-local-environment.sh"' "$codex_environment" || \
+  fail 'Codex Local Environment setup must call tools/setup-local-environment.sh'
+for codex_action in \
+  'command = "bash tools/validate-agent-directory.sh --changed"' \
+  'command = "bash tools/validate-agent-directory.sh --full"' \
+  'command = "bash tools/run-routine.sh maintenance --dry-run"' \
+  'command = "bash tools/install-git-hooks.sh --status"'; do
+  grep -Fqx "$codex_action" "$codex_environment" || \
+    fail "Codex Local Environment lost its pinned action: $codex_action"
+done
+
+python3 - "$repo_root/.claude/settings.json" <<'PY' || fail 'Claude Code settings must be valid JSON with the pinned SessionStart setup hook'
+import json
+import sys
+
+with open(sys.argv[1], encoding="utf-8") as handle:
+    settings = json.load(handle)
+
+expected = {
+    "hooks": {
+        "SessionStart": [
+            {
+                "matcher": "startup|resume",
+                "hooks": [
+                    {
+                        "type": "command",
+                        "command": 'bash "$CLAUDE_PROJECT_DIR/tools/setup-local-environment.sh"',
+                    }
+                ],
+            }
+        ]
+    }
+}
+if settings != expected:
+    raise SystemExit(1)
+PY
+
+if grep -Eq '\.env|GH_TOKEN|GITHUB_TOKEN|API_KEY' "$codex_environment" "$repo_root/.claude/settings.json"; then
+  fail 'local environment adapters must not copy or name secret-bearing files and variables'
+fi
 
 # Immutable source material has exactly two areas, internal/external, both protected with the same strength.
 required_directories=(
@@ -1489,6 +1536,11 @@ if command -v git >/dev/null 2>&1 && git -C "$repo_root" rev-parse --show-toplev
   for guarded_path in "$registry_path" "$ignore_path" 'projects/_template/PROJECT.md' 'projects/PROJECTS.md'; do
     if git -C "$repo_root" check-ignore -q -- "$guarded_path" 2>/dev/null; then
       fail "$guarded_path must never be ignored by the root repository"
+    fi
+  done
+  for shared_adapter in '.codex/environments/agent-directory.toml' '.claude/settings.json'; do
+    if git -C "$repo_root" check-ignore -q -- "$shared_adapter" 2>/dev/null; then
+      fail "$shared_adapter is a shared adapter and must not be ignored by the root repository"
     fi
   done
   for embedded_contract in "$repo_root"/projects/*/PROJECT.md; do
@@ -1941,6 +1993,14 @@ if [[ -f "$repo_root/tools/prepare-context.sh" ]]; then
   "$syntax_bash" -n "$repo_root/tools/prepare-context.sh" 2>/dev/null || \
     fail 'tools/prepare-context.sh fails bash -n'
 fi
+grep -Fq 'setup-local-environment.sh' "$repo_root/tools/TOOLS.md" || \
+  fail 'tools/TOOLS.md does not register setup-local-environment.sh'
+if [[ -f "$repo_root/tools/setup-local-environment.sh" ]]; then
+  [[ -x "$repo_root/tools/setup-local-environment.sh" ]] || \
+    fail 'tools/setup-local-environment.sh is not executable'
+  "$syntax_bash" -n "$repo_root/tools/setup-local-environment.sh" 2>/dev/null || \
+    fail 'tools/setup-local-environment.sh fails bash -n'
+fi
 grep -Fq 'finalize-task.sh' "$repo_root/tools/TOOLS.md" || \
   fail 'tools/TOOLS.md does not register finalize-task.sh'
 if [[ -f "$repo_root/tools/finalize-task.sh" ]]; then
@@ -1978,7 +2038,8 @@ if [[ -f "$repo_root/tools/control-policy.tsv" ]]; then
   fi
   # Pin the load-bearing rows so the policy is not silently weakened.
   for pinned_policy in 'forbidden:.env*' 'frozen:knowledge/raw/*' 'frozen:knowledge/wiki/logs/*' \
-    'guarded:AGENTS.md' 'guarded:README.md' 'guarded:tools/*' 'guarded:evals/*' 'guarded:routines/*' \
+    'guarded:AGENTS.md' 'guarded:README.md' 'guarded:.codex/*' 'guarded:.claude/*' \
+    'guarded:tools/*' 'guarded:evals/*' 'guarded:routines/*' \
     'contract:projects/*/PROJECT.md'; do
     pinned_tier="${pinned_policy%%:*}"
     pinned_pattern="${pinned_policy#*:}"
