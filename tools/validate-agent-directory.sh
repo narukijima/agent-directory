@@ -1895,6 +1895,11 @@ if [[ -f "$materialize_tool" ]]; then
 fi
 
 report_tool="$repo_root/tools/report-upstream-issue.sh"
+upstream_contract="$repo_root/tools/UPSTREAM.md"
+grep -Fqx '## 事前承認済み送信' "$upstream_contract" || \
+  fail 'tools/UPSTREAM.md is missing the pre-approved send section heading: ## 事前承認済み送信'
+grep -Fqx '次の全条件を満たす送信だけを、実行前確認なしの事前承認済み外部操作とする。' "$upstream_contract" || \
+  fail 'tools/UPSTREAM.md is missing the introductory contract for pre-approved Issue sends'
 if [[ -f "$report_tool" ]]; then
   [[ -x "$report_tool" ]] || fail 'tools/report-upstream-issue.sh is not executable'
   "$syntax_bash" -n "$report_tool" 2>/dev/null || fail 'tools/report-upstream-issue.sh fails bash -n'
