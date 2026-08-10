@@ -16,6 +16,8 @@ guarded	AGENTS.md	最上位規約
 guarded	CLAUDE.md	bridge
 guarded	README.md	スケルトンの入口文書
 guarded	.gitignore	追跡境界の定義
+guarded	.codex/*	Codex Desktop共有adapter
+guarded	.claude/*	Claude Code共有adapter
 guarded	tools/*	Toolと執行系
 guarded	evals/*	行動契約と採点基準
 guarded	routines/*	無人実行の契約
