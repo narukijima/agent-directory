@@ -1,6 +1,6 @@
 # AGENTS.md — 最上位ブートローダー
 
-共通規約の正本。通常タスクではRouteとTargetだけを決め、内部profileや境界実装を再推論しない。
+共通規約の正本。通常タスクではRouteとTargetだけを決め、内部の境界実装を再推論しない。
 
 ## 自己定義
 
@@ -38,8 +38,8 @@
 ## 自律実行
 
 Human-on-the-loop。通常経路は`Route → Target → Work → Verify`だけとする。`tools/task.sh`へRouteと
-Targetを渡し、Owner、Git root、検証範囲、終了処理はToolが正本から解決する。Agentがtask classや
-profileを通常判断へ露出させない。書込Git rootはsession毎に1つ（判定は`projects/AGENTS.md`）。
+Targetを渡し、必要な読込、書込Git root、検証、終了処理はToolに解決させる。書込Git rootはsession毎に
+1つとする（判定は`projects/AGENTS.md`）。
 
 TriggerはHumanまたはRoutine（Routeではない、同一規則）。関連時だけ`routines/ROUTINES.md`を読む。
 

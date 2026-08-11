@@ -2535,7 +2535,8 @@ changed_env=(
   AGENT_VALIDATOR_NESTED_FIXTURE=1
 )
 mkdir -p "$changed_fixture_dir/tools/lib" "$changed_fixture_dir/projects/scoped-proj"
-cp "$repo_root/tools/validate-agent-directory.sh" "$changed_fixture_dir/tools/"
+cp "$repo_root/tools/validate-agent-directory.sh" "$repo_root/tools/task.sh" \
+  "$changed_fixture_dir/tools/"
 cp "$repo_root/tools/lib/project-registry.sh" "$changed_fixture_dir/tools/lib/"
 {
   printf '%s\n' '---' 'name: scoped-proj' 'description: scoped validation fixture' \
@@ -2561,6 +2562,16 @@ changed_status=$?
 set -e
 if (( changed_status != 0 )) || ! printf '%s\n' "$changed_output" | grep -Fq 'scoped validation (--changed)'; then
   fail "validator --changed did not run a scoped pass on a project-only change: $(printf '%s' "$changed_output" | head -n 3 | tr '\n' ' ')"
+fi
+set +e
+task_verify_output="$(env "${changed_env[@]}" AGENT_DIRECTORY_ROOT="$changed_fixture_dir" \
+  bash "$changed_fixture_dir/tools/task.sh" verify 2>&1)"
+task_verify_status=$?
+set -e
+if (( task_verify_status != 0 )) || \
+  ! printf '%s\n' "$task_verify_output" | grep -Fq 'scoped validation (--changed)' || \
+  ! printf '%s\n' "$task_verify_output" | grep -Fqx 'TASK_OK action=verify scope=changed'; then
+  fail "task facade fixture: verify did not enter the normal --changed path: $(printf '%s' "$task_verify_output" | head -n 3 | tr '\n' ' ')"
 fi
 
 # --changed immutability boundary: with no explicit --base, the uncommitted work is
@@ -2621,6 +2632,16 @@ if (( changed_status == 0 )) || \
   ! printf '%s\n' "$changed_output" | grep -Fq 'running the full static validation'; then
   fail 'validator --changed did not fall back to the full static run when the changed set reached meta canon'
 fi
+set +e
+task_verify_output="$(env "${changed_env[@]}" AGENT_DIRECTORY_ROOT="$changed_fixture_dir" \
+  bash "$changed_fixture_dir/tools/task.sh" verify 2>&1)"
+task_verify_status=$?
+set -e
+if (( task_verify_status == 0 )) || \
+  ! printf '%s\n' "$task_verify_output" | grep -Fq 'running the full static validation' || \
+  ! printf '%s\n' "$task_verify_output" | grep -Fqx 'TASK_FAILED action=verify reason=validation-failed'; then
+  fail 'task facade fixture: verify bypassed the validator meta fallback'
+fi
 
 # prepare-context.sh maps the agent-decided class deterministically: --class is
 # mandatory (never an implicit work), and meta read maps to no validation and no backup.
@@ -2668,6 +2689,91 @@ if (( finalize_probe_status == 0 )) || \
   ! printf '%s\n' "$finalize_probe_output" | grep -Fq 'FINALIZE_BLOCKED reason=ack-env-set'; then
   fail 'finalize-task.sh must refuse a call arriving with an escalation ack preset'
 fi
+
+# task.sh keeps compatibility implementation details behind the facade and refuses bad
+# input/protected completion before commit or backup. The isolated Git fixture gives backup
+# a sentinel stub so any accidental external-effect path is deterministic and observable.
+task_fixture_dir="$(mktemp -d "${TMPDIR:-/tmp}/agent-validator-task.XXXXXX")"
+cleanup_paths+=("$task_fixture_dir")
+mkdir -p "$task_fixture_dir/tools/lib"
+cp "$repo_root/tools/task.sh" "$repo_root/tools/prepare-context.sh" \
+  "$repo_root/tools/finalize-task.sh" "$repo_root/tools/check-boundary.sh" \
+  "$repo_root/tools/control-policy.tsv" "$task_fixture_dir/tools/"
+cp "$repo_root/tools/lib/project-registry.sh" "$task_fixture_dir/tools/lib/"
+{
+  printf '#!/bin/bash\n'
+  printf 'touch "$AGENT_DIRECTORY_ROOT/validator-called"\n'
+  printf 'exit 0\n'
+} > "$task_fixture_dir/tools/validate-agent-directory.sh"
+{
+  printf '#!/bin/bash\n'
+  printf 'touch "$AGENT_DIRECTORY_ROOT/backup-called"\n'
+  printf 'exit 0\n'
+} > "$task_fixture_dir/tools/backup-to-github.sh"
+chmod 755 "$task_fixture_dir/tools/"*.sh
+printf '# fixture agent\n' > "$task_fixture_dir/AGENTS.md"
+printf '# fixture tools\n' > "$task_fixture_dir/tools/TOOLS.md"
+printf '# fixture safety\n' > "$task_fixture_dir/tools/SAFETY.md"
+task_fixture_env=(
+  HOME="$task_fixture_dir/home" GIT_CONFIG_NOSYSTEM=1
+  GIT_AUTHOR_NAME=fixture GIT_AUTHOR_EMAIL=fixture@example.invalid
+  GIT_COMMITTER_NAME=fixture GIT_COMMITTER_EMAIL=fixture@example.invalid
+  AGENT_DIRECTORY_ROOT="$task_fixture_dir"
+)
+env "${task_fixture_env[@]}" git -C "$task_fixture_dir" init -q
+env "${task_fixture_env[@]}" git -C "$task_fixture_dir" add -A
+env "${task_fixture_env[@]}" git -C "$task_fixture_dir" commit -q -m 'fixture: task baseline'
+task_fixture_head="$(env "${task_fixture_env[@]}" git -C "$task_fixture_dir" rev-parse HEAD)"
+
+set +e
+task_context_output="$(env "${task_fixture_env[@]}" \
+  bash "$task_fixture_dir/tools/task.sh" context --route meta --target tools/SAFETY.md 2>&1)"
+task_context_status=$?
+set -e
+if (( task_context_status != 0 )) || \
+  ! printf '%s\n' "$task_context_output" | grep -Fqx 'TASK_CONTEXT v2' || \
+  printf '%s\n' "$task_context_output" | grep -Eq '^(task_class|validation_profile|backup_profile)='; then
+  fail "task facade fixture: context leaked compatibility fields or failed: $task_context_output"
+fi
+
+printf 'protected edit\n' >> "$task_fixture_dir/tools/SAFETY.md"
+env "${task_fixture_env[@]}" git -C "$task_fixture_dir" add tools/SAFETY.md
+set +e
+task_finish_output="$(env "${task_fixture_env[@]}" \
+  bash "$task_fixture_dir/tools/task.sh" finish --route meta --target tools/SAFETY.md \
+  --message 'fixture: protected finish' 2>&1)"
+task_finish_status=$?
+set -e
+if (( task_finish_status == 0 )) || \
+  ! printf '%s\n' "$task_finish_output" | grep -Fqx \
+    'TASK_BLOCKED action=finish reason=protected-change'; then
+  fail "task facade fixture: protected finish was not normalized: $task_finish_output"
+fi
+[[ "$(env "${task_fixture_env[@]}" git -C "$task_fixture_dir" rev-parse HEAD)" == \
+  "$task_fixture_head" ]] || fail 'task facade fixture: protected finish created a commit'
+[[ ! -e "$task_fixture_dir/validator-called" ]] || \
+  fail 'task facade fixture: protected finish ran validation after its boundary refusal'
+[[ ! -e "$task_fixture_dir/backup-called" ]] || \
+  fail 'task facade fixture: protected finish called backup after its boundary refusal'
+env "${task_fixture_env[@]}" git -C "$task_fixture_dir" reset -q --hard >/dev/null
+
+for task_bad_args in 'context --route invalid' \
+  'context --route meta --target ../escape'; do
+  set +e
+  # shellcheck disable=SC2086 # fixture intentionally expands a fixed argument string
+  task_bad_output="$(env "${task_fixture_env[@]}" \
+    bash "$task_fixture_dir/tools/task.sh" $task_bad_args 2>&1)"
+  task_bad_status=$?
+  set -e
+  (( task_bad_status != 0 )) || \
+    fail "task facade fixture: invalid input succeeded: $task_bad_args"
+done
+[[ "$(env "${task_fixture_env[@]}" git -C "$task_fixture_dir" rev-parse HEAD)" == \
+  "$task_fixture_head" ]] || fail 'task facade fixture: invalid input changed Git history'
+[[ -z "$(env "${task_fixture_env[@]}" git -C "$task_fixture_dir" status --porcelain)" ]] || \
+  fail 'task facade fixture: invalid input changed the worktree'
+[[ ! -e "$task_fixture_dir/validator-called" && ! -e "$task_fixture_dir/backup-called" ]] || \
+  fail 'task facade fixture: invalid input reached validation or backup'
 
 # report-upstream-issue.sh anonymization derives block terms from the identity line of
 # AGENTS.md#自己定義 (any heading depth) and is fail-closed on the number of checks that
@@ -4407,7 +4513,8 @@ if [[ "$full" == true && -z "${AGENT_VALIDATOR_NESTED_FIXTURE:-}" ]]; then
     GIT_COMMITTER_NAME=fixture GIT_COMMITTER_EMAIL=fixture@example.invalid
   )
   mkdir -p "$control_work/tools/hooks" "$control_work/knowledge/raw/internal" \
-    "$control_work/knowledge/wiki/logs" "$control_work/projects/demo"
+    "$control_work/knowledge/wiki/logs" "$control_work/projects/demo" \
+    "$control_work/evals/cases" "$control_work/evals/profiles"
   cp "$repo_root/tools/check-boundary.sh" "$repo_root/tools/control-policy.tsv" \
     "$repo_root/tools/install-git-hooks.sh" "$control_work/tools/"
   cp "$repo_root/tools/hooks/pre-commit" "$repo_root/tools/hooks/pre-push" "$control_work/tools/hooks/"
@@ -4415,6 +4522,11 @@ if [[ "$full" == true && -z "${AGENT_VALIDATOR_NESTED_FIXTURE:-}" ]]; then
   printf '# closed log\n' > "$control_work/knowledge/wiki/logs/2026-Q1.md"
   printf 'work\n' > "$control_work/projects/demo/note.md"
   printf '# demo contract\n' > "$control_work/projects/demo/PROJECT.md"
+  printf '# ordinary documentation\n' > "$control_work/README.md"
+  printf '# six invariant safety kernel\n' > "$control_work/tools/SAFETY.md"
+  printf 'name: route-to-knowledge\nexpect:\n  must_read: [knowledge/KNOWLEDGE.md]\n' > \
+    "$control_work/evals/cases/route-to-knowledge.yaml"
+  printf 'route-to-knowledge\n' > "$control_work/evals/profiles/core.txt"
   env "${control_env[@]}" git -C "$control_work" init -q
   env "${control_env[@]}" git -C "$control_work" add -A
   env "${control_env[@]}" git -C "$control_work" commit -q -m 'fixture: control baseline'
@@ -4591,6 +4703,53 @@ if [[ "$full" == true && -z "${AGENT_VALIDATOR_NESTED_FIXTURE:-}" ]]; then
   fi
   env "${control_env[@]}" git -C "$control_work" reset -q -- .env
   rm -f "$control_work/.env"
+
+  # Ordinary model-facing documentation remains a normal commit: no ack and no full
+  # receipt are required merely because the file is at repository root.
+  printf 'clarified normal path\n' >> "$control_work/README.md"
+  env "${control_env[@]}" git -C "$control_work" add README.md
+  control_commit 'fixture: ordinary documentation'
+  if (( control_status != 0 )); then
+    fail "control fixture: ordinary README documentation required protected ceremony: $control_output"
+  fi
+
+  # A Core safety file requires both the one-commit ack and an index-tree-bound receipt.
+  printf 'safety invariant clarification\n' >> "$control_work/tools/SAFETY.md"
+  env "${control_env[@]}" git -C "$control_work" add tools/SAFETY.md
+  control_commit 'fixture: unacknowledged safety change'
+  if (( control_status == 0 )) || \
+    ! printf '%s\n' "$control_output" | grep -Fq 'reason=guarded-path-without-ack'; then
+    fail "control fixture: a Core safety change passed without ack: $control_output"
+  fi
+  control_commit 'fixture: safety without receipt' AGENT_GUARDED_COMMIT=true
+  if (( control_status == 0 )) || \
+    ! printf '%s\n' "$control_output" | grep -Fq 'reason=missing-full-validation-receipt'; then
+    fail "control fixture: an acked Core safety change passed without a receipt: $control_output"
+  fi
+  control_safety_tree="$(env "${control_env[@]}" git -C "$control_work" write-tree)"
+  mkdir -p "$control_work/.git/agent-control/receipts"
+  printf 'head=fixture\n' > "$control_work/.git/agent-control/receipts/$control_safety_tree"
+  control_commit 'fixture: acknowledged safety change' AGENT_GUARDED_COMMIT=true
+  if (( control_status != 0 )); then
+    fail "control fixture: an acked Core safety change with a receipt was refused: $control_output"
+  fi
+  [[ ! -f "$control_work/.git/agent-control/receipts/$control_safety_tree" ]] || \
+    fail 'control fixture: the Core safety receipt was not consumed on use'
+
+  # Core eval cases are protected by the same gate. Even an acked attempted weakening
+  # cannot enter history silently without the exact full-validation receipt.
+  control_eval_head="$(env "${control_env[@]}" git -C "$control_work" rev-parse HEAD)"
+  printf 'name: route-to-knowledge\nexpect: {}\n' > \
+    "$control_work/evals/cases/route-to-knowledge.yaml"
+  env "${control_env[@]}" git -C "$control_work" add evals/cases/route-to-knowledge.yaml
+  control_commit 'fixture: weaken Core eval' AGENT_GUARDED_COMMIT=true
+  if (( control_status == 0 )) || \
+    ! printf '%s\n' "$control_output" | grep -Fq 'reason=missing-full-validation-receipt'; then
+    fail "control fixture: a Core eval weakening passed without a receipt: $control_output"
+  fi
+  [[ "$(env "${control_env[@]}" git -C "$control_work" rev-parse HEAD)" == \
+    "$control_eval_head" ]] || fail 'control fixture: a refused Core eval weakening changed history'
+  env "${control_env[@]}" git -C "$control_work" reset -q --hard >/dev/null
 
   # An unacknowledged guarded commit fails at the hook.
   printf 'forbidden\tblocked.txt\tfixture row\n' >> "$control_work/tools/control-policy.tsv"

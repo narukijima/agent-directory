@@ -91,7 +91,7 @@ case "$command_name" in
       rc=$?
       printf '%s\n' "$output" >&2
       case "$output" in
-        *'reason=guarded-or-contract-diff'*|*'reason=boundary-class'*)
+        *'FINALIZE_BLOCKED reason=boundary'*|*'reason=guarded-or-contract-diff'*|*'reason=boundary-class'*)
           blocked finish protected-change "$rc"
           ;;
         *)
