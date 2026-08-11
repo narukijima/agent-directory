@@ -6,8 +6,7 @@
 
 1. 対象を一つに確定する（明示パスがなければ
    `tools/find-context.sh --route project --limit 5 -- "<query>"`）。明示依頼なく新設しない。
-2. 作業cwdは`projects/<name>/`。classを決め`tools/prepare-context.sh --route project
-   --target projects/<name> --class <class>`でGit所有境界とprofileを得る。
+2. `tools/task.sh context --route project --target projects/<name>`で、読む正本とGit所有境界を得る。
 3. `AGENTS.md`（あれば）→`PROJECT.md`全文→`STATE.md`の順に読み、対象契約
    （`#PC-xx`か`#status`）と合格条件を特定。
 4. 成立したDocs Route条件の正本とRequired参照だけを読む。
@@ -24,8 +23,8 @@
 - 成果契約の範囲で最小かつ完全に変更。契約自体の変更は`projects/LIFECYCLE.md#人間が決める遷移`。
 - `PROJECT.md`の検証を実行。未実行を合格扱いしない。
 - 状態変化と同じ作業内で`STATE.md`を更新。
-- 検証合格後はscoped commitまで確認なしで完結し、結果、証拠、commit、未完了を区別して
-  事後報告（`tools/TOOLS.md#自律実行の標準完了`）。
+- `tools/task.sh verify`で対象差分を検証する。検証合格後はscoped commitまで確認なしで完結し、
+  結果、証拠、commit、未完了を区別して事後報告（`tools/TOOLS.md#自律実行の標準完了`）。
 
 ## PROJECTS.mdを読む条件
 

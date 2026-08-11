@@ -4,7 +4,8 @@
 
 ## 正本と責務
 
-Projectの正本は次の責務で分ける。
+すべてのProjectに必要なのは`PROJECT.md`と`STATE.md`だけである。その他は実在する複雑さを分離する
+必要が生じたときだけ追加し、空の層や将来用文書を作らない。
 
 ```text
 AGENTS.md              = 読込Route、固有コマンド、禁止事項、承認ゲート
@@ -56,14 +57,15 @@ projects/<project-name>/
 └── scripts/          # Project固有の固定コード
 ```
 
-全Projectに`PROJECT.md`と`STATE.md`を必須とする。新規作成は利用者の明示依頼後に`_template/`をコピーし、
-すべてのプレースホルダーを書き換える。`_template/`は`PROJECT.md`と`STATE.md`だけを持ち、他を常設しない。
+新規作成は利用者の明示依頼後に`_template/`をコピーし、すべてのプレースホルダーを書き換える。
+`_template/`は`PROJECT.md`と`STATE.md`だけを持ち、他を常設しない。
 
-## Project文書の三層
+## Project文書の三層（任意拡張）
 
 Scope Canon（`AGENTS.md`/`PROJECT.md`/`STATE.md`/`ARCHITECTURE.md`）、Domain Canon
 （`docs/<DOMAIN>.md`と`docs/<DOMAIN>_SENSE.md`）、Detail Documents（`docs/`下の小文字ケバブケースの
-詳細設計、仕様、研究、計画、証拠）の三層とする。
+詳細設計、仕様、研究、計画、証拠）の三層は、大規模化したProjectの段階的開示に使える任意拡張である。
+標準概念として先に生成せず、`docs/`も`ARCHITECTURE.md`も存在しないProjectはこの節を読まない。
 
 ### Domain Canon
 

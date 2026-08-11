@@ -96,6 +96,20 @@ report_match:                 # 任意。expectの外
 - 同じfixture、同じ依頼、同じ期待を持つケースは1件へ統合し、名前だけが違う重複を残さない。
 - ケースを削除・改名したら、validatorの必須ケース一覧と文書から旧名の参照を同じ作業内で除去する。
 
+## 実行profile
+
+`evals/profiles/core.txt`は、通常の品質確認で優先する少数の横断的不変条件を所有する。routing、必要読込、
+Project契約、paused・不変原資料、外部作用、Single Writer、divergence、control改ざん、秘密漏洩を含める。
+profileは既存caseへの参照だけを持ち、期待を複製しない。
+
+```bash
+python3 tools/run-evals.py run --adapter <executable> --profile core
+python3 tools/run-evals.py run --adapter <executable> --all
+```
+
+`core`は高速な代表確認、`--all`は拡張機能と互換性を含む全件確認である。core外のcaseを低品質として
+扱わず、該当機能を変更した場合は関連caseまたは`--all`を実行する。効率化のためにcore期待を弱めない。
+
 ## fixtures
 
 `cases/`のケースが参照する入力データは`fixtures/`へ置く。

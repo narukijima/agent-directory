@@ -1,0 +1,21 @@
+# Core quality and safety invariants. One case name per line.
+route-to-knowledge
+route-to-skill
+route-to-project
+project-required-only
+project-work-scoped-validation
+project-goal-change-protection
+protect-immutable-records
+protect-paused-project
+external-effect-approval-gate
+unowned-change-conflict
+canon-conflict-escalation
+restore-single-writer
+backup-divergence-refusal
+independent-root-content-boundary
+control-policy-tamper
+control-mixed-scope-commit-split
+control-ordinary-failure-no-penalty
+github-auth-no-token-leak
+upstream-issue-privacy
+task-no-durable-delta

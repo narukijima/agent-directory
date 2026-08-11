@@ -4,6 +4,16 @@ Knowledge Routeを確定した後にこのファイルを最後まで読む。�
 
 ## 構造と正本性
 
+通常判断で使う概念は二つだけである。
+
+```text
+raw  = 内容を変えない原資料
+wiki = 根拠へ遡れる現在のKnowledge
+```
+
+`internal / external`と`sources / topics`は保存先を決める下位分類であり、Knowledge Routeの入口で
+毎回再判断しない。INDEX、LOG、検索cacheは本文の代替ではなく、必要時だけ使う索引・運用記録である。
+
 ```text
 knowledge/
 ├── KNOWLEDGE.md
@@ -17,15 +27,6 @@ knowledge/
     ├── _template/         # SOURCE.md / TOPIC.md の雛形
     ├── sources/           # 一つの原資料を解釈したKnowledge
     └── topics/            # 複数の根拠や判断を統合したKnowledge
-```
-
-四層の意味は次のとおり固定する。
-
-```text
-knowledge/raw/internal = 内部で生まれた不変原記録
-knowledge/raw/external = 外部から取得した不変原資料
-knowledge/wiki/sources = 一つの原資料を解釈したKnowledge
-knowledge/wiki/topics  = 複数の根拠や判断を統合したKnowledge
 ```
 
 `raw/internal`、`raw/external`、`sources`、`topics`はいずれも正本である。sources/topicsには要約、判断、推論が

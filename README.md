@@ -25,6 +25,8 @@ Knowledge、Skill、Projectを正本として育てながら、1タスクの読�
 
 ## 設計方針
 
+- 通常経路は`Route → Target → Work → Verify`に固定し、`tools/task.sh`を共通入口にする。
+- 常時守る安全境界は[tools/SAFETY.md](tools/SAFETY.md)の6項目だけとし、実装詳細は条件付きで読む。
 - Human-on-the-loopで運用する。内部で完結する可逆な操作はAIが判断、実行、検証、commitまで完結し、
   人間は方針・成果契約の変更、不可逆操作、外部影響、安全性と正本衝突だけを見る。
 - リポジトリ内の正本を会話記憶、製品側AIメモリ、検索結果より優先する。
@@ -82,7 +84,7 @@ agent-directory/
 │   ├── ROUTINES.md               # Routine Trigger層の正本
 │   └── maintenance/ROUTINE.md    # Maintenance Routineの契約
 ├── evals/                        # EVALS.md、cases/、fixtures/
-└── tools/                        # TOOLS.md、BACKUP.md、固定Tool一式
+└── tools/                        # task.sh、SAFETY.md、固定ToolとOptional capability
 ```
 
 ## ローカル実行環境
@@ -166,9 +168,9 @@ tools/find-context.sh --route knowledge --limit 5 -- "資本配分"
 # 明示的な監査時だけ非activeも含める
 tools/find-context.sh --route project --include-inactive -- "site migration"
 
-# 対象確定後の初期読込とtask class profileを1回のContext Packetへまとめる
-tools/prepare-context.sh --route project --target projects/<name> --class work
-tools/prepare-context.sh --route meta --target tools/TOOLS.md --class read
+# 対象確定後の通常入口
+tools/task.sh context --route project --target projects/<name>
+tools/task.sh context --route meta --target tools/TOOLS.md
 ```
 
 明示パスと正本の明示参照を最優先とし、検索結果は候補として扱う。選択後に正本を読む。
@@ -180,7 +182,8 @@ manifest（全体inventory）はMaintenanceとfull検証だけが再生成する
 ## 検証
 
 ```bash
-bash tools/validate-agent-directory.sh --changed          # 通常work: 変更対象だけの限定検証
+tools/task.sh verify                                      # 通常入口
+bash tools/validate-agent-directory.sh --changed          # 互換・直接実行
 bash tools/validate-agent-directory.sh
 bash tools/validate-agent-directory.sh --strict --full
 bash tools/validate-agent-directory.sh --full --base main
@@ -196,120 +199,46 @@ Knowledgeページの削除は通常workとして通らない。meta正本への
 行動evalは[evals/EVALS.md](evals/EVALS.md)のtrace契約を`tools/run-evals.py`で採点できる。外部AIは
 必須ではなく、観測されていない期待は自己申告でPASSにせず`UNVERIFIED`に残す。
 
-commit・push境界は[tools/CONTROL.md](tools/CONTROL.md)のpolicyを`tools/check-boundary.sh`が判定し、
-導入済みのgit hooks（pre-commit / pre-push）が強制する。hookが実行するのはworking tree版ではなく
-`.git/agent-control/`の承認済みsnapshot（HEAD追従）であり、meta正本・Project成果契約の変更には
-明示ackと`--full`検証のreceiptを要求し、push時は送信内容を再検査する。判定はAIハーネスに依存せず、
-hookは境界検査だけを行いbackupや検証を起動しない。materialize済みIndependent repositoryへも
-同じhookが導入される。
+commit・push境界は`tools/check-boundary.sh`と導入済みgit hooksが機械的に強制する。通常変更と
+protected変更の分離、検証、Independent repositoryへの適用は
+[tools/CONTROL.md](tools/CONTROL.md)だけが所有し、停止時または境界保守時に読む。
+
+## CoreとOptional
+
+Coreは`AGENTS.md`、Route正本、`tools/task.sh`、validator、[tools/SAFETY.md](tools/SAFETY.md)である。
+通常タスクはこの範囲だけで開始できる。backup、GitHub認証repair、Independent repository、Routine、
+behavioral eval、上流Issue報告はOptional capabilityであり、該当機能を使うときだけ正本とToolを読む。
+
+既存consumerとの互換性のため`tools/prepare-context.sh`と`tools/finalize-task.sh`は残すが、新しい通常入口を
+増やさない。分類と所有先は[tools/TOOLS.md](tools/TOOLS.md)、個別CLIは
+[tools/REFERENCE.md](tools/REFERENCE.md)が所有する。
 
 ## Routine（自律定期保守）
 
-`routines/`は、SchedulerがAgentを起動するTrigger層である。RoutineはRouteではなくTriggerであり、
-Human起点と同じRoute・Owner・Target・Verify・例外規則に従う。初期版はMaintenance Routineだけで、
-Research Routineは未実装である。詳細契約は[routines/ROUTINES.md](routines/ROUTINES.md)と
-[routines/maintenance/ROUTINE.md](routines/maintenance/ROUTINE.md)が所有する。
-
-### モデルなしで動くMaintenance
-
-推論ProviderやAPIキーを設定しなくても、標準Maintenanceは完全に実行できる。
+RoutineはOptionalであり、通常タスクでは読まない。利用時の安全境界、Provider、lock、schedule、結果語彙は
+[routines/ROUTINES.md](routines/ROUTINES.md)が所有する。初期版はMaintenanceだけである。
 
 ```bash
-bash tools/run-routine.sh maintenance            # 日次: cache鮮度 + 標準validator
-bash tools/run-routine.sh maintenance --dry-run  # 検査のみ。変更・commit・backup・外部送信なし
-bash tools/run-routine.sh maintenance --full     # 広域検証を強制
-```
-
-日次scheduleを1つ登録するだけで、7日ごとのfull検証はExecutorが自律判定する。問題も
-tracked変更もなければ`ROUTINE_NOOP`で終了し、API呼び出し・commit・backup・pushを行わない。
-Routineがtracked修正をcommitできた場合だけ、既存の[tools/BACKUP.md](tools/BACKUP.md)の
-event-driven backup契約に従う（schedule到達自体はbackup triggerにならない）。
-
-### optional reasoning（任意）
-
-`.env.example`を`.env`へコピーし、次を設定すると、validatorの具体的なFAILがあるときだけ
-限定的な推論支援と低リスク自動修復が有効になる。
-
-```dotenv
-AGENT_ROUTINE_REASONING_ENABLED=true
-AGENT_ROUTINE_REASONING_PROVIDER=deepseek   # deepseek | openai | anthropic から1つ
-AGENT_ROUTINE_REASONING_MODEL=<provider側のmodel ID。利用者が明示設定する>
-DEEPSEEK_API_KEY=<選択したProviderのkeyだけ>
-```
-
-`ENABLED=true`は、validator診断と直接関係する最小限のtrackedテキスト（最大12ファイル・32KiB）を
-選択した1 Providerへ送信するstanding approvalになる。`.env*`、`knowledge/raw/**`、ログ、秘密情報は
-送信されない。Provider間の自動fallbackはなく、モデル出力は隔離検証を通過した低リスクpatchだけが
-適用される。設定不足でも決定的Maintenanceは失敗しない。
-
-### Scheduler（cron / launchd）
-
-一般的なUnix環境の標準はcron、macOSの推奨はlaunchd（user LaunchAgent）である。
-`--scheduler auto`はmacOSでlaunchd、その他でcronを選ぶ。scheduleはhostのlocal timezoneで動く。
-
-```bash
-# 登録内容の確認（OSへは何も書かない）
-bash tools/manage-routine-schedule.sh --routine maintenance --scheduler auto --at 03:00 --print
-
-# 登録・状態・解除（冪等。無関係なcrontab entryやLaunchAgentへは触れない）
-bash tools/manage-routine-schedule.sh --routine maintenance --scheduler auto --at 03:00 --install
+bash tools/run-routine.sh maintenance --dry-run
 bash tools/manage-routine-schedule.sh --routine maintenance --scheduler auto --status
-bash tools/manage-routine-schedule.sh --routine maintenance --scheduler auto --remove
 ```
 
-Schedulerはclone時に自動installされない。`--install`は利用者の明示操作である。
+推論とschedule導入は明示設定時だけ有効になる。未設定では外部通信せず、clone時にscheduleを
+自動installしない。
 
 ## ローカル正本とGitHubバックアップ
 
-ローカルの作業コピーが唯一の書込可能な稼働正本であり、GitHubは最後に確定したコミットの受動的な
-遠隔復旧コピーである。通常タスクはネットワークなしで完結し、GitHub Actions、CI、cron、常駐daemonによる
-時刻駆動の同期は使用しない。backupはエージェントのタスク境界で起きるevent-drivenな操作であり、有効な
-Private backup remoteが設定済みなら、検証済みcommitの後に確認を求めず実行する。エージェント1体につき
-Privateリポジトリを1つ用意し、公開スケルトンへ実運用データをpushしない。Single WriterはGitリポジトリ
-単位であり、同じrepositoryへ同時に書き込む稼働コピーを持たない。異なるIndependent repositoryは
-並行して進めてよい。
-
-GitHub認証はWorkspaceごとの`.env`ではなく、マシン共通credentialを標準とする。Mac mini、MacBook等、
-各マシンで次を一度だけ実行すれば、そのマシン上のAgent Workspaceが同じ安全なresolverを利用する。
-process `GH_TOKEN` / `GITHUB_TOKEN`は一時override、Workspace `.env`は限定override、`gh`保存認証は
-fallbackである。token値はGitへ追跡せず、既定pathは
-`${XDG_CONFIG_HOME:-$HOME/.config}/agent-directory/github.env`（directory `0700`、file `0600`）。
+ローカルが稼働正本、GitHubは受動的な復旧コピーである。backupはOptional capabilityであり、設定済みの
+タスク境界でだけ`tools/backup-to-github.sh`を使う。認証、scope、divergence、復旧、Single Writer、
+`git clean`の禁止は[tools/BACKUP.md](tools/BACKUP.md)が所有する。
 
 ```bash
-bash tools/setup-github-auth.sh --install-from-gh
 bash tools/setup-github-auth.sh --check
-```
-
-特定accountへ厳格に固定するWorkspaceだけ`--expected-login <github-login>`または
-`AGENT_DIRECTORY_GITHUB_EXPECTED_LOGIN`を指定する。公開スケルトンは個人loginを既定値に持たない。
-`--remote`未指定のdoctorは`remote.pushDefault`、`backup`、`origin`の順で実在remoteを選ぶ。
-
-```bash
-# セットアップ（GitHubで空のPrivateリポジトリを作成してから実行する）
-git remote rename origin template
-git remote add backup git@github.com:<owner>/<private-agent-repository>.git
-git config remote.pushDefault backup
-
-# バックアップ（既定はworkspace scope）
 bash tools/backup-to-github.sh --dry-run
-bash tools/backup-to-github.sh
-
-# root repositoryだけの部分結果
-bash tools/backup-to-github.sh --root-only --dry-run
-bash tools/backup-to-github.sh --root-only
 ```
 
-triggerは検証済みcommitの後、破壊的変更前のcheckpoint、採用revision更新後、マシン移行前などのタスク
-境界である。前提条件を満たさなければ何も変更せず停止する。backupの失敗は検証済みローカルcommitの成功を
-取り消さず、`local task` / `local commit` / `backup` / `recoverability`を区別して報告する。
-
-| scope | 検査範囲 | 成功出力 |
-|---|---|---|
-| 既定（workspace） | root push前に全Independent repositoryを監査。Independent remoteへはpushしない | `WORKSPACE_BACKUP_OK` |
-| `--root-only` | root repositoryだけ。Independentのnetwork、dirty、unpushは検査しない部分結果 | `ROOT_BACKUP_OK` |
-
-停止条件、divergence時の禁止操作、Single Writer、root `git clean`の禁止、復旧・移行手順、旧構造からの
-移行は[tools/BACKUP.md](tools/BACKUP.md)が所有し、バックアップ・復旧・移行を扱うときだけ読む。
+Toolは前提違反ならremoteを変更せず停止する。backup失敗は検証済みlocal commitを取り消さず、
+`local task`、`local commit`、`backup`、`recoverability`を分けて報告する。
 
 ## 正本
 
@@ -324,7 +253,8 @@ triggerは検証済みcommitの後、破壊的変更前のcheckpoint、採用rev
 | [projects/LIFECYCLE.md](projects/LIFECYCLE.md) / [projects/RECOVERY.md](projects/RECOVERY.md) | 状態遷移と削除条件 / 目的不一致からの復旧 |
 | [routines/ROUTINES.md](routines/ROUTINES.md) | Routine Trigger層、Scheduler分離、送信境界、commit/backup条件 |
 | [evals/EVALS.md](evals/EVALS.md) | 振る舞いevalの契約、ケースschema、fixture、最低条件 |
-| [tools/TOOLS.md](tools/TOOLS.md) | task class、Tool登録、相互参照、自律commit、自己修復、サイズ予算 |
+| [tools/SAFETY.md](tools/SAFETY.md) | 通常判断で守る6つの安全不変条件とリスク別経路 |
+| [tools/TOOLS.md](tools/TOOLS.md) | 通常入口、Core/Optional分類、Tool登録、自律commit、自己修復、サイズ予算 |
 | [tools/REFERENCE.md](tools/REFERENCE.md) | 固定Toolの呼び出し形、入出力、生成物、停止reason、fallback |
 | [tools/BACKUP.md](tools/BACKUP.md) | backup trigger、remote分類、失敗と復旧、divergence、Single Writer |
 | [tools/CONTROL.md](tools/CONTROL.md) | 境界執行の三層、policy tier、明示エスカレーション、違反分類と代謝、委譲境界、導入基準 |

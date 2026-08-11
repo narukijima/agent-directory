@@ -5,6 +5,23 @@
 自律実行の規約は`tools/TOOLS.md`が所有し、本書はTool個別の契約だけを持つ。下流Workspaceの
 固有Toolも、登録は`tools/TOOLS.md#Tool一覧`へ1行、詳細は本書へ節を追加して所有させる。
 
+## task.sh
+
+```bash
+tools/task.sh context --route <route> [--target <path>]
+tools/task.sh verify
+tools/task.sh finish --route <route> [--target <path>] --message "変更理由"
+tools/task.sh status
+```
+
+通常タスクの薄い入口。`context`は互換実装の`prepare-context.sh`からtask classとprofileを隠して
+読む正本とGit所有境界だけを返す。`verify`は変更集合から`--changed`検証を起動し、meta変更はvalidatorが
+full staticへ自動fallbackする。`finish`は通常変更だけを`finalize-task.sh`へ委譲し、protected変更は
+`TASK_BLOCKED reason=protected-change`として手動の安全経路へ返す。`status`はGit rootと変更件数だけを返す。
+
+正規結果は`TASK_CONTEXT v2`、`TASK_OK`、`TASK_BLOCKED`、`TASK_FAILED`のいずれかである。下位Toolの
+診断はstderrへ保持し、既存consumer向けの結果語彙を変更しない。
+
 ## build-context-cache.sh
 
 ```bash
@@ -135,6 +152,12 @@ process `GITHUB_TOKEN` → Workspace `.env` → マシン共通`github.env` → 
 値は出力せず、machine directory `0700`・file `0600`以外をfail closedする。APIは`gh api user`、Gitは
 実remote readで能力を判定し、GitHub HTTPSだけ`gh auth git-credential`をchild Gitへ適用する。
 SSHとGitHub以外のhostへGitHub credentialを渡さない。
+
+`GH_TOKEN`等のprocess環境不在や`gh auth status`だけを失敗根拠にしない。`GH_HOST=github.com`を固定し、
+実`gh api user`と対象remote probeで判定する。認証失敗はdoctor→安全なrepair 1回→操作再試行1回までとし、
+`auth-store-missing`、`auth-store-permissions`、`account-mismatch`、`github-auth-unavailable`、
+`github-permission-denied`、`github-api-unreachable`、`git-credential-unavailable`、
+`remote-not-configured`を区別する。
 
 ```bash
 bash tools/setup-github-auth.sh --install-from-gh

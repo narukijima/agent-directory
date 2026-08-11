@@ -16,6 +16,22 @@ Agent = いつ実行するかを規約に従って判断し、検証と記録ま
 Human = 例外と方針変更を決定する
 ```
 
+## 通常入口
+
+通常タスクでAgentが使う入口は`tools/task.sh`に一本化する。
+
+```bash
+tools/task.sh context --route <route> [--target <path>]
+tools/task.sh verify
+tools/task.sh finish --route <route> [--target <path>] --message "変更理由"
+```
+
+Agentが渡すのはRouteとTargetであり、必要な読込、Git root、検証、終了処理は既存の決定的Toolが
+解決する。read-only回答は入口Toolを必須とせず、明示対象を必要最小限だけ読む。
+
+安全境界の要約は`tools/SAFETY.md`が所有する。通常作業では`tools/CONTROL.md`、`tools/BACKUP.md`、
+本書の互換実装節を読まず、Toolが返した停止reasonに該当するときだけ読む。
+
 ## 正本と派生物
 
 Markdown、原資料、Project入出力、eval、Toolコードが正本である。`.agent-cache/`はGit管理外の派生物で、
@@ -49,7 +65,7 @@ work/stateの終端は`tools/finalize-task.sh`の1回で検証・commit・backup
 - commitが意味的に一つの作業単位である。
 
 hooks導入済み環境では、commit・push境界を`tools/check-boundary.sh`が機械検査する（正本は
-`tools/CONTROL.md`。guarded正本の変更は明示エスカレーションと`--full`検証を要する）。
+`tools/CONTROL.md`。安全核としてguardedな変更だけが明示エスカレーションと`--full`検証を要する）。
 
 commit messageは変更内容と理由が分かる一文を先頭に置く。中断時は残件を明記した
 checkpoint commitを作ってよいが、完了報告にも成果契約の達成にもしない。commit後は`tools/BACKUP.md`の
@@ -84,6 +100,8 @@ Toolへの決定的な入力不備、自分の変更が壊したtestである。
 
 ### タスク分類と終端処理
 
+以下は互換実装の内部契約であり、通常のAgent判断へ露出させない。
+
 | class | 対象 | 終端処理 |
 |---|---|---|
 | read | 照会、監査、説明 | 検証・STATE・commit・backup・manifest生成なし |
@@ -91,9 +109,9 @@ Toolへの決定的な入力不備、自分の変更が壊したtestである。
 | state | 目標・到達点・検証結果の変化 | STATE更新後に同じfinalize 1回 |
 | boundary | 契約、attachment、registry、移行、復旧 | full検証、必要な承認、workspace backup（手動経路） |
 
-classはAgentが決め、必須の`prepare-context.sh --class`がprofileへ写像する（metaのwork/stateはfull）。未指定classを暗黙のworkとして扱わない。決定的なコマンド列は1回の
-Tool呼び出しへまとめ、成功時出力は短く保つ。現在目標、到達点、検証結果、ブロッカー、次の一手が
-変わらなければ`STATE.md`は不変とし、実行した事実や日付だけで更新しない。
+この表は`task.sh`配下の互換実装用であり、通常のAgent判断へ露出させない。直接呼び出す既存consumerの
+ために`prepare-context.sh --class`と`finalize-task.sh --class`は維持する。現在目標、到達点、検証結果、
+ブロッカー、次の一手が変わらなければ`STATE.md`は不変とし、実行した事実や日付だけで更新しない。
 
 ## Tool一覧
 
@@ -101,26 +119,41 @@ Tool呼び出しへまとめ、成功時出力は短く保つ。現在目標、�
 「詳細正本」列の所有先だけが持ち、扱うToolの節だけを条件付きロードで読む。下流Workspaceの
 固有Toolも本表へ1行で登録し、詳細は`tools/REFERENCE.md`へ節を追加する（本書へ詳細を書き戻さない）。
 
+### Core
+
+通常タスクと6つの安全不変条件を支える。Agentが通常直接使うのは`task.sh`と`find-context.sh`だけである。
+
 | Tool | 責務 | 詳細正本 |
 |---|---|---|
+| `task.sh` | context、変更検証、終端処理の薄い共通入口 | `tools/REFERENCE.md` |
 | `build-context-cache.sh` | catalog・manifest・検索索引の再生成 | `tools/REFERENCE.md` |
 | `find-context.sh` | Route確定後の候補検索（metadata最大5件） | `tools/REFERENCE.md` |
-| `prepare-context.sh` | Context Packetとclass→profile写像 | `tools/REFERENCE.md` |
 | `setup-local-environment.sh` | Codex / Claude Code共通のローカル初期化 | `tools/REFERENCE.md` |
-| `finalize-task.sh` | work/state専用の決定的終端（検証・commit・backup） | `tools/REFERENCE.md` |
-| `run-evals.py` | 隔離adapter実行と実traceのPASS / FAIL / UNVERIFIED採点 | `evals/EVALS.md` |
-| `append-knowledge-log.sh` | LOG追記とローテーション | `tools/REFERENCE.md` |
-| `backup-to-github.sh` | root backup remoteへpushする唯一の標準経路 | `tools/REFERENCE.md` |
-| `report-upstream-issue.sh` | 上流Issue送信の唯一の経路（宛先許可リスト固定・添付なし） | `tools/UPSTREAM.md` |
-| `lib/github-auth.sh` / `setup-github-auth.sh` | Issueとbackup共通の認証resolver、1台1回のsetup、doctor | `tools/REFERENCE.md` |
-| `migrate-github-auth.sh` | 既存Workspaceへ認証実装だけを安全に移植 | `tools/REFERENCE.md` |
-| `test-github-auth.sh` | 認証resolver・API分類・draft契約の隔離fixture | `tools/REFERENCE.md` |
-| `materialize-project-repositories.sh` | registryからclone再現（復旧・移行・partial解消） | `tools/REFERENCE.md` |
-| `run-routine.sh` | Scheduler起点のRoutine Executor | `tools/REFERENCE.md` |
-| `manage-routine-schedule.sh` | user crontab / LaunchAgentのSchedule管理 | `tools/REFERENCE.md` |
-| `routine-reasoner.py` | 任意推論アダプター（provider・keyは`.env`） | `tools/REFERENCE.md` |
 | `validate-agent-directory.sh` | 構造・境界・サイズの機械検査 | `tools/REFERENCE.md` |
 | `check-boundary.sh` / `install-git-hooks.sh` | commit・push境界検査とhook導入 | `tools/CONTROL.md` |
+
+### Compatibility
+
+既存consumerと`task.sh`の内部実装が使う。新しい通常経路を増やさない。
+
+| Tool | 責務 | 詳細正本 |
+|---|---|---|
+| `prepare-context.sh` | Context Packetとclass→profile写像 | `tools/REFERENCE.md` |
+| `finalize-task.sh` | work/state専用の決定的終端（検証・commit・backup） | `tools/REFERENCE.md` |
+| `append-knowledge-log.sh` | LOG追記とローテーション | `tools/REFERENCE.md` |
+
+### Optional
+
+該当機能を明示利用するときだけ読む。存在することを全タスクの必須知識にしない。
+
+| Capability | Tool | 詳細正本 |
+|---|---|---|
+| behavioral eval | `run-evals.py` | `evals/EVALS.md` |
+| backup | `backup-to-github.sh` | `tools/BACKUP.md` |
+| upstream report | `report-upstream-issue.sh` | `tools/UPSTREAM.md` |
+| GitHub auth | `lib/github-auth.sh`、`setup-github-auth.sh`、`test-github-auth.sh`、`migrate-github-auth.sh` | `tools/REFERENCE.md` |
+| Independent repository | `materialize-project-repositories.sh` | `tools/REFERENCE.md` |
+| Routine | `run-routine.sh`、`manage-routine-schedule.sh`、`routine-reasoner.py` | `routines/ROUTINES.md` |
 
 ## サイズ予算
 

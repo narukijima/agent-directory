@@ -453,6 +453,25 @@ def resolve_case(repo_root, value):
     return candidate.resolve()
 
 
+def resolve_profile(repo_root, value):
+    if not re.fullmatch(r"[a-z0-9]+(?:-[a-z0-9]+)*", value):
+        raise EvalError("profile has an invalid name: %s" % value)
+    profile_path = repo_root / "evals" / "profiles" / (value + ".txt")
+    if not profile_path.is_file():
+        raise EvalError("profile does not exist: %s" % value)
+    names = []
+    for line_number, raw_line in enumerate(profile_path.read_text(encoding="utf-8").splitlines(), 1):
+        name = raw_line.strip()
+        if not name or name.startswith("#"):
+            continue
+        if name in names:
+            raise EvalError("profile %s repeats case %s at line %d" % (value, name, line_number))
+        names.append(name)
+    if not names:
+        raise EvalError("profile is empty: %s" % value)
+    return [resolve_case(repo_root, name) for name in names]
+
+
 def copy_workspace(repo_root, destination):
     result = subprocess.run(["git", "-C", str(repo_root), "ls-files", "-co", "--exclude-standard", "-z"],
                             stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
@@ -482,13 +501,14 @@ def run_adapter(args, repo_root):
         adapter = (Path.cwd() / adapter).resolve()
     if not adapter.is_file() or not os.access(str(adapter), os.X_OK):
         raise EvalError("adapter must be an existing executable file: %s" % adapter)
-    if args.all and args.case:
-        raise EvalError("choose --all or --case, not both")
+    selectors = int(bool(args.all)) + int(bool(args.case)) + int(bool(args.profile))
+    if selectors != 1:
+        raise EvalError("choose exactly one of --profile, --all, or --case")
     case_paths = [resolve_case(repo_root, value) for value in args.case]
-    if args.all:
+    if args.profile:
+        case_paths = resolve_profile(repo_root, args.profile)
+    elif args.all:
         case_paths = sorted((repo_root / "evals" / "cases").glob("*.yaml"))
-    if not case_paths:
-        raise EvalError("run mode requires --case or --all")
     timestamp = dt.datetime.now(dt.timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
     output_dir = Path(args.output_dir or (repo_root / ".agent-cache" / "evals" / timestamp)).resolve()
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -584,6 +604,7 @@ def build_parser():
     run.add_argument("--adapter", required=True)
     run.add_argument("--case", action="append", default=[])
     run.add_argument("--all", action="store_true")
+    run.add_argument("--profile", help="run a named case list from evals/profiles/<name>.txt")
     run.add_argument("--output-dir")
     run.add_argument("--baseline")
     run.add_argument("--regression-percent", type=float, default=20)
