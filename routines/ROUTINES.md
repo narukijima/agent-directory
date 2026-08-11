@@ -1,6 +1,7 @@
 # ROUTINES.md — Routine Trigger Control Layer
 
-Routineは、SchedulerがAgentの作業を起動するTrigger層の正本である。Routine関連の作業時だけ読む。
+RoutineはCoreではなく、SchedulerがAgentの作業を起動するOptional Trigger層の正本である。
+Routine関連の作業時だけ読み、通常のHuman起点タスクのcontext、検証、終了処理へ読み込まない。
 
 ## 位置づけ
 

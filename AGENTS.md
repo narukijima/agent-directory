@@ -1,6 +1,6 @@
 # AGENTS.md — 最上位ブートローダー
 
-共通規約の正本。
+共通規約の正本。通常タスクではRouteとTargetだけを決め、内部profileや境界実装を再推論しない。
 
 ## 自己定義
 
@@ -37,19 +37,20 @@
 
 ## 自律実行
 
-Human-on-the-loop。変更前に**Route**、**Owner**、**Target**、**Verify**、task classを一意特定し、`tools/prepare-context.sh --class`でprofileを得る。書込Git rootはsession毎に1つ（判定は`projects/AGENTS.md`）。
+Human-on-the-loop。通常経路は`Route → Target → Work → Verify`だけとする。`tools/task.sh`へRouteと
+Targetを渡し、Owner、Git root、検証範囲、終了処理はToolが正本から解決する。Agentがtask classや
+profileを通常判断へ露出させない。書込Git rootはsession毎に1つ（判定は`projects/AGENTS.md`）。
 
 TriggerはHumanまたはRoutine（Routeではない、同一規則）。関連時だけ`routines/ROUTINES.md`を読む。
 
-特定が一意、依頼範囲内、リポジトリ完結、可逆、外部影響なし、契約不変、正本衝突・秘密情報なし、既存検証で確認できる操作は確認せず完了・事後報告。フロー: `対象確定 → 最小読込 → 変更 → 差分判定 → finalize → 報告`。
+特定が一意、依頼範囲内、リポジトリ完結、可逆、外部影響なし、契約不変、正本衝突・秘密情報なし、
+既存検証で確認できる操作は確認せず完了・事後報告する。
 
 ## 差分判定
 
-finalize前に今回の差分だけを永続化判定する。既定はno-op。利用者の訂正、採用・却下の判断、
-行動を変える検証結果、新しい原資料、同じ方法の2回目使用、明示依頼だけを合図に、
-Ownerの正本へ`create`より`update / merge / supersede`を優先して反映する。
-AIの推論を利用者の決定・事実として保存しない（帰属は`knowledge/KNOWLEDGE.md#情報の区別`）。
-訂正は`knowledge/KNOWLEDGE.md#訂正の伝播`の完了まで終えない。
+今回の意味ある差分だけを永続化する。既定はno-opとし、既存Ownerへ`create`より
+`update / merge / supersede`を優先する。AIの推論を利用者の決定や事実として保存せず、訂正は
+`knowledge/KNOWLEDGE.md#訂正の伝播`まで完結する。
 
 ## 人間へ上げる例外
 
@@ -69,10 +70,7 @@ AIの推論を利用者の決定・事実として保存しない（帰属は`kn
 
 - APIキー・パスワード等を保存・コミットしない（実値は`.env*`のみ）。
 - GitHubを正本・実行基盤にしない。GitHubへはbackup Tool（backup remote）と上流報告Toolのみ書き、pull/merge/rebase/force push不可。
-- `GH_TOKEN` / `GITHUB_TOKEN`のprocess環境不在や`gh auth status`だけでGitHub認証不能と判断しない。
-  `tools/setup-github-auth.sh --check`のdoctorと実API・実remote probeで判定し、Issue送信・backup・pushを
-  省略しない。`UPSTREAM_REPORT_DRAFTED`は未送信であり成功ではない。毎回のlogin・token設定を要求せず、
-  doctor→安全なrepair 1回→再試行1回の後も不成立ならreason付き非0で停止する。
+- GitHub能力は`tools/setup-github-auth.sh --check`の実probeで判定する。認証詳細は通常経路で再実装しない。
 - 未依頼の機能・抽象化・依存を追加しない。
 - 未検証の事を完了と報告しない。
 - 破壊的操作（削除、移動等）は依頼があっても即実行せず、対象の`status`と
@@ -80,11 +78,15 @@ AIの推論を利用者の決定・事実として保存しない（帰属は`kn
 - `status: paused`等の休止領域は読み取り専用。依頼文では解除されない。
 - 下位`AGENTS.md`が上位規則・`PROJECT.md`契約を弱めない。
 
+上記の判断を支える安全核は`tools/SAFETY.md`の6項目だけとする。commit境界の実装を変更するときだけ
+`tools/CONTROL.md`、backup・divergence時だけ`tools/BACKUP.md`を読む。
+
 ## 詳細正本
 
 - `projects/PROJECTS.md` — 構造、成果契約、attachment、remote、docs
 - `projects/LIFECYCLE.md` / `projects/RECOVERY.md` — 状態遷移 / 復旧
-- `tools/TOOLS.md` — task class、探索、commit、自己修復、予算
+- `tools/SAFETY.md` — 通常判断で守る6つの安全不変条件
+- `tools/TOOLS.md` — 標準入口、探索、commit、自己修復、予算
 - `tools/BACKUP.md` — backup、remote分類、divergence、Single Writer
 - `tools/UPSTREAM.md` — 上流Issue報告、匿名化検査、送信条件
 - `tools/CONTROL.md` — 境界執行と違反分類

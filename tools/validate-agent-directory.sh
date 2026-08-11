@@ -1213,7 +1213,8 @@ required_files=(
   'README.md' 'knowledge/KNOWLEDGE.md' "$knowledge_index_path" "$knowledge_log_path"
   'skills/SKILLS.md' 'skills/_template/SKILL.md' 'projects/PROJECTS.md' 'projects/LIFECYCLE.md' 'projects/RECOVERY.md'
   "$registry_path" "$ignore_path"
-  'projects/_template/PROJECT.md' 'projects/_template/STATE.md' 'evals/EVALS.md' 'tools/TOOLS.md'
+  'projects/_template/PROJECT.md' 'projects/_template/STATE.md' 'evals/EVALS.md' 'evals/profiles/core.txt' 'tools/TOOLS.md'
+  'tools/SAFETY.md' 'tools/task.sh'
   'tools/BACKUP.md' 'tools/build-context-cache.sh' 'tools/find-context.sh' 'tools/prepare-context.sh'
   'tools/append-knowledge-log.sh' 'tools/backup-to-github.sh' 'tools/validate-agent-directory.sh'
   'tools/setup-local-environment.sh'
@@ -1346,6 +1347,7 @@ check_size "$repo_root/skills/SKILLS.md" 12288 'skills SKILLS.md'
 check_size "$repo_root/projects/PROJECTS.md" 24576 'projects PROJECTS.md'
 check_size "$repo_root/evals/EVALS.md" 24576 'evals EVALS.md'
 check_size "$repo_root/tools/TOOLS.md" 20480 'tools TOOLS.md'
+check_size "$repo_root/tools/SAFETY.md" 8192 'tools SAFETY.md'
 check_size "$repo_root/tools/BACKUP.md" 20480 'tools BACKUP.md'
 check_size "$repo_root/tools/CONTROL.md" 20480 'tools CONTROL.md'
 check_size "$repo_root/tools/UPSTREAM.md" 20480 'tools UPSTREAM.md'
@@ -1646,6 +1648,32 @@ required_cases=(
 )
 
 for case_name in "${required_cases[@]}"; do require_file "$repo_root/evals/cases/$case_name.yaml"; done
+
+core_profile="$repo_root/evals/profiles/core.txt"
+if [[ -f "$core_profile" ]]; then
+  core_case_count=0
+  core_seen=''
+  while IFS= read -r core_case; do
+    core_case="${core_case%%#*}"
+    core_case="$(printf '%s' "$core_case" | tr -d '[:space:]')"
+    [[ -n "$core_case" ]] || continue
+    core_case_count=$((core_case_count + 1))
+    if printf '%s\n' "$core_seen" | grep -Fqx -- "$core_case"; then
+      fail "evals/profiles/core.txt repeats case: $core_case"
+    fi
+    core_seen="${core_seen}${core_case}
+"
+    require_file "$repo_root/evals/cases/$core_case.yaml"
+  done < "$core_profile"
+  (( core_case_count >= 12 )) || fail 'evals/profiles/core.txt must retain at least 12 cross-cutting cases'
+  for pinned_core_case in route-to-knowledge route-to-skill route-to-project \
+    project-goal-change-protection protect-immutable-records protect-paused-project \
+    external-effect-approval-gate unowned-change-conflict backup-divergence-refusal \
+    control-policy-tamper github-auth-no-token-leak upstream-issue-privacy; do
+    printf '%s\n' "$core_seen" | grep -Fqx -- "$pinned_core_case" || \
+      fail "evals/profiles/core.txt lost a pinned invariant: $pinned_core_case"
+  done
+fi
 
 while IFS= read -r -d '' case_file; do
   require_fixed_line "$case_file" 'request: |'
@@ -1996,6 +2024,17 @@ elif [[ "$full" == true ]]; then
 fi
 grep -Fq 'materialize-project-repositories.sh' "$repo_root/tools/TOOLS.md" || \
   fail 'tools/TOOLS.md does not register materialize-project-repositories.sh'
+grep -Fq 'task.sh' "$repo_root/tools/TOOLS.md" || fail 'tools/TOOLS.md does not register task.sh'
+if [[ -f "$repo_root/tools/task.sh" ]]; then
+  [[ -x "$repo_root/tools/task.sh" ]] || fail 'tools/task.sh is not executable'
+  "$syntax_bash" -n "$repo_root/tools/task.sh" 2>/dev/null || fail 'tools/task.sh fails bash -n'
+fi
+grep -Fq 'tools/SAFETY.md' "$repo_root/AGENTS.md" || \
+  fail 'AGENTS.md does not route normal safety decisions to tools/SAFETY.md'
+for safety_number in 1 2 3 4 5 6; do
+  grep -Eq "^${safety_number}\\. \\*\\*" "$repo_root/tools/SAFETY.md" || \
+    fail "tools/SAFETY.md is missing invariant $safety_number"
+done
 grep -Fq 'prepare-context.sh' "$repo_root/tools/TOOLS.md" || \
   fail 'tools/TOOLS.md does not register prepare-context.sh'
 if [[ -f "$repo_root/tools/prepare-context.sh" ]]; then
