@@ -39,14 +39,15 @@
 
 `.env`全体をsource/evalせず既知キーだけを読み、token値を出力しない。マシン共通directoryは`0700`、
 fileは`0600`とし、緩いpermission・不正形式はfail closedする。各マシンで一度だけ
-`bash tools/setup-github-auth.sh --install-from-gh --expected-login narukijima`を実行する。同一マシンの
-Agentごとに繰り返さず、別マシンでは各一度必要である。
+`bash tools/setup-github-auth.sh --install-from-gh`を実行する。同一マシンのAgentごとに繰り返さず、
+別マシンでは各一度必要である。特定accountへの固定が必要な場合だけ
+`--expected-login <github-login>`または`AGENT_DIRECTORY_GITHUB_EXPECTED_LOGIN`を使う。
 
 `GH_TOKEN`等のprocess環境不在や`gh auth status`は不成立の証拠にしない。`GH_HOST=github.com`を固定し、
 実`gh api user`のloginと実Git remote readで判定する。不成立時はdoctor→安全なrepair 1回→送信再試行1回に
 限定し、なお失敗なら未送信としてexit 3にする。reasonは`auth-store-missing`、
 `auth-store-permissions`、`account-mismatch`、`github-auth-unavailable`、`github-permission-denied`、
-`github-api-unreachable`、`git-credential-unavailable`を区別する。
+`github-api-unreachable`、`git-credential-unavailable`、`remote-not-configured`を区別する。
 
 ## 事前承認済み送信
 

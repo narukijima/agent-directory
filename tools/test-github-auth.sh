@@ -57,7 +57,7 @@ cat > "$fixture/bin/gh" <<'STUB'
 case "${1:-} ${2:-}" in
   'api user')
     case "${FAKE_GH_MODE:-ok}" in
-      ok) printf '%s\n' "${FAKE_GH_LOGIN:-narukijima}" ;;
+      ok) printf '%s\n' "${FAKE_GH_LOGIN:-fixture-login}" ;;
       401) printf 'HTTP 401: Bad credentials\n' >&2; exit 1 ;;
       403) printf 'HTTP 403: Resource not accessible\n' >&2; exit 1 ;;
       network) printf 'could not resolve api.github.com\n' >&2; exit 1 ;;
@@ -81,14 +81,42 @@ for api_case in '401:github-auth-unavailable' '403:github-permission-denied' \
   fake_mode="${api_case%%:*}"
   expected_reason="${api_case#*:}"
   api_output="$(env -i PATH="$fixture/bin:$PATH" HOME="$fixture/home" FAKE_GH_MODE="$fake_mode" \
-    /bin/bash -c '. "$1"; github_auth_resolve "$2"; github_auth_probe_api narukijima || printf "%s" "$GITHUB_AUTH_REASON"' \
+    /bin/bash -c '. "$1"; github_auth_resolve "$2"; github_auth_probe_api fixture-login || printf "%s" "$GITHUB_AUTH_REASON"' \
     auth-test "$tool_root/lib/github-auth.sh" "$fixture/workspace" 2>&1)"
   [[ "$api_output" == "$expected_reason" ]] || fail "API $fake_mode classification was $api_output"
 done
 account_output="$(env -i PATH="$fixture/bin:$PATH" HOME="$fixture/home" FAKE_GH_LOGIN=someone-else \
-  /bin/bash -c '. "$1"; github_auth_resolve "$2"; github_auth_probe_api narukijima || printf "%s" "$GITHUB_AUTH_REASON"' \
+  /bin/bash -c '. "$1"; github_auth_resolve "$2"; github_auth_probe_api fixture-login || printf "%s" "$GITHUB_AUTH_REASON"' \
   auth-test "$tool_root/lib/github-auth.sh" "$fixture/workspace" 2>&1)"
 [[ "$account_output" == account-mismatch ]] || fail 'account mismatch was not rejected'
+
+# The doctor accepts an omitted expected login, resolves an adopted workspace's backup
+# remote without origin, and distinguishes a missing remote from a credential failure.
+mkdir -p "$fixture/setup-workspace" "$fixture/setup-empty" "$fixture/setup-config/agent-directory"
+chmod 700 "$fixture/setup-config/agent-directory"
+printf 'GH_TOKEN=setup-machine-token\n' > "$fixture/setup-config/agent-directory/github.env"
+chmod 600 "$fixture/setup-config/agent-directory/github.env"
+git -C "$fixture/setup-workspace" init -q
+git -C "$fixture/setup-empty" init -q
+git init -q --bare "$fixture/setup-backup.git"
+git -C "$fixture/setup-workspace" remote add backup "$fixture/setup-backup.git"
+set +e
+setup_output="$(env -i PATH="$fixture/bin:$PATH" HOME="$fixture/home" \
+  XDG_CONFIG_HOME="$fixture/setup-config" AGENT_DIRECTORY_ROOT="$fixture/setup-workspace" \
+  /bin/bash "$tool_root/setup-github-auth.sh" --check 2>&1)"
+setup_status=$?
+set -e
+[[ "$setup_status" == 0 && "$setup_output" == \
+  'GITHUB_AUTH_OK source=machine-env login=fixture-login api=ok git=ok' ]] || \
+  fail "doctor did not resolve the adopted workspace backup remote: $setup_output"
+set +e
+setup_output="$(env -i PATH="$fixture/bin:$PATH" HOME="$fixture/home" \
+  XDG_CONFIG_HOME="$fixture/setup-config" AGENT_DIRECTORY_ROOT="$fixture/setup-empty" \
+  /bin/bash "$tool_root/setup-github-auth.sh" --check 2>&1)"
+setup_status=$?
+set -e
+[[ "$setup_status" != 0 && "$setup_output" == *'reason=remote-not-configured'* ]] || \
+  fail "doctor did not distinguish a missing remote: $setup_output"
 
 # Report mode: machine credential works without process token; auth failure exits 3 and
 # reuses the same content-addressed draft.

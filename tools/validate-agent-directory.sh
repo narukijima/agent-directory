@@ -1237,10 +1237,13 @@ for codex_action in \
   'command = "bash tools/validate-agent-directory.sh --full"' \
   'command = "bash tools/run-routine.sh maintenance --dry-run"' \
   'command = "bash tools/install-git-hooks.sh --status"' \
-  'command = "bash tools/setup-github-auth.sh --check --expected-login narukijima"'; do
+  'command = "bash tools/setup-github-auth.sh --check"'; do
   grep -Fqx "$codex_action" "$codex_environment" || \
     fail "Codex Local Environment lost its pinned action: $codex_action"
 done
+if grep -Fq -- '--expected-login' "$codex_environment"; then
+  fail 'Codex Local Environment must not pin a user-specific GitHub login'
+fi
 
 python3 - "$repo_root/.claude/settings.json" <<'PY' || fail 'Claude Code settings must be valid JSON with the pinned SessionStart setup hook'
 import json
@@ -2006,6 +2009,72 @@ if [[ -f "$repo_root/tools/setup-local-environment.sh" ]]; then
     fail 'tools/setup-local-environment.sh is not executable'
   "$syntax_bash" -n "$repo_root/tools/setup-local-environment.sh" 2>/dev/null || \
     fail 'tools/setup-local-environment.sh fails bash -n'
+fi
+for github_auth_consumer in tools/backup-to-github.sh tools/report-upstream-issue.sh; do
+  grep -Fq 'expected_login="${AGENT_DIRECTORY_GITHUB_EXPECTED_LOGIN:-}"' \
+    "$repo_root/$github_auth_consumer" || \
+    fail "$github_auth_consumer must not carry a user-specific default GitHub login"
+done
+if [[ "$full" == true && -z "${AGENT_VALIDATOR_NESTED_FIXTURE:-}" ]]; then
+  local_environment_fixture="$(mktemp -d "${TMPDIR:-/tmp}/agent-validator-local-environment.XXXXXX")"
+  cleanup_paths+=("$local_environment_fixture")
+  mkdir -p "$local_environment_fixture/work/tools"
+  cp "$repo_root/tools/setup-local-environment.sh" \
+    "$local_environment_fixture/work/tools/setup-local-environment.sh"
+  printf '#!/bin/bash\nexit 0\n' > "$local_environment_fixture/work/tools/build-context-cache.sh"
+  printf '#!/bin/bash\nexit 0\n' > "$local_environment_fixture/work/tools/validate-agent-directory.sh"
+  chmod 755 "$local_environment_fixture/work/tools/"*.sh
+  printf '# AGENTS.md\n\n## 自己定義\n\n- あなたは`fixture-agent`（役割:`fixture-role`）。\n' > \
+    "$local_environment_fixture/work/AGENTS.md"
+  git -C "$local_environment_fixture/work" init -q
+  git config --file "$local_environment_fixture/global.gitconfig" user.name host-user
+  git config --file "$local_environment_fixture/global.gitconfig" user.email host@example.invalid
+  local_environment_run() {
+    set +e
+    local_environment_output="$(env -i PATH="$PATH" HOME="$local_environment_fixture/home" \
+      GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL="$local_environment_fixture/global.gitconfig" "$@" \
+      /bin/bash "$local_environment_fixture/work/tools/setup-local-environment.sh" 2>&1)"
+    local_environment_status=$?
+    set -e
+  }
+  local_environment_run
+  [[ "$local_environment_status" == 0 && "$local_environment_output" == \
+    *'git-author=recommended'* ]] || \
+    fail "local environment fixture: recommended Agent name was not applied: $local_environment_output"
+  [[ "$(git -C "$local_environment_fixture/work" config --local --get user.name)" == \
+    'fixture-agent' ]] || fail 'local environment fixture: repo-local user.name did not use the Agent name'
+  [[ -z "$(git -C "$local_environment_fixture/work" config --local --get user.email 2>/dev/null || true)" ]] || \
+    fail 'local environment fixture: setup inferred a repository-local email'
+
+  git -C "$local_environment_fixture/work" config --local user.name user-override
+  local_environment_run
+  [[ "$(git -C "$local_environment_fixture/work" config --local --get user.name)" == \
+    'user-override' && "$local_environment_output" == *'git-author=existing'* ]] || \
+    fail 'local environment fixture: repeated setup replaced the user override'
+
+  local_environment_run env AGENT_DIRECTORY_GIT_AUTHOR_NAME=environment-agent
+  [[ "$(git -C "$local_environment_fixture/work" config --local --get user.name)" == \
+    'environment-agent' && "$local_environment_output" == *'git-author=explicit'* ]] || \
+    fail 'local environment fixture: environment author override was not applied'
+  set +e
+  local_environment_output="$(env -i PATH="$PATH" HOME="$local_environment_fixture/home" \
+    GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL="$local_environment_fixture/global.gitconfig" \
+    AGENT_DIRECTORY_GIT_AUTHOR_NAME=environment-agent \
+    /bin/bash "$local_environment_fixture/work/tools/setup-local-environment.sh" \
+    --git-author-name cli-agent 2>&1)"
+  local_environment_status=$?
+  set -e
+  [[ "$local_environment_status" == 0 && \
+    "$(git -C "$local_environment_fixture/work" config --local --get user.name)" == 'cli-agent' ]] || \
+    fail 'local environment fixture: CLI author override did not take precedence'
+
+  git -C "$local_environment_fixture/work" config --local --unset user.name
+  printf '# AGENTS.md\n\n## 自己定義\n\n- あなたは`<agent-name>`（役割:`<agent-role>`）。\n' > \
+    "$local_environment_fixture/work/AGENTS.md"
+  local_environment_run
+  [[ -z "$(git -C "$local_environment_fixture/work" config --local --get user.name 2>/dev/null || true)" && \
+    "$local_environment_output" == *'git-author=template-unset'* ]] || \
+    fail 'local environment fixture: template placeholder was written as a Git author'
 fi
 grep -Fq 'finalize-task.sh' "$repo_root/tools/TOOLS.md" || \
   fail 'tools/TOOLS.md does not register finalize-task.sh'
@@ -4287,6 +4356,8 @@ if [[ "$full" == true && -z "${AGENT_VALIDATOR_NESTED_FIXTURE:-}" ]]; then
   env "${control_env[@]}" git -C "$control_work" init -q
   env "${control_env[@]}" git -C "$control_work" add -A
   env "${control_env[@]}" git -C "$control_work" commit -q -m 'fixture: control baseline'
+  control_approved_policy="$control_fixture_dir/approved-policy.tsv"
+  cp "$control_work/tools/control-policy.tsv" "$control_approved_policy"
 
   control_boundary() {
     # $@ = 追加の環境変数割り当て（例: AGENT_GUARDED_COMMIT=true）
@@ -4364,6 +4435,28 @@ if [[ "$full" == true && -z "${AGENT_VALIDATOR_NESTED_FIXTURE:-}" ]]; then
   control_boundary AGENT_GUARDED_COMMIT=true
   printf '%s\n' "$control_output" | grep -Fq 'reason=mixed-scope' || \
     fail "control fixture: a mixed guarded+ordinary stage was not refused: $control_output"
+  env "${control_env[@]}" git -C "$control_work" reset -q --hard >/dev/null
+
+  # If the ordinary path is newly guarded only by the staged policy, keep the
+  # approved-snapshot verdict but identify the precise policy/snapshot gap and recovery.
+  printf 'guarded\tprojects/new-canon/*\tfixture staged policy extension\n' >> \
+    "$control_work/tools/control-policy.tsv"
+  mkdir -p "$control_work/projects/new-canon"
+  printf 'new canon\n' > "$control_work/projects/new-canon/settings.json"
+  env "${control_env[@]}" git -C "$control_work" add tools/control-policy.tsv \
+    projects/new-canon/settings.json
+  set +e
+  control_output="$(cd "$control_work" && env "${control_env[@]}" AGENT_GUARDED_COMMIT=true \
+    /bin/bash tools/check-boundary.sh --staged --policy "$control_approved_policy" 2>&1)"
+  control_status=$?
+  set -e
+  printf '%s\n' "$control_output" | grep -Fq 'reason=mixed-scope' || \
+    fail "control fixture: a staged policy extension was not refused against the approved snapshot: $control_output"
+  printf '%s\n' "$control_output" | grep -Fq \
+    'staged policy classifies projects/new-canon/settings.json as guarded' || \
+    fail "control fixture: mixed-scope did not identify the staged-policy snapshot gap: $control_output"
+  printf '%s\n' "$control_output" | grep -Fq 'safe recovery: commit the policy change alone' || \
+    fail "control fixture: mixed-scope did not provide the safe two-step recovery: $control_output"
   env "${control_env[@]}" git -C "$control_work" reset -q --hard >/dev/null
 
   # A Project contract change needs its own explicit approval acknowledgment.

@@ -7,10 +7,11 @@ repo_root="$(cd "${AGENT_DIRECTORY_ROOT:-$tool_root/..}" 2>/dev/null && pwd -P)"
 
 mode=''
 expected_login=''
-remote_name='origin'
+remote_name=''
+remote_explicit=false
 
 usage() {
-  printf 'Usage: %s (--install-from-gh|--check|--repair-from-gh) --expected-login <login> [--remote <name>]\n' "${0##*/}" >&2
+  printf 'Usage: %s (--install-from-gh|--check|--repair-from-gh) [--expected-login <login>] [--remote <name>]\n' "${0##*/}" >&2
   exit 2
 }
 
@@ -27,14 +28,15 @@ while [[ $# -gt 0 ]]; do
       shift
       ;;
     --expected-login) [[ $# -ge 2 ]] || usage; expected_login="$2"; shift 2 ;;
-    --remote) [[ $# -ge 2 ]] || usage; remote_name="$2"; shift 2 ;;
+    --remote) [[ $# -ge 2 ]] || usage; remote_name="$2"; remote_explicit=true; shift 2 ;;
     *) usage ;;
   esac
 done
 
-[[ -n "$mode" && -n "$expected_login" ]] || usage
-[[ "$expected_login" =~ ^[A-Za-z0-9-]+$ ]] || blocked account-mismatch
-[[ -n "$repo_root" && -d "$repo_root/.git" ]] || blocked git-credential-unavailable
+[[ -n "$mode" ]] || usage
+[[ -z "$expected_login" || "$expected_login" =~ ^[A-Za-z0-9-]+$ ]] || blocked account-mismatch
+[[ -n "$repo_root" ]] && git -C "$repo_root" rev-parse --git-dir >/dev/null 2>&1 || \
+  blocked not-git-repository
 
 machine_file="$(github_auth_machine_file)"
 
@@ -108,8 +110,23 @@ fi
 if ! github_auth_probe_api "$expected_login"; then
   blocked "${GITHUB_AUTH_REASON:-github-auth-unavailable}"
 fi
+
+# Adopted workspaces normally use `backup` and may not have `origin`. An explicit
+# --remote is never replaced; otherwise prefer the configured push default, then the
+# documented workspace backup name, and finally the public-skeleton development remote.
+if [[ "$remote_explicit" != true ]]; then
+  configured_push_default="$(git -C "$repo_root" config --local remote.pushDefault 2>/dev/null || true)"
+  for remote_candidate in "$configured_push_default" backup origin; do
+    [[ -n "$remote_candidate" ]] || continue
+    if git -C "$repo_root" remote get-url "$remote_candidate" >/dev/null 2>&1; then
+      remote_name="$remote_candidate"
+      break
+    fi
+  done
+fi
+[[ -n "$remote_name" ]] || blocked remote-not-configured
 remote_url="$(git -C "$repo_root" remote get-url "$remote_name" 2>/dev/null || true)"
-[[ -n "$remote_url" ]] || blocked git-credential-unavailable
+[[ -n "$remote_url" ]] || blocked remote-not-configured
 if ! github_auth_probe_git "$repo_root" "$remote_name" "$remote_url"; then
   blocked "${GITHUB_AUTH_REASON:-git-credential-unavailable}"
 fi

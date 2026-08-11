@@ -58,7 +58,7 @@ URL、argv、Git config値へ入れない。`GIT_TERMINAL_PROMPT=0`を固定す�
 
 認証失敗はdoctor→安全なrepair 1回→remote操作再試行1回に限定し、`github-auth-unavailable`、
 `github-permission-denied`、`github-api-unreachable`、`git-credential-unavailable`を
-`remote-diverged`、`remote-unreachable`、`push-failed`と区別する。認証失敗でも検証済みlocal commitを
+`remote-not-configured`、`remote-diverged`、`remote-unreachable`、`push-failed`と区別する。認証失敗でも検証済みlocal commitを
 取り消さない契約は変わらない。
 
 ## backup Tool

@@ -110,7 +110,10 @@ patternはリポジトリ相対pathへのshell globである。
 ackは自己申告であり、それ単独では通らない。workspace rootでは次の機械的な束縛が加わる。
 
 - **mixed-scope拒否** — guarded / contractの変更と通常の成果を同じcommitへstageしたら、
-  ackの有無にかかわらず`mixed-scope`で拒否する。commitを分ける。
+  ackの有無にかかわらず`mixed-scope`で拒否する。stage済みpolicyでは新たにguarded / contractとなるpathが
+  HEAD由来snapshotではordinaryの場合、DETAILがそのpathとsnapshot差を明示する。stage済みpolicyは診断に
+  だけ使い、判定を変更しない。policy変更だけを先にcommitし、新HEADからmanaged hookを再導入してから
+  残りをcommitする。hookやsnapshotを迂回しない。
 - **full検証receipt** — guarded / contractのcommitは、stage済みindex tree（`git write-tree`）へ
   束縛された一回限りのreceiptを要求する。receiptは`--full`validatorがPASS時に
   `.git/agent-control/receipts/<tree>`へ発行し、pre-commitが消費する。手順は

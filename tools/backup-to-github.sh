@@ -18,7 +18,7 @@ independent_index=0
 verify_repo=''
 # Local bare remotes are allowed only for isolated fixture verification. Never set this in normal operation.
 allow_local_repository_url="${AGENT_ALLOW_LOCAL_REPOSITORY_URL:-false}"
-expected_login="${AGENT_DIRECTORY_GITHUB_EXPECTED_LOGIN:-narukijima}"
+expected_login="${AGENT_DIRECTORY_GITHUB_EXPECTED_LOGIN:-}"
 github_repair_attempted=false
 
 # Parallel arrays for the registered Independent Projects. bash 3.2 has no associative arrays.

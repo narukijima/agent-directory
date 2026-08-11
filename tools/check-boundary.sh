@@ -98,6 +98,32 @@ while IFS=$'\t' read -r tier pattern _note; do
   patterns+=("$pattern")
 done < "$policy_file"
 
+# A staged policy is diagnostic input only. The approved policy above remains the sole
+# source of the verdict. When a policy addition and its newly guarded file are staged
+# together, this lets mixed-scope explain the HEAD-snapshot gap without trusting the
+# unapproved candidate policy for enforcement.
+staged_policy_valid=false
+staged_tiers=()
+staged_patterns=()
+if [[ "$mode" == 'staged' ]] && \
+   git -C "$repo_root" diff --cached --name-only -- tools/control-policy.tsv | \
+     grep -Fqx 'tools/control-policy.tsv'; then
+  staged_policy_valid=true
+  while IFS=$'\t' read -r staged_tier staged_pattern _staged_note; do
+    case "$staged_tier" in ''|'#'*) continue ;; esac
+    case "$staged_tier" in
+      exempt|forbidden|frozen|guarded|contract) ;;
+      *) staged_policy_valid=false; break ;;
+    esac
+    if [[ -z "$staged_pattern" ]]; then
+      staged_policy_valid=false
+      break
+    fi
+    staged_tiers+=("$staged_tier")
+    staged_patterns+=("$staged_pattern")
+  done < <(git -C "$repo_root" show :tools/control-policy.tsv 2>/dev/null || true)
+fi
+
 tier_for() {
   # $1=repo相対path（path-prefix適用済み）。最初に一致した行のtierを返す（一致なしはnone）。
   local path="$1" i
@@ -109,6 +135,21 @@ tier_for() {
     # shellcheck disable=SC2254 # patternはpolicy正本のglobとして展開する
     case "$path" in
       ${patterns[$i]}) printf '%s' "${tiers[$i]}"; return 0 ;;
+    esac
+  done
+  printf 'none'
+}
+
+staged_tier_for() {
+  local path="$1" i
+  if [[ "$staged_policy_valid" != true || ${#staged_patterns[@]} == 0 ]]; then
+    printf 'none'
+    return 0
+  fi
+  for (( i = 0; i < ${#staged_patterns[@]}; i++ )); do
+    # shellcheck disable=SC2254 # staged candidate is parsed only for a non-authoritative diagnostic
+    case "$path" in
+      ${staged_patterns[$i]}) printf '%s' "${staged_tiers[$i]}"; return 0 ;;
     esac
   done
   printf 'none'
@@ -144,6 +185,7 @@ first_reason=''
 guarded_count=0
 contract_count=0
 normal_count=0
+ordinary_paths=()
 
 record_violation() {
   # $1=reason $2=op $3=path
@@ -157,13 +199,17 @@ check_op() {
   local op="$1" path="$2" tier
   tier="$(tier_for "$path_prefix$path")"
   case "$tier" in
-    exempt|none) normal_count=$((normal_count + 1)) ;;
+    exempt|none)
+      normal_count=$((normal_count + 1))
+      ordinary_paths+=("$path")
+      ;;
     forbidden)
       record_violation 'forbidden-path' "$op" "$path"
       ;;
     frozen)
       if [[ "$op" == 'add' ]]; then
         normal_count=$((normal_count + 1))
+        ordinary_paths+=("$path")
       else
         record_violation 'frozen-path-modified' "$op" "$path"
       fi
@@ -209,6 +255,22 @@ EOF
 # guarded / contractの変更は、通常の成果と同じcommitへ混ぜない（stagedモードだけの機械拒否）。
 if [[ "$mode" == 'staged' ]] && (( guarded_count + contract_count > 0 )) && (( normal_count > 0 )); then
   printf 'DETAIL: meta/contract changes and ordinary work are staged together; split them into separate commits\n' >&2
+  snapshot_gap_count=0
+  for ordinary_path in ${ordinary_paths[@]+"${ordinary_paths[@]}"}; do
+    candidate_tier="$(staged_tier_for "$path_prefix$ordinary_path")"
+    case "$candidate_tier" in
+      guarded|contract)
+        snapshot_gap_count=$((snapshot_gap_count + 1))
+        if (( snapshot_gap_count <= 5 )); then
+          printf 'DETAIL: staged policy classifies %s as %s, but the approved HEAD snapshot still classifies it as ordinary\n' \
+            "$ordinary_path" "$candidate_tier" >&2
+        fi
+        ;;
+    esac
+  done
+  if (( snapshot_gap_count > 0 )); then
+    printf 'DETAIL: safe recovery: commit the policy change alone, reinstall managed hooks from the new HEAD, then commit the newly protected paths; do not bypass the hooks\n' >&2
+  fi
   record_violation 'mixed-scope' 'staged' '(guarded/contract + ordinary paths)'
 fi
 

@@ -65,7 +65,11 @@ bash tools/setup-local-environment.sh
 
 Codex Desktopの`.codex/environments/agent-directory.toml`とClaude Codeの共有
 `.claude/settings.json`が呼ぶ唯一のローカル初期化Tool。`bash`、`git`、`python3`とGit rootを検査し、
-worktree固有の検索cacheだけを冪等に生成する。新鮮なcacheはstat指紋のfast pathで再利用する。
+worktree固有の検索cacheを冪等に生成する。`user.name`は明示override、既存repo-local値、
+`AGENTS.md#自己定義`の推奨Agent名の優先順で扱い、推奨名はlocal値が無い場合だけ既定設定する。
+明示overrideは`--git-author-name <name>`または`AGENT_DIRECTORY_GIT_AUTHOR_NAME`で渡せる。
+emailと既存履歴は変更しない。
+新鮮なcacheはstat指紋のfast pathで再利用する。
 依存packageの追加、`.env*`のコピー、Git hook・remote・
 scheduleの変更、ネットワーク接続は行わない。成功は`LOCAL_ENVIRONMENT_READY`、停止は
 `LOCAL_ENVIRONMENT_BLOCKED reason=<reason>`を返す。
@@ -133,9 +137,9 @@ process `GITHUB_TOKEN` → Workspace `.env` → マシン共通`github.env` → 
 SSHとGitHub以外のhostへGitHub credentialを渡さない。
 
 ```bash
-bash tools/setup-github-auth.sh --install-from-gh --expected-login narukijima
-bash tools/setup-github-auth.sh --check --expected-login narukijima
-bash tools/setup-github-auth.sh --repair-from-gh --expected-login narukijima
+bash tools/setup-github-auth.sh --install-from-gh
+bash tools/setup-github-auth.sh --check
+bash tools/setup-github-auth.sh --repair-from-gh
 bash tools/migrate-github-auth.sh --workspace /absolute/path [--check]
 bash tools/test-github-auth.sh
 ```
@@ -143,6 +147,9 @@ bash tools/test-github-auth.sh
 doctor成功は`GITHUB_AUTH_OK source=<source> login=<login> api=ok git=ok`、失敗は
 `GITHUB_AUTH_BLOCKED reason=<reason>`。migrationはsignature、Git root、auth fileのclean状態、対応version、
 patch適用可否を先に検査し、tokenやAgent固有設定を扱わない。
+`--expected-login <github-login>`はaccountを固定したい場合だけ使う任意の厳格照合である。
+`--remote`未指定時は`remote.pushDefault`、`backup`、`origin`の順で実在remoteを解決し、存在しなければ
+`remote-not-configured`を返す。
 
 ## report-upstream-issue.sh
 

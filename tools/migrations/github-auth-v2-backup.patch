@@ -4,7 +4,7 @@ diff --git a/tools/backup-to-github.sh b/tools/backup-to-github.sh
 @@ -6,0 +7 @@ repo_root="$(cd "${AGENT_DIRECTORY_ROOT:-$tool_root/..}" 2>/dev/null && pwd -P)"
 +. "$tool_root/lib/github-auth.sh"
 @@ -19,0 +21,2 @@ allow_local_repository_url="${AGENT_ALLOW_LOCAL_REPOSITORY_URL:-false}"
-+expected_login="${AGENT_DIRECTORY_GITHUB_EXPECTED_LOGIN:-narukijima}"
++expected_login="${AGENT_DIRECTORY_GITHUB_EXPECTED_LOGIN:-}"
 +github_repair_attempted=false
 @@ -45,0 +49,34 @@ note() {
 +ensure_github_remote_auth() {
