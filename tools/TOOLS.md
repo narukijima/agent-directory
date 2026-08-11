@@ -26,9 +26,8 @@ tools/task.sh verify
 tools/task.sh finish --route <route> [--target <path>] --message "変更理由"
 ```
 
-Agentが判断するのはRouteとTarget、作業内容、合格条件だけである。Owner、Git root、task class、
-validation profile、backup profileは既存の決定的Toolが内部で解決する。read-only回答は入口Toolを
-必須とせず、明示対象を必要最小限だけ読む。
+Agentが渡すのはRouteとTargetであり、必要な読込、Git root、検証、終了処理は既存の決定的Toolが
+解決する。read-only回答は入口Toolを必須とせず、明示対象を必要最小限だけ読む。
 
 安全境界の要約は`tools/SAFETY.md`が所有する。通常作業では`tools/CONTROL.md`、`tools/BACKUP.md`、
 本書の互換実装節を読まず、Toolが返した停止reasonに該当するときだけ読む。

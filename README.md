@@ -168,7 +168,7 @@ tools/find-context.sh --route knowledge --limit 5 -- "資本配分"
 # 明示的な監査時だけ非activeも含める
 tools/find-context.sh --route project --include-inactive -- "site migration"
 
-# 対象確定後の通常入口。Owner、Git root、class、profileは内部解決する
+# 対象確定後の通常入口
 tools/task.sh context --route project --target projects/<name>
 tools/task.sh context --route meta --target tools/TOOLS.md
 ```
@@ -199,12 +199,9 @@ Knowledgeページの削除は通常workとして通らない。meta正本への
 行動evalは[evals/EVALS.md](evals/EVALS.md)のtrace契約を`tools/run-evals.py`で採点できる。外部AIは
 必須ではなく、観測されていない期待は自己申告でPASSにせず`UNVERIFIED`に残す。
 
-commit・push境界は[tools/CONTROL.md](tools/CONTROL.md)のpolicyを`tools/check-boundary.sh`が判定し、
-導入済みのgit hooks（pre-commit / pre-push）が強制する。hookが実行するのはworking tree版ではなく
-`.git/agent-control/`の承認済みsnapshot（HEAD追従）であり、安全核・Project成果契約の変更には
-明示ackと`--full`検証のreceiptを要求し、push時は送信内容を再検査する。判定はAIハーネスに依存せず、
-hookは境界検査だけを行いbackupや検証を起動しない。materialize済みIndependent repositoryへも
-同じhookが導入される。
+commit・push境界は`tools/check-boundary.sh`と導入済みgit hooksが機械的に強制する。通常変更と
+protected変更の分離、検証、Independent repositoryへの適用は
+[tools/CONTROL.md](tools/CONTROL.md)だけが所有し、停止時または境界保守時に読む。
 
 ## CoreとOptional
 

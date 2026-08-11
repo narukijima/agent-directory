@@ -29,15 +29,6 @@ knowledge/
     └── topics/            # 複数の根拠や判断を統合したKnowledge
 ```
 
-四層の意味は次のとおり固定する。
-
-```text
-knowledge/raw/internal = 内部で生まれた不変原記録
-knowledge/raw/external = 外部から取得した不変原資料
-knowledge/wiki/sources = 一つの原資料を解釈したKnowledge
-knowledge/wiki/topics  = 複数の根拠や判断を統合したKnowledge
-```
-
 `raw/internal`、`raw/external`、`sources`、`topics`はいずれも正本である。sources/topicsには要約、判断、推論が
 含まれ、原資料から同一内容を再生成できない。検索TSV、DB、snippet、製品側AIメモリだけが再生成可能な派生物である。
 `knowledge/`直下と`wiki/`配下に領域説明用の`README.md`を置かない。構造の意味はこのファイルが所有する。

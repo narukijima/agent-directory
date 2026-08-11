@@ -57,8 +57,8 @@ projects/<project-name>/
 └── scripts/          # Project固有の固定コード
 ```
 
-全Projectに`PROJECT.md`と`STATE.md`を必須とする。新規作成は利用者の明示依頼後に`_template/`をコピーし、
-すべてのプレースホルダーを書き換える。`_template/`は`PROJECT.md`と`STATE.md`だけを持ち、他を常設しない。
+新規作成は利用者の明示依頼後に`_template/`をコピーし、すべてのプレースホルダーを書き換える。
+`_template/`は`PROJECT.md`と`STATE.md`だけを持ち、他を常設しない。
 
 ## Project文書の三層（任意拡張）
 
