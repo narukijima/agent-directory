@@ -66,7 +66,7 @@ work/stateの終端は`tools/finalize-task.sh`の1回で検証・commit・backup
 - commitが意味的に一つの作業単位である。
 
 hooks導入済み環境では、commit・push境界を`tools/check-boundary.sh`が機械検査する（正本は
-`tools/CONTROL.md`。guarded正本の変更は明示エスカレーションと`--full`検証を要する）。
+`tools/CONTROL.md`。安全核としてguardedな変更だけが明示エスカレーションと`--full`検証を要する）。
 
 commit messageは変更内容と理由が分かる一文を先頭に置く。中断時は残件を明記した
 checkpoint commitを作ってよいが、完了報告にも成果契約の達成にもしない。commit後は`tools/BACKUP.md`の

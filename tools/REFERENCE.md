@@ -153,6 +153,12 @@ process `GITHUB_TOKEN` → Workspace `.env` → マシン共通`github.env` → 
 実remote readで能力を判定し、GitHub HTTPSだけ`gh auth git-credential`をchild Gitへ適用する。
 SSHとGitHub以外のhostへGitHub credentialを渡さない。
 
+`GH_TOKEN`等のprocess環境不在や`gh auth status`だけを失敗根拠にしない。`GH_HOST=github.com`を固定し、
+実`gh api user`と対象remote probeで判定する。認証失敗はdoctor→安全なrepair 1回→操作再試行1回までとし、
+`auth-store-missing`、`auth-store-permissions`、`account-mismatch`、`github-auth-unavailable`、
+`github-permission-denied`、`github-api-unreachable`、`git-credential-unavailable`、
+`remote-not-configured`を区別する。
+
 ```bash
 bash tools/setup-github-auth.sh --install-from-gh
 bash tools/setup-github-auth.sh --check

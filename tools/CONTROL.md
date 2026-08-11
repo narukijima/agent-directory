@@ -89,12 +89,13 @@ patternはリポジトリ相対pathへのshell globである。
 | `exempt` | 以降の行を適用しない明示的な例外 |
 | `forbidden` | 追加を含め、Git追跡・stagingを常に拒否する |
 | `frozen` | 追記専用領域。新規追加だけを許し、変更・削除・改名を拒否する |
-| `guarded` | meta正本。`AGENT_GUARDED_COMMIT=true`の明示がない変更を拒否する |
+| `guarded` | 6つの安全不変条件を定義・執行する正本とTool。`AGENT_GUARDED_COMMIT=true`の明示がない変更を拒否する |
 | `contract` | Project成果契約。人間の決定事項であり、`AGENT_CONTRACT_COMMIT=true`の明示がない変更を拒否する |
 
-`guarded`集合は、validator `--changed`がfull検査へfallbackするmeta正本集合と一致させる。
-片方だけを変更しない。policyの緩和・行削除はそれ自体がguarded変更であり、下記の
-エスカレーション条件と`--full`検証を要求する。
+`guarded`は`tools/SAFETY.md`の不変条件を機械的に定義・執行する最小集合とする。説明文書、テンプレート、
+非Core eval、外部作用を持たない補助Toolを「metaだから」という理由だけでguardedにしない。
+validator `--changed`は品質確認のため、guardedより広いmeta変更でfull staticへfallbackしてよい。
+policyの緩和・行削除はそれ自体がguarded変更であり、下記のエスカレーション条件と`--full`検証を要求する。
 
 ## 明示エスカレーション
 

@@ -2152,8 +2152,20 @@ if [[ -f "$repo_root/tools/control-policy.tsv" ]]; then
   fi
   # Pin the load-bearing rows so the policy is not silently weakened.
   for pinned_policy in 'forbidden:.env*' 'frozen:knowledge/raw/*' 'frozen:knowledge/wiki/logs/*' \
-    'guarded:AGENTS.md' 'guarded:README.md' 'guarded:.codex/*' 'guarded:.claude/*' \
-    'guarded:tools/*' 'guarded:evals/*' 'guarded:routines/*' \
+    'guarded:AGENTS.md' 'guarded:.codex/*' 'guarded:.claude/*' \
+    'guarded:tools/SAFETY.md' 'guarded:tools/CONTROL.md' 'guarded:tools/control-policy.tsv' \
+    'guarded:tools/check-boundary.sh' 'guarded:tools/install-git-hooks.sh' \
+    'guarded:tools/validate-agent-directory.sh' 'guarded:tools/task.sh' \
+    'guarded:tools/finalize-task.sh' 'guarded:tools/backup-to-github.sh' \
+    'guarded:tools/report-upstream-issue.sh' 'guarded:tools/lib/github-auth.sh' \
+    'guarded:tools/lib/project-registry.sh' 'guarded:tools/materialize-project-repositories.sh' \
+    'guarded:tools/setup-local-environment.sh' 'guarded:tools/setup-github-auth.sh' \
+    'guarded:tools/migrate-github-auth.sh' 'guarded:tools/run-evals.py' \
+    'guarded:tools/run-routine.sh' 'guarded:tools/manage-routine-schedule.sh' \
+    'guarded:tools/routine-reasoner.py' 'guarded:evals/EVALS.md' \
+    'guarded:evals/profiles/core.txt' 'guarded:routines/ROUTINES.md' \
+    'guarded:routines/*/ROUTINE.md' 'guarded:projects/AGENTS.md' \
+    'guarded:projects/LIFECYCLE.md' 'guarded:projects/REPOSITORIES.md' \
     'contract:projects/*/PROJECT.md'; do
     pinned_tier="${pinned_policy%%:*}"
     pinned_pattern="${pinned_policy#*:}"
@@ -2162,6 +2174,17 @@ if [[ -f "$repo_root/tools/control-policy.tsv" ]]; then
       "$repo_root/tools/control-policy.tsv" || \
       fail "tools/control-policy.tsv lost a pinned row: $pinned_tier $pinned_pattern"
   done
+  if [[ -f "$repo_root/evals/profiles/core.txt" ]]; then
+    while IFS= read -r protected_core_case; do
+      protected_core_case="${protected_core_case%%#*}"
+      protected_core_case="$(printf '%s' "$protected_core_case" | tr -d '[:space:]')"
+      [[ -n "$protected_core_case" ]] || continue
+      awk -F '\t' -v p="evals/cases/$protected_core_case.yaml" \
+        '$1 == "guarded" && $2 == p { found = 1 } END { exit !found }' \
+        "$repo_root/tools/control-policy.tsv" || \
+        fail "tools/control-policy.tsv does not guard core eval: $protected_core_case"
+    done < "$repo_root/evals/profiles/core.txt"
+  fi
 fi
 
 grep -Fq 'tools/CONTROL.md' "$repo_root/README.md" || fail 'README.md does not register tools/CONTROL.md'
