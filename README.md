@@ -95,9 +95,12 @@ agent-directory/
 | Codex Desktop | `.codex/environments/agent-directory.toml` | worktree作成時のSetupと共通Actions |
 | Claude Code | `.claude/settings.json` | 新規`SessionStart`から同じSetupを呼ぶ |
 
-Setupは`bash`、`git`、`python3`とGit rootを確認し、Git管理外の検索cacheだけを生成する。既存cacheが
-新鮮なら本文を再読しないfast pathを使う。`.env*`のコピー、
-package追加、Git hook・remote・scheduleの変更、ネットワーク接続は行わない。Git hookの導入は利用開始手順の
+Setupは`bash`、`git`、`python3`とGit rootを確認し、Git管理外の検索cacheを生成する。
+`--git-author-name`または`AGENT_DIRECTORY_GIT_AUTHOR_NAME`の明示overrideがあれば適用し、なければ既存の
+repo-local `user.name`を保持する。local値も未設定のときだけ`AGENTS.md#自己定義`の推奨Agent名を
+既定値にする。emailと既存履歴は変更しない。既存cacheが新鮮なら本文を再読しないfast pathを使う。
+`.env*`のコピー、package追加、
+Git hook・remote・scheduleの変更、ネットワーク接続は行わない。Git hookの導入は利用開始手順の
 明示コマンドとして分離する。CodexのActionsは限定検証、full検証、Maintenance dry-run、hook状態確認を
 既存Toolへ直接つなぎ、GitHub認証状態は既存の`tools/setup-github-auth.sh --check`へ明示的に接続する。
 GitHub認証Actionは実APIと実remoteを検査するが、Setupからは呼ばない。判定ロジックをadapterへ複製しない。
@@ -273,9 +276,13 @@ fallbackである。token値はGitへ追跡せず、既定pathは
 `${XDG_CONFIG_HOME:-$HOME/.config}/agent-directory/github.env`（directory `0700`、file `0600`）。
 
 ```bash
-bash tools/setup-github-auth.sh --install-from-gh --expected-login narukijima
-bash tools/setup-github-auth.sh --check --expected-login narukijima
+bash tools/setup-github-auth.sh --install-from-gh
+bash tools/setup-github-auth.sh --check
 ```
+
+特定accountへ厳格に固定するWorkspaceだけ`--expected-login <github-login>`または
+`AGENT_DIRECTORY_GITHUB_EXPECTED_LOGIN`を指定する。公開スケルトンは個人loginを既定値に持たない。
+`--remote`未指定のdoctorは`remote.pushDefault`、`backup`、`origin`の順で実在remoteを選ぶ。
 
 ```bash
 # セットアップ（GitHubで空のPrivateリポジトリを作成してから実行する）

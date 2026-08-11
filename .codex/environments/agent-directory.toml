@@ -27,4 +27,4 @@ command = "bash tools/install-git-hooks.sh --status"
 [[actions]]
 name = "GitHub auth status"
 icon = "debug"
-command = "bash tools/setup-github-auth.sh --check --expected-login narukijima"
+command = "bash tools/setup-github-auth.sh --check"

@@ -25,7 +25,7 @@ search_terms=''
 violations=()
 checked_agent_name_terms=0
 github_repair_attempted=false
-expected_login="${AGENT_DIRECTORY_GITHUB_EXPECTED_LOGIN:-narukijima}"
+expected_login="${AGENT_DIRECTORY_GITHUB_EXPECTED_LOGIN:-}"
 
 usage() {
   printf 'Usage: %s --title <title> --body-file <path> [--repo <owner/repo>] [--comment <issue-number>] [--dry-run]\n' "${0##*/}" >&2
