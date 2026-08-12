@@ -1213,7 +1213,8 @@ required_files=(
   'README.md' 'knowledge/KNOWLEDGE.md' "$knowledge_index_path" "$knowledge_log_path"
   'skills/SKILLS.md' 'skills/_template/SKILL.md' 'projects/PROJECTS.md' 'projects/LIFECYCLE.md' 'projects/RECOVERY.md'
   "$registry_path" "$ignore_path"
-  'projects/_template/PROJECT.md' 'projects/_template/STATE.md' 'evals/EVALS.md' 'evals/profiles/core.txt' 'tools/TOOLS.md'
+  'projects/_template/PROJECT.md' 'projects/_template/STATE.md' 'evals/EVALS.md'
+  'evals/profiles/core.txt' 'evals/profiles/decay.txt' 'tools/TOOLS.md'
   'tools/SAFETY.md' 'tools/task.sh'
   'tools/BACKUP.md' 'tools/build-context-cache.sh' 'tools/find-context.sh' 'tools/prepare-context.sh'
   'tools/append-knowledge-log.sh' 'tools/backup-to-github.sh' 'tools/validate-agent-directory.sh'
@@ -1645,6 +1646,12 @@ required_cases=(
   github-auth-real-capability-probe github-auth-no-token-leak upstream-drafted-is-not-success
   upstream-auth-repair-once backup-shared-github-auth backup-https-credential-helper
   backup-ssh-does-not-require-token
+  decay-knowledge-current-clean decay-knowledge-current-aged
+  decay-project-routing-clean decay-project-routing-aged
+  decay-explicit-target-clean decay-explicit-target-aged
+  decay-old-contradiction-clean decay-old-contradiction-aged
+  decay-noop-verification-clean decay-noop-verification-aged
+  decay-context-boundedness-clean decay-context-boundedness-aged
 )
 
 for case_name in "${required_cases[@]}"; do require_file "$repo_root/evals/cases/$case_name.yaml"; done
@@ -1675,6 +1682,47 @@ if [[ -f "$core_profile" ]]; then
   done
 fi
 
+decay_profile="$repo_root/evals/profiles/decay.txt"
+if [[ -f "$decay_profile" ]]; then
+  decay_case_count="$(grep -Ev '^[[:space:]]*(#|$)' "$decay_profile" | wc -l | tr -d ' ')"
+  (( decay_case_count == 12 )) || fail 'evals/profiles/decay.txt must contain the six Clean/Aged pairs'
+  decay_seen=''
+  while IFS= read -r decay_case; do
+    decay_case="${decay_case%%#*}"
+    decay_case="$(printf '%s' "$decay_case" | tr -d '[:space:]')"
+    [[ -n "$decay_case" ]] || continue
+    if printf '%s\n' "$decay_seen" | grep -Fqx -- "$decay_case"; then
+      fail "evals/profiles/decay.txt repeats case: $decay_case"
+    fi
+    decay_seen="${decay_seen}${decay_case}
+"
+    require_file "$repo_root/evals/cases/$decay_case.yaml"
+  done < "$decay_profile"
+  if command -v python3 >/dev/null 2>&1; then
+    python3 - "$repo_root" "$decay_profile" <<'PY' || \
+      fail 'evals/profiles/decay.txt must contain six same-request Clean/Aged pairs with matching fixtures'
+from pathlib import Path
+import runpy
+import sys
+
+root = Path(sys.argv[1])
+profile = Path(sys.argv[2])
+runtime = runpy.run_path(str(root / "tools" / "run-evals.py"))
+names = [line.strip() for line in profile.read_text(encoding="utf-8").splitlines()
+         if line.strip() and not line.lstrip().startswith("#")]
+cases = [runtime["parse_case"](root / "evals" / "cases" / (name + ".yaml")) for name in names]
+pairs, errors = runtime["decay_definitions"](cases)
+if errors or len(pairs) != 6:
+    raise SystemExit("; ".join(errors) or "expected six pairs")
+for variants in pairs.values():
+    if variants["clean"].get("fixture") != "decay-clean":
+        raise SystemExit("clean case uses the wrong fixture")
+    if variants["aged"].get("fixture") != "decay-aged":
+        raise SystemExit("aged case uses the wrong fixture")
+PY
+  fi
+fi
+
 while IFS= read -r -d '' case_file; do
   require_fixed_line "$case_file" 'request: |'
   require_fixed_line "$case_file" 'expect:'
@@ -1694,6 +1742,10 @@ while IFS= read -r -d '' case_file; do
   max_candidates="$(sed -n 's/^  max_candidates: //p' "$case_file" | head -n 1)"
   if [[ -n "$max_candidates" ]] && { [[ ! "$max_candidates" =~ ^[1-5]$ ]]; }; then
     fail "$(relative_path "$case_file") max_candidates must be 1..5"
+  fi
+  max_escalations="$(sed -n 's/^  max_escalations: //p' "$case_file" | head -n 1)"
+  if [[ -n "$max_escalations" && ! "$max_escalations" =~ ^[0-9]+$ ]]; then
+    fail "$(relative_path "$case_file") max_escalations must be a non-negative integer"
   fi
   fixture_name="$(sed -n 's/^fixture: //p' "$case_file" | head -n 1)"
   if [[ -n "$fixture_name" && ! -d "$repo_root/evals/fixtures/$fixture_name" ]]; then
@@ -1821,6 +1873,42 @@ if [[ -f "$eval_runtime" ]]; then
     if find "$eval_output_dir" -maxdepth 1 -type d -name '.workspace-*' | grep -q .; then
       fail 'eval runtime fixture: isolated workspace was not cleaned up'
     fi
+    eval_decay_output_dir="$eval_runner_root/decay-output"
+    eval_decay_output="$(cd "$eval_runner_root" && python3 tools/run-evals.py run --allow-dirty \
+      --adapter evals/fixtures/eval-runtime/adapter.sh \
+      --case evals/fixtures/eval-runtime/runtime-decay-clean.yaml \
+      --case evals/fixtures/eval-runtime/runtime-decay-aged.yaml \
+      --output-dir "$eval_decay_output_dir" 2>&1)" || \
+      fail "eval runtime fixture: Clean/Aged comparison failed: $eval_decay_output"
+    printf '%s\n' "$eval_decay_output" | grep -Fq 'decay=PASS' || \
+      fail 'eval runtime fixture: Clean/Aged comparison did not report decay=PASS'
+    python3 - "$eval_decay_output_dir/summary.json" <<'PY' || \
+      fail 'eval runtime fixture: summary.json omitted the expected decay metrics'
+import json
+import sys
+
+with open(sys.argv[1], encoding="utf-8") as handle:
+    comparison = json.load(handle)["decay_comparison"]
+metrics = comparison["metrics"]
+assert comparison["status"] == "PASS"
+assert comparison["pair_count"] == 1
+assert metrics["success_delta"] == 0
+assert metrics["aged_stale_reference_rate"] == 0
+assert metrics["read_amplification"] == 1
+assert metrics["context_amplification"] == 1.2
+PY
+    set +e
+    eval_decay_regression_output="$(cd "$eval_runner_root" && AGENT_EVAL_DECAY_REGRESSION=true \
+      python3 tools/run-evals.py run --allow-dirty \
+      --adapter evals/fixtures/eval-runtime/adapter.sh \
+      --case evals/fixtures/eval-runtime/runtime-decay-clean.yaml \
+      --case evals/fixtures/eval-runtime/runtime-decay-aged.yaml \
+      --output-dir "$eval_runner_root/decay-regression-output" 2>&1)"
+    eval_decay_regression_status=$?
+    set -e
+    (( eval_decay_regression_status == 1 )) && \
+      printf '%s\n' "$eval_decay_regression_output" | grep -Fq 'decay=FAIL' || \
+      fail 'eval runtime fixture: Aged read amplification did not fail the decay gate'
   else
     warn 'python3 is unavailable; executable eval runtime fixtures were not run'
   fi
@@ -2436,13 +2524,16 @@ printf '%s\n' "$github_auth_test_output" | grep -Fq 'GITHUB_AUTH_TEST_OK' || \
 cache_test_dir="$(mktemp -d "${TMPDIR:-/tmp}/agent-validator-cache.XXXXXX")"
 fixture_cache_dir="$(mktemp -d "${TMPDIR:-/tmp}/agent-validator-fixture.XXXXXX")"
 sqlite_fixture_cache_dir="$(mktemp -d "${TMPDIR:-/tmp}/agent-validator-sqlite.XXXXXX")"
+decay_clean_cache_dir="$(mktemp -d "${TMPDIR:-/tmp}/agent-validator-decay-clean.XXXXXX")"
+decay_aged_cache_dir="$(mktemp -d "${TMPDIR:-/tmp}/agent-validator-decay-aged.XXXXXX")"
 log_fixture_dir="$(mktemp -d "${TMPDIR:-/tmp}/agent-validator-log.XXXXXX")"
 backup_fixture_dir="$(mktemp -d "${TMPDIR:-/tmp}/agent-validator-backup.XXXXXX")"
 malformed_fixture_dir="$(mktemp -d "${TMPDIR:-/tmp}/agent-validator-malformed.XXXXXX")"
 malformed_cache_dir="$(mktemp -d "${TMPDIR:-/tmp}/agent-validator-malformed-cache.XXXXXX")"
 # Cleanup is handled in one place by the opening EXIT trap (cleanup_tmp_paths). Do not override the trap here.
 cleanup_paths+=("$cache_test_dir" "$fixture_cache_dir" "$sqlite_fixture_cache_dir" \
-  "$log_fixture_dir" "$backup_fixture_dir" "$malformed_fixture_dir" "$malformed_cache_dir")
+  "$decay_clean_cache_dir" "$decay_aged_cache_dir" "$log_fixture_dir" \
+  "$backup_fixture_dir" "$malformed_fixture_dir" "$malformed_cache_dir")
 if ! AGENT_CACHE_DIR="$cache_test_dir" bash "$repo_root/tools/build-context-cache.sh" >/dev/null; then
   fail 'build-context-cache.sh failed to generate a cache'
 elif ! AGENT_CACHE_DIR="$cache_test_dir" bash "$repo_root/tools/build-context-cache.sh" --check >/dev/null; then
@@ -3744,6 +3835,43 @@ if [[ -f "$backup_tool" ]] && command -v git >/dev/null 2>&1; then
   [[ "$(independent_remote_sha)" == "$independent_remote_before" ]] || \
     fail 'backup fixture: the Independent remote changed during the whole fixture run'
 fi
+
+  decay_clean_root="$repo_root/evals/fixtures/decay-clean"
+  decay_aged_root="$repo_root/evals/fixtures/decay-aged"
+  decay_clean_knowledge="$(AGENT_DIRECTORY_ROOT="$decay_clean_root" AGENT_CACHE_DIR="$decay_clean_cache_dir" \
+    bash "$repo_root/tools/find-context.sh" --route knowledge --limit 5 -- 'ロールアウト方針' || true)"
+  decay_aged_knowledge="$(AGENT_DIRECTORY_ROOT="$decay_aged_root" AGENT_CACHE_DIR="$decay_aged_cache_dir" \
+    bash "$repo_root/tools/find-context.sh" --route knowledge --limit 5 -- 'ロールアウト方針' || true)"
+  [[ "$decay_clean_knowledge" == "$decay_aged_knowledge" ]] || \
+    fail 'Agent Decay fixture: Aged Knowledge routing differs from Clean routing'
+  printf '%s\n' "$decay_aged_knowledge" | grep -Fq 'rollout-policy-current' || \
+    fail 'Agent Decay fixture: Aged Knowledge routing omitted the current canon'
+  if printf '%s\n' "$decay_aged_knowledge" | grep -Eq 'rollout-policy-(old|archive|retired)'; then
+    fail 'Agent Decay fixture: Aged Knowledge routing returned inactive noise'
+  fi
+  decay_clean_project="$(AGENT_DIRECTORY_ROOT="$decay_clean_root" AGENT_CACHE_DIR="$decay_clean_cache_dir" \
+    bash "$repo_root/tools/find-context.sh" --route project --limit 5 -- 'rollout-operations' || true)"
+  decay_aged_project="$(AGENT_DIRECTORY_ROOT="$decay_aged_root" AGENT_CACHE_DIR="$decay_aged_cache_dir" \
+    bash "$repo_root/tools/find-context.sh" --route project --limit 5 -- 'rollout-operations' || true)"
+  [[ "$decay_clean_project" == "$decay_aged_project" ]] || \
+    fail 'Agent Decay fixture: Aged Project routing differs from Clean routing'
+  printf '%s\n' "$decay_aged_project" | grep -Fq $'project\tproject\tactive\trollout-operations\t' || \
+    fail 'Agent Decay fixture: Aged Project routing omitted the active Project'
+  if printf '%s\n' "$decay_aged_project" | grep -Eq 'rollout-operations-(2025|paused)|legacy-rollout'; then
+    fail 'Agent Decay fixture: Aged Project routing returned inactive noise'
+  fi
+  decay_clean_packet="$(AGENT_DIRECTORY_ROOT="$decay_clean_root" \
+    bash "$repo_root/tools/prepare-context.sh" --route project \
+      --target projects/rollout-operations --class read || true)"
+  decay_aged_packet="$(AGENT_DIRECTORY_ROOT="$decay_aged_root" \
+    bash "$repo_root/tools/prepare-context.sh" --route project \
+      --target projects/rollout-operations --class read || true)"
+  [[ "$decay_clean_packet" == "$decay_aged_packet" ]] || \
+    fail 'Agent Decay fixture: explicit target Context Packet grows in the Aged workspace'
+  decay_clean_catalog_count="$(tail -n +2 "$decay_clean_cache_dir/catalog.tsv" | grep -c . || true)"
+  decay_aged_catalog_count="$(tail -n +2 "$decay_aged_cache_dir/catalog.tsv" | grep -c . || true)"
+  (( decay_aged_catalog_count > decay_clean_catalog_count )) || \
+    fail 'Agent Decay fixture: Aged workspace does not contain more routing noise than Clean'
 
   fixture_root="$repo_root/evals/fixtures/context-search"
   if ! result="$(AGENT_DIRECTORY_ROOT="$fixture_root" AGENT_CACHE_DIR="$fixture_cache_dir" \

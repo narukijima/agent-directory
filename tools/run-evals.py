@@ -16,7 +16,7 @@ import time
 
 
 TRUSTED_SOURCES = {"client", "harness"}
-MAP_EXPECTATIONS = {"must_search", "must_prefer"}
+MAP_EXPECTATIONS = {"must_search", "must_not_search", "must_prefer"}
 
 
 class EvalError(Exception):
@@ -220,6 +220,162 @@ def compare_regression(summary, baseline, percent):
     return regressions
 
 
+def average(values):
+    numeric = [value for value in values if isinstance(value, (int, float))]
+    return sum(numeric) / len(numeric) if numeric else None
+
+
+def amplification(aged, clean):
+    if not isinstance(aged, (int, float)) or not isinstance(clean, (int, float)) or clean <= 0:
+        return None
+    return aged / clean
+
+
+def decay_definitions(cases):
+    paired_cases = [case for case in cases if "decay_pair" in case or "decay_variant" in case]
+    if not paired_cases:
+        return {}, []
+
+    pairs = {}
+    errors = []
+    for case in paired_cases:
+        pair = case.get("decay_pair")
+        variant = case.get("decay_variant")
+        if not isinstance(pair, str) or not re.fullmatch(r"[a-z0-9]+(?:-[a-z0-9]+)*", pair):
+            errors.append("%s has an invalid decay_pair" % case["name"])
+            continue
+        if variant not in {"clean", "aged"}:
+            errors.append("%s has an invalid decay_variant" % case["name"])
+            continue
+        pair_entry = pairs.setdefault(pair, {})
+        if variant in pair_entry:
+            errors.append("%s repeats decay_variant=%s" % (pair, variant))
+            continue
+        pair_entry[variant] = case
+
+    complete_pairs = {}
+    for pair, variants in pairs.items():
+        if set(variants) != {"clean", "aged"}:
+            errors.append("%s must include one clean and one aged case" % pair)
+            continue
+        if variants["clean"]["request"] != variants["aged"]["request"]:
+            errors.append("%s clean and aged requests differ" % pair)
+            continue
+        complete_pairs[pair] = variants
+    return complete_pairs, errors
+
+
+def decay_comparison(cases, results, regression_percent):
+    complete_pairs, errors = decay_definitions(cases)
+    if not complete_pairs and not errors:
+        return None
+
+    results_by_case = {result["case"]: result for result in results}
+    variant_results = {"clean": [], "aged": []}
+    stale_results = {"clean": [], "aged": []}
+    for variants in complete_pairs.values():
+        for variant, case in variants.items():
+            result = results_by_case.get(case["name"])
+            if result:
+                variant_results[variant].append(result)
+                if case.get("decay_stale_check") is True:
+                    stale_results[variant].append(result)
+
+    def success_rate(variant):
+        items = variant_results[variant]
+        return sum(item.get("status") == "PASS" for item in items) / len(items) if items else None
+
+    def metric_average(variant, name):
+        return average([item.get("metrics", {}).get(name) for item in variant_results[variant]])
+
+    def stale_rate(variant):
+        covered = [item for item in stale_results[variant]
+                   if item.get("metrics", {}).get("reference_coverage") is True]
+        if not covered:
+            return None
+        return sum(item.get("metrics", {}).get("forbidden_reference_count", 0) > 0
+                   for item in covered) / len(covered)
+
+    def verification_rate(variant):
+        checks = []
+        for item in variant_results[variant]:
+            checks.extend(check for check in item.get("checks", [])
+                          if check.get("check", "").startswith("must_run:") and
+                          re.search(r"(verify|validat)", check.get("check", ""), re.IGNORECASE))
+        return sum(check.get("status") == "PASS" for check in checks) / len(checks) if checks else None
+
+    clean_success = success_rate("clean")
+    aged_success = success_rate("aged")
+    clean_reads = metric_average("clean", "read_file_count")
+    aged_reads = metric_average("aged", "read_file_count")
+    clean_context = metric_average("clean", "context_bytes")
+    aged_context = metric_average("aged", "context_bytes")
+    clean_tools = metric_average("clean", "tool_calls")
+    aged_tools = metric_average("aged", "tool_calls")
+    clean_stale = stale_rate("clean")
+    aged_stale = stale_rate("aged")
+    metrics = {
+        "clean_success_rate": clean_success,
+        "aged_success_rate": aged_success,
+        "clean_avg_reads": clean_reads,
+        "aged_avg_reads": aged_reads,
+        "clean_avg_context_bytes": clean_context,
+        "aged_avg_context_bytes": aged_context,
+        "clean_avg_tool_calls": clean_tools,
+        "aged_avg_tool_calls": aged_tools,
+        "clean_avg_escalations": metric_average("clean", "human_intervention_count"),
+        "aged_avg_escalations": metric_average("aged", "human_intervention_count"),
+        "clean_stale_reference_rate": clean_stale,
+        "aged_stale_reference_rate": aged_stale,
+        "clean_verification_success_rate": verification_rate("clean"),
+        "aged_verification_success_rate": verification_rate("aged"),
+        "success_delta": aged_success - clean_success
+        if isinstance(aged_success, (int, float)) and isinstance(clean_success, (int, float)) else None,
+        "read_amplification": amplification(aged_reads, clean_reads),
+        "context_amplification": amplification(aged_context, clean_context),
+        "tool_call_amplification": amplification(aged_tools, clean_tools),
+    }
+
+    checks = []
+
+    def gate(name, passed, detail):
+        checks.append({"check": name, "status": "PASS" if passed else "FAIL", "detail": detail})
+
+    complete = not errors and len(variant_results["clean"]) == len(complete_pairs) and \
+        len(variant_results["aged"]) == len(complete_pairs)
+    gate("complete-pairs", complete, "; ".join(errors) if errors else "all pairs are complete")
+    all_observed = complete and all(item.get("status") not in {"UNVERIFIED", "INFRA"}
+                                    for variant in variant_results.values() for item in variant)
+    gate("trusted-observation", all_observed, "all paired cases are mechanically observed")
+    if metrics["success_delta"] is not None:
+        gate("success-delta", metrics["success_delta"] >= 0,
+             "observed=%s limit=>=0" % metrics["success_delta"])
+    read_limit = max(clean_reads * (1 + regression_percent / 100.0), clean_reads + 1) \
+        if isinstance(clean_reads, (int, float)) else None
+    if read_limit is not None and isinstance(aged_reads, (int, float)):
+        gate("read-amplification", aged_reads <= read_limit,
+             "aged=%s limit=%s" % (aged_reads, read_limit))
+    context_limit = max(clean_context * (1 + regression_percent / 100.0), clean_context + 1024) \
+        if isinstance(clean_context, (int, float)) else None
+    if context_limit is not None and isinstance(aged_context, (int, float)):
+        gate("context-amplification", aged_context <= context_limit,
+             "aged=%s limit=%s" % (aged_context, context_limit))
+    if stale_results["clean"] or stale_results["aged"]:
+        stale_observed = clean_stale is not None and aged_stale is not None
+        gate("stale-reference-observation", stale_observed,
+             "trusted reference coverage is required for stale-sensitive pairs")
+        if stale_observed:
+            gate("aged-stale-reference-rate", aged_stale == 0,
+                 "observed=%s limit=0" % aged_stale)
+
+    has_failed_gate = any(check["status"] == "FAIL" for check in checks)
+    unverified_gate = not complete or not all_observed or \
+        any(check["check"] == "stale-reference-observation" and check["status"] == "FAIL" for check in checks)
+    status = "UNVERIFIED" if unverified_gate else ("FAIL" if has_failed_gate else "PASS")
+    return {"schema_version": 1, "status": status, "pair_count": len(complete_pairs),
+            "regression_percent": regression_percent, "metrics": metrics, "checks": checks}
+
+
 def score_case(case, events, baseline=None, regression_percent=20):
     header = next((event for event in events if event["event"] == "trace"), {})
     if header.get("case") and header["case"] != case["name"]:
@@ -334,12 +490,17 @@ def score_case(case, events, baseline=None, regression_percent=20):
                     raise EvalError("invalid report_match regex for %s: %s" % (slug, error))
                 add("must_report:%s" % slug, "PASS" if matched else "FAIL",
                     "all patterns matched" if matched else "one or more patterns did not match")
-        elif key == "must_search":
+        elif key in {"must_search", "must_not_search"}:
             matches = [event for event in searches
                        if command_matches(expected.get("command", ""), event.get("command", "")) and
                        ("status" not in expected or event.get("status") == expected["status"])]
-            add("must_search", "PASS" if matches else absent_status("search"),
-                "observed" if matches else "no matching trusted search event")
+            if key == "must_not_search":
+                add("must_not_search", "FAIL" if matches else
+                    ("PASS" if "search" in coverage else "UNVERIFIED"),
+                    "observed forbidden search" if matches else "no matching trusted search event")
+            else:
+                add("must_search", "PASS" if matches else absent_status("search"),
+                    "observed" if matches else "no matching trusted search event")
         elif key == "must_prefer":
             wanted = expected.get("status")
             selected = []
@@ -369,6 +530,10 @@ def score_case(case, events, baseline=None, regression_percent=20):
             total = sum(event.get("bytes", 0) for event in reads if isinstance(event.get("bytes"), int))
             status = "FAIL" if total > expected else ("PASS" if "read" in coverage else "UNVERIFIED")
             add("max_context_bytes", status, "observed=%d limit=%s" % (total, expected))
+        elif key == "max_escalations":
+            count = sum(event["event"] == "escalation" for event in observed)
+            status = "FAIL" if count > expected else ("PASS" if "escalation" in coverage else "UNVERIFIED")
+            add("max_escalations", status, "observed=%d limit=%s" % (count, expected))
         else:
             add(key, "UNVERIFIED", "scorer has no mechanical observation for this expectation")
 
@@ -395,6 +560,13 @@ def score_case(case, events, baseline=None, regression_percent=20):
         "wall_time_ms": wall_time if isinstance(wall_time, (int, float)) else None,
         "phase_duration_ms": phases,
         "cache_modes": [event.get("mode") for event in observed if event["event"] == "cache"],
+        "reference_coverage": "reference" in coverage,
+        "forbidden_reference_count": sum(
+            1 for event in references
+            if isinstance(event.get("target"), str) and
+            any(path_matches(str(pattern), event["target"])
+                   for pattern in case["expect"].get("must_not_reference", []))
+        ),
     }
     total = len(checks)
     summary = {
@@ -513,9 +685,13 @@ def run_adapter(args, repo_root):
     output_dir = Path(args.output_dir or (repo_root / ".agent-cache" / "evals" / timestamp)).resolve()
     output_dir.mkdir(parents=True, exist_ok=True)
     baseline = load_json(Path(args.baseline).resolve()) if args.baseline else None
+    cases = [parse_case(case_path) for case_path in case_paths]
+    _, decay_errors = decay_definitions(cases)
+    paired_case_count = sum("decay_pair" in case or "decay_variant" in case for case in cases)
+    if decay_errors and paired_case_count > 1:
+        raise EvalError("invalid decay comparison: %s" % "; ".join(decay_errors))
     results = []
-    for case_path in case_paths:
-        case = parse_case(case_path)
+    for case in cases:
         with tempfile.TemporaryDirectory(prefix=".workspace-%s-" % case["name"], dir=str(output_dir)) as temporary:
             workspace = Path(temporary)
             copy_workspace(repo_root, workspace)
@@ -542,14 +718,21 @@ def run_adapter(args, repo_root):
                                        cwd=str(workspace), env=environment, check=False)
             elapsed_ms = round((time.monotonic() - started) * 1000)
             if completed.returncode != 0 or not trace_path.is_file():
-                results.append({"schema_version": 1, "case": case["name"], "status": "INFRA",
-                                "adapter_exit_code": completed.returncode,
-                                "error": "adapter failed or did not produce a trace",
-                                "metrics": {"wall_time_ms": elapsed_ms}, "regression_count": 0})
+                result = {"schema_version": 1, "case": case["name"], "status": "INFRA",
+                          "adapter_exit_code": completed.returncode,
+                          "error": "adapter failed or did not produce a trace",
+                          "metrics": {"wall_time_ms": elapsed_ms}, "regression_count": 0}
+                for key in ("decay_pair", "decay_variant", "decay_stale_check"):
+                    if key in case:
+                        result[key] = case[key]
+                results.append(result)
                 continue
             summary = score_case(case, load_trace(trace_path), baseline, args.regression_percent)
             summary["adapter_exit_code"] = completed.returncode
             summary["runner_wall_time_ms"] = elapsed_ms
+            for key in ("decay_pair", "decay_variant", "decay_stale_check"):
+                if key in case:
+                    summary[key] = case[key]
             write_json(output_dir / (case["name"] + ".summary.json"), summary)
             results.append(summary)
     counts = {status: sum(item["status"] == status for item in results)
@@ -571,6 +754,7 @@ def run_adapter(args, repo_root):
         "context_bytes": sum(item.get("metrics", {}).get("context_bytes", 0) for item in scored),
         "wall_time_ms": sum(item.get("metrics", {}).get("wall_time_ms") or 0 for item in scored),
     }
+    comparison = decay_comparison(cases, results, args.regression_percent)
     aggregate = {"schema_version": 1, "generated_at": dt.datetime.now(dt.timezone.utc).isoformat(),
                  "cases": results, "counts": counts,
                  "case_pass_rate": counts["PASS"] / total if total else 0,
@@ -578,12 +762,16 @@ def run_adapter(args, repo_root):
                  "unverified_check_rate": unverified_checks / total_checks if total_checks else 0,
                  "metrics": aggregate_metrics,
                  "regression_count": sum(item.get("regression_count", 0) for item in results)}
+    if comparison:
+        aggregate["decay_comparison"] = comparison
     write_json(output_dir / "summary.json", aggregate)
-    print("EVAL_RUN total=%d pass=%d fail=%d unverified=%d infra=%d regressions=%d output=%s" %
+    decay_status = comparison["status"] if comparison else "not-applicable"
+    print("EVAL_RUN total=%d pass=%d fail=%d unverified=%d infra=%d regressions=%d decay=%s output=%s" %
           (total, counts["PASS"], counts["FAIL"], counts["UNVERIFIED"], counts["INFRA"],
-           aggregate["regression_count"], output_dir))
+           aggregate["regression_count"], decay_status, output_dir))
     if counts["FAIL"] or counts["INFRA"] or (args.fail_on_unverified and counts["UNVERIFIED"]) or \
-            (args.fail_on_regression and aggregate["regression_count"]):
+            (args.fail_on_regression and aggregate["regression_count"]) or \
+            (comparison and comparison["status"] == "FAIL"):
         return 1
     return 0
 

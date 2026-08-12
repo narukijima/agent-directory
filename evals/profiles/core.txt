@@ -2,6 +2,8 @@
 route-to-knowledge
 route-to-skill
 route-to-project
+knowledge-bounded-retrieval
+context-budget-stop
 project-required-only
 project-work-scoped-validation
 project-goal-change-protection
