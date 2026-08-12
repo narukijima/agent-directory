@@ -13,3 +13,8 @@ expect:
     - knowledge/KNOWLEDGE.md
   must_report:
     - unread-scope-and-uncertainty
+
+report_match:
+  unread-scope-and-uncertainty:
+    - (未読|unread)
+    - (不確実|uncertain)

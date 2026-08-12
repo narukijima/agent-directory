@@ -26,9 +26,12 @@ expect:
   must_search:                       # 探索Toolと状態filter
     command: tools/find-context.sh
     status: active
+  must_not_search:                   # 明示target等で探索禁止の場合
+    command: tools/find-context.sh
   max_candidates: 5
   max_read_files: 12
   max_context_bytes: 32768
+  max_escalations: 0
 
   must_read:
     - AGENTS.md
@@ -110,6 +113,17 @@ python3 tools/run-evals.py run --adapter <executable> --all
 `core`は高速な代表確認、`--all`は拡張機能と互換性を含む全件確認である。core外のcaseを低品質として
 扱わず、該当機能を変更した場合は関連caseまたは`--all`を実行する。効率化のためにcore期待を弱めない。
 
+`evals/profiles/decay.txt`は長期運用regression専用のoptional profileである。同一requestを
+`decay_pair`で結んだ`clean` / `aged` fixtureへ同じadapter・環境で実行し、通常validator、commit、setup、
+通常タスクからは起動しない。現在正本、Project routing、明示target、旧矛盾、no-op、Context上限の6対だけを
+持ち、別のaging系profileを増やさない。
+
+```yaml
+decay_pair: knowledge-current
+decay_variant: clean       # clean | aged
+decay_stale_check: true    # stale referenceを直接検査する対だけ
+```
+
 ## fixtures
 
 `cases/`のケースが参照する入力データは`fixtures/`へ置く。
@@ -142,7 +156,7 @@ ignore projectionで隠れるfixture pathは`git add -f`で明示追跡する。
 行動evalの実行adapterは、可能なら次のJSONLを記録する。
 
 ```json
-{"event":"trace","source":"client","case":"route-to-knowledge","coverage":["route","search","read","run","write","final_response","metrics"]}
+{"event":"trace","source":"client","case":"route-to-knowledge","coverage":["route","search","read","reference","run","write","escalation","final_response","metrics"]}
 {"event":"phase","name":"resolve","duration_ms":42}
 {"event":"route","route":"knowledge"}
 {"event":"search","route":"knowledge","query":"...","returned":5,"duration_ms":120}
@@ -170,6 +184,7 @@ Agent自身の申告を表す。`coverage`は、そのsourceが当該event種別
 - 最終報告文（`final_response`）への`report_match`照合。traceが`final_response`を
   提供しない場合、当該`must_report`は未検証として扱う
 - phase別duration、cache mode（stat-fast / full-check / rebuild）、Tool call数、全体wall time
+- 明示target時の検索不実行、不要な確認・停止、回答が参照したpath
 
 効率指標は品質期待の代替にしない。route正解率、必須読込、検証合格、backup保証の正確な報告が
 同一水準で維持されることを前提に、wall time、Tool call数、読込byte、統合fixture実行数の悪化を
@@ -316,3 +331,20 @@ wall time、phase duration、cache mode、baseline比regressionをJSONで持つ�
 baseline比較は既定20%に短時間noise用の絶対幅（wall / phase 100ms、Tool / read 1件、context 1KiB）を
 併用し、`--regression-percent`で比率だけを変更できる。通常はregressionを記録し、hard gateにする場合だけ
 `--fail-on-regression`、未検証を拒否する評価段階だけ`--fail-on-unverified`を明示する。
+
+## Agent Decay比較
+
+```bash
+python3 tools/run-evals.py run --adapter <real-model-adapter> --profile decay --fail-on-unverified
+```
+
+adapter側でmodel、temperature等を固定する。runnerは各対を同じ実行ファイル・process環境の隔離workspaceへ
+接続し、`summary.json#decay_comparison`へ成功率、平均read、Context bytes、Tool call、不要escalation、
+stale reference、検証成功率と、`success_delta` / `read_amplification` / `context_amplification`を残す。
+wrong target、不要read/write、refusal、output correctnessは各caseの機械採点結果に残る。
+
+初期gateは既存regression基準を再利用し、Aged成功率をClean未満にしない、stale referenceを0、平均readを
+`max(Clean×1.2, Clean+1)`以下、平均Contextを`max(Clean×1.2, Clean+1KiB)`以下とする。比率は
+`--regression-percent`で同じ割合だけ変更できる。trusted traceが不足すれば`UNVERIFIED`、相対gate違反は
+`FAIL`であり、未実行やProvider未指定をPASSにしない。生成物は従来どおり`.agent-cache/evals/`だけに置き、
+Knowledge、STATE、通常Contextへ取り込まない。

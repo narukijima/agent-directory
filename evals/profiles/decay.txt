@@ -1,0 +1,13 @@
+# Optional Clean vs Aged Agent Decay benchmark. One paired case per variant.
+decay-knowledge-current-clean
+decay-knowledge-current-aged
+decay-project-routing-clean
+decay-project-routing-aged
+decay-explicit-target-clean
+decay-explicit-target-aged
+decay-old-contradiction-clean
+decay-old-contradiction-aged
+decay-noop-verification-clean
+decay-noop-verification-aged
+decay-context-boundedness-clean
+decay-context-boundedness-aged
