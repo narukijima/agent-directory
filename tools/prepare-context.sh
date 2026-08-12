@@ -188,7 +188,7 @@ case "$route" in
     queue_read 'skills/SKILLS.md'
     if [[ -n "$target" ]]; then
       case "$target" in
-        skills/*/SKILL.md) queue_read "$target" ;;
+        skills/*/*) queue_read "$target" ;;
         skills/*) queue_read "${target}/SKILL.md" ;;
         *) queue_read "$target" ;;
       esac
@@ -218,7 +218,8 @@ case "$task_class" in
     ;;
   work|state)
     [[ "$route" != 'meta' ]] || validation_profile='full'
-    [[ "$repository_owner" != 'independent' ]] || backup_profile='independent-origin'
+    # finalize-task.sh と同じ語彙: Independent はここから push せず Push Policy に委ねる。
+    [[ "$repository_owner" != 'independent' ]] || backup_profile='push-policy'
     ;;
   boundary)
     validation_profile='full'

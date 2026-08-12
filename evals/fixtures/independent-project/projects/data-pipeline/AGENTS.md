@@ -4,7 +4,7 @@
 
 ## 実行
 
-- 検証は`bash scripts/verify-pipeline.sh`で行い、他のコマンドで代替しない。
+- 検証は`PROJECT.md`の`## 検証方法`に従い、他のコマンドで代替しない。
 - 生成物は`outputs/`だけへ書き、`inputs/`を書き換えない。
 
 ## Push Policy

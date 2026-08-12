@@ -70,7 +70,7 @@ tools/prepare-context.sh --route project --target projects/<name> --class work
 
 Route確定後の初期読込を1回のContext Packetへまとめ、Git root、attachment、Required参照、
 読込順序を決定的に列挙する（本文は出力しない）。classからvalidation（none|scoped|full）と
-backup（none|root-only|workspace|independent-origin）のprofileを決定的に返す。
+backup（none|root-only|workspace|push-policy）のprofileを決定的に返す（`finalize-task.sh`と同一語彙）。
 Conditionalの成立判断はエージェントが行い、読込予算・読込順序の規約は変えない。
 出力は`TASK_CONTEXT v1`のkey=value行と`READ:`/`CONDITIONAL:`/`MISSING:`のpath列。
 
@@ -215,7 +215,7 @@ bash tools/manage-routine-schedule.sh --routine maintenance --scheduler auto --a
 ```
 
 user crontabとuser LaunchAgentだけを扱うSchedule管理。`--scheduler auto|cron|launchd`と
-`--print|--install|--status|--remove`を持ち、冪等で無関係entryを保持する。installは利用者の明示操作であり、Routine実行やclone直後に
+`--print|--dry-run|--install|--status|--remove`を持ち、冪等で無関係entryを保持する。installは利用者の明示操作であり、Routine実行やclone直後に
 OS scheduleを変更しない。出力は`SCHEDULE_*`の1行。
 
 ## routine-reasoner.py
@@ -228,7 +228,7 @@ Provider（`deepseek | openai | anthropic`）、model ID、APIキーは`.env`が
 ## validate-agent-directory.sh
 
 ```bash
-bash tools/validate-agent-directory.sh [--strict] [--full] [--changed] [--base <ref>]
+bash tools/validate-agent-directory.sh [--strict] [--full] [--changed] [--base <ref>] [--bootstrap-status]
 ```
 
 - 通常: 必須構造、`AGENTS.md`/`CLAUDE.md`階層、metadata、Project契約とdocs境界、STATE、
@@ -236,6 +236,9 @@ bash tools/validate-agent-directory.sh [--strict] [--full] [--changed] [--base <
 - `--changed`: Git差分で変更されたProject・Knowledge・Skillだけを検査するFast Path。meta正本
   （tools、evals、routines、領域正本、registry、template）へ及ぶ変更は全体静的検査へ自動fallbackする
 - `--strict`: 導入後に残してはいけない自己定義・Skillプレースホルダーも失敗にする
+  （full静的経路専用。`--changed`とは併用不可で、組合せはusageエラーになる）
+- `--bootstrap-status`: 検査せず配布状態（`template|partial|deployed`）だけを1行で返す照会mode。
+  `run-routine.sh`の配布判定が使う
 - `--full`: 全参照、全Knowledge/Skill/Projectに加え、cache再生成、実Git・backup・materializer・
   context Toolの隔離fixtureを検査。Tool、eval、正本規約を変更した作業では必須とする
 - `--base <ref>`: Git差分から`knowledge/raw/`、閉鎖済みlog、Project物理移動の禁止を検査
@@ -247,7 +250,7 @@ bash tools/validate-agent-directory.sh [--strict] [--full] [--changed] [--base <
 
 機械検査する境界の網羅的な正本はvalidator本体、`evals/EVALS.md`の各最低条件、`tools/BACKUP.md`で
 ある。AGENTS三層とProject docsの完全な構造規則は`projects/PROJECTS.md`が所有し、validatorは
-境界とサイズだけを固定する。どのmodeも実GitHub接続、`gh` CLI、認証情報を必要としない。
+その境界・必須見出し集合・サイズを機械検査する。どのmodeも実GitHub接続、`gh` CLI、認証情報を必要としない。
 
 ## check-boundary.sh / install-git-hooks.sh
 

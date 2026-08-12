@@ -107,6 +107,14 @@ while (( $# > 0 )); do
   esac
 done
 
+# --strict の placeholder 検査は full 静的経路にしか存在しない。--changed と組み合わせると
+# scoped 経路では黙って素通りし、fallback 時だけ実行される（データ依存）ため、明示的に拒否する。
+if [[ "$strict" == true && "$changed" == true && "$full" != true ]]; then
+  printf 'ERROR: --strict needs the full static run; use --strict --full or drop --changed\n' >&2
+  usage
+  exit 2
+fi
+
 if [[ "$bootstrap_status_mode" == true ]]; then
   validator_metrics_enabled=false
 fi
@@ -1118,6 +1126,9 @@ finish_run() {
       case "$receipt_dir" in /*) ;; *) receipt_dir="$repo_root/$receipt_dir" ;; esac
       if receipt_tree="$(git -C "$repo_root" write-tree 2>/dev/null)"; then
         mkdir -p "$receipt_dir/receipts"
+        # 未消費のreceiptは最新の1枚だけ保持する。meta作業の--full PASSごとに孤児が
+        # 蓄積し、同一index treeの再出現時に古いreceiptが後日のcommitを承認するのを防ぐ。
+        rm -f "$receipt_dir/receipts/"* 2>/dev/null || true
         printf 'head=%s\nissued=%s\n' \
           "$(git -C "$repo_root" rev-parse HEAD 2>/dev/null || printf 'none')" \
           "$(date -u '+%Y-%m-%dT%H:%M:%SZ')" > "$receipt_dir/receipts/$receipt_tree"
@@ -1963,6 +1974,14 @@ if [[ -f "$eval_runtime" ]]; then
     set -e
     (( eval_fail_status == 1 )) && printf '%s\n' "$eval_fail_output" | grep -Fq 'status=FAIL' || \
       fail 'eval runtime fixture: observed violations did not score FAIL with exit 1'
+
+    set +e
+    eval_failed_run_output="$(python3 "$eval_runtime" score --case "$eval_fixture/case.yaml" \
+      --trace "$eval_fixture/failed-run.jsonl" 2>&1)"
+    eval_failed_run_status=$?
+    set -e
+    (( eval_failed_run_status == 1 )) && printf '%s\n' "$eval_failed_run_output" | grep -Fq 'status=FAIL' || \
+      fail 'eval runtime fixture: a required command that exited nonzero was still accepted as must_run evidence'
 
     eval_unverified_output="$(python3 "$eval_runtime" score --case "$eval_fixture/case.yaml" \
       --trace "$eval_fixture/unverified.jsonl" 2>&1)" || \

@@ -43,7 +43,8 @@ while (( $# > 0 )); do
       shift 2
       ;;
     --path-prefix)
-      path_prefix="${2:-}"
+      [[ $# -ge 2 ]] || { usage; exit 2; }
+      path_prefix="$2"
       shift 2
       ;;
     -h|--help) usage; exit 0 ;;
@@ -182,6 +183,7 @@ contract_ack="${AGENT_CONTRACT_COMMIT:-}"
 checked=0
 violations=0
 first_reason=''
+first_reason_count=0
 guarded_count=0
 contract_count=0
 normal_count=0
@@ -191,6 +193,9 @@ record_violation() {
   # $1=reason $2=op $3=path
   violations=$((violations + 1))
   [[ -n "$first_reason" ]] || first_reason="$1"
+  # paths= reports the count for the reported reason only, so the machine-readable
+  # pair stays consistent with the DETAIL lines of that reason (issue #64).
+  [[ "$1" != "$first_reason" ]] || first_reason_count=$((first_reason_count + 1))
   printf 'DETAIL: %s %s %s\n' "$1" "$2" "$3" >&2
 }
 
@@ -283,6 +288,6 @@ if (( violations > 0 )); then
       printf 'DETAIL: Project contract changes are decided by the human; commit them alone with AGENT_CONTRACT_COMMIT=true after that approval (tools/CONTROL.md#明示エスカレーション)\n' >&2
       ;;
   esac
-  blocked "$first_reason" "$violations"
+  blocked "$first_reason" "$first_reason_count"
 fi
 printf 'BOUNDARY_OK checked=%d guarded=%d contract=%d\n' "$checked" "$guarded_count" "$contract_count"

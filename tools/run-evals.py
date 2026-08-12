@@ -427,13 +427,20 @@ def score_case(case, events, baseline=None, regression_percent=20):
         elif key in {"must_run", "must_not_run"}:
             negative = key == "must_not_run"
             for item in expected:
-                matches = [event["command"] for event in runs if command_matches(item, event["command"])]
+                matches = [event for event in runs if command_matches(item, event["command"])]
                 if negative:
-                    status = "FAIL" if matches else ("PASS" if "run" in coverage else "UNVERIFIED")
+                    add("%s:%s" % (key, item),
+                        "FAIL" if matches else ("PASS" if "run" in coverage else "UNVERIFIED"),
+                        "observed" if matches else "no matching trusted run event")
                 else:
-                    status = "PASS" if matches else absent_status("run")
-                add("%s:%s" % (key, item), status,
-                    "observed" if matches else "no matching trusted run event")
+                    # EVALS.md examines the exit code: a required command that ran and
+                    # failed is not satisfied evidence (a mere attempt must not pass).
+                    succeeded = [event for event in matches if event.get("exit_code", 0) == 0]
+                    add("%s:%s" % (key, item),
+                        "PASS" if succeeded else absent_status("run"),
+                        "observed" if succeeded else
+                        ("matching run event(s) exited nonzero" if matches
+                         else "no matching trusted run event"))
         elif key in {"must_not_write", "must_not_modify"}:
             for item in expected:
                 matches = [event["path"] for event in writes if path_matches(str(item), event["path"])]
@@ -706,6 +713,19 @@ def run_adapter(args, repo_root):
                 if not fixture_root.is_dir():
                     raise EvalError("fixture does not exist: %s" % fixture)
                 shutil.copytree(str(fixture_root), str(workspace), dirs_exist_ok=True)
+            # Seal the copy as its own Git repository. Without a .git here, any git
+            # command an adapter runs resolves upward to the real checkout and mutates
+            # it; the baseline commit also makes commit/rev-parse expectations
+            # satisfiable inside the isolated workspace.
+            for git_step in (["init", "-q"],
+                             ["add", "-A"],
+                             ["-c", "user.name=agent-eval", "-c", "user.email=agent-eval@invalid",
+                              "commit", "-q", "--no-verify", "-m", "eval workspace baseline"]):
+                sealed = subprocess.run(["git", "-C", str(workspace)] + git_step,
+                                        stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False)
+                if sealed.returncode != 0:
+                    raise EvalError("cannot isolate the eval workspace: %s"
+                                    % sealed.stderr.decode("utf-8", "replace").strip())
             request_path = output_dir / (case["name"] + ".request.txt")
             trace_path = output_dir / (case["name"] + ".jsonl")
             request_path.write_text(case["request"], encoding="utf-8")

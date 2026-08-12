@@ -1,4 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
+<!-- issue #38-41 の回帰ガード: docs境界外の運用ファイルをvalidatorが誤拒否しないことを固定する。
+     どのeval caseからも参照されないが、削除するとこの回帰カバレッジが失われる。 -->
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>

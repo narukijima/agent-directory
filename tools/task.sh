@@ -69,9 +69,14 @@ case "$command_name" in
     if ! git -C "$repo_root" rev-parse --show-toplevel >/dev/null 2>&1; then
       blocked verify not-a-git-repository
     fi
-    if output="$(bash "$tool_root/validate-agent-directory.sh" --changed 2>&1)"; then
+    [[ -f "$repo_root/tools/validate-agent-directory.sh" ]] || blocked verify validator-not-found
+    if output="$( (cd "$repo_root" && bash tools/validate-agent-directory.sh --changed) 2>&1 )"; then
       printf '%s\n' "$output" >&2
-      printf 'TASK_OK action=verify scope=changed\n'
+      scope='changed'
+      case "$output" in
+        *'running the full static validation'*) scope='full' ;;
+      esac
+      printf 'TASK_OK action=verify scope=%s\n' "$scope"
     else
       rc=$?
       printf '%s\n' "$output" >&2
@@ -91,7 +96,7 @@ case "$command_name" in
       rc=$?
       printf '%s\n' "$output" >&2
       case "$output" in
-        *'FINALIZE_BLOCKED reason=boundary'*|*'reason=guarded-or-contract-diff'*|*'reason=boundary-class'*)
+        *'FINALIZE_BLOCKED reason=boundary'*|*'FINALIZE_BLOCKED reason=ack-env-set'*)
           blocked finish protected-change "$rc"
           ;;
         *)

@@ -1,7 +1,7 @@
 # TOOLS.md — 構造保守と限定取得
 
 `tools/`は利用者の成果を作るSkillではなく、このAgent Workspace自体を保守するmeta層である。
-固定Toolは`#Tool一覧`の登録だけとし、依存関係を増やさず、入出力、fallback、検証方法を
+固定Toolは`tools/TOOLS.md#Tool一覧`の登録だけとし、依存関係を増やさず、入出力、fallback、検証方法を
 Tool個別契約の所有正本へ明記する。
 macOS標準のbash 3.2を最低条件とし、GNU専用option、associative array、`mapfile`を
 使わずBSD `find`と`sed`で動かす。`set -u`下の空配列は件数で守ってから展開する。変更時は
@@ -24,6 +24,7 @@ Human = 例外と方針変更を決定する
 tools/task.sh context --route <route> [--target <path>]
 tools/task.sh verify
 tools/task.sh finish --route <route> [--target <path>] --message "変更理由"
+tools/task.sh status
 ```
 
 Agentが渡すのはRouteとTargetであり、必要な読込、Git root、検証、終了処理は既存の決定的Toolが
@@ -65,7 +66,7 @@ work/stateの終端は`tools/finalize-task.sh`の1回で検証・commit・backup
 - commitが意味的に一つの作業単位である。
 
 hooks導入済み環境では、commit・push境界を`tools/check-boundary.sh`が機械検査する（正本は
-`tools/CONTROL.md`。安全核としてguardedな変更だけが明示エスカレーションと`--full`検証を要する）。
+`tools/CONTROL.md`。安全核としてguarded / contractの変更だけが明示エスカレーションと`--full`検証を要する）。
 
 commit messageは変更内容と理由が分かる一文を先頭に置く。中断時は残件を明記した
 checkpoint commitを作ってよいが、完了報告にも成果契約の達成にもしない。commit後は`tools/BACKUP.md`の

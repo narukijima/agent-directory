@@ -1,6 +1,8 @@
 # RECOVERY.md — Projectの復旧手順
 
-利用者から間違い、重複、目的不一致、過去決定の見落としを指摘された場合だけ読む。
+利用者から間違い、重複、目的不一致、過去決定の見落としを指摘された場合、または
+Independent repositoryの接続不一致（missing clone、origin mismatch、head not adopted等）を
+検出した場合だけ読む。
 
 1. 対象の`PROJECT.md`、`STATE.md`、指摘された成果物を再読する。
 2. 期待、現在結果、食い違い、原因を具体的に特定する。

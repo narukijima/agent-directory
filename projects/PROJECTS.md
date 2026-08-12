@@ -275,6 +275,9 @@ mode: finite
 - `mode`は`finite`または`continuous`だけを使う。
 - `status`は`active | paused | completed | retired`だけを使う。
 - パスが恒久IDである。別のID体系や物理archiveを作らない。
+- 本文の必須見出し集合は`projects/_template/PROJECT.md`を規範とする（目的、判断原則、非ゴール、
+  制約・固定決定、品質基準、入力、使用するKnowledge、使用するSkill、成果物、検証方法）。
+  validatorがこの集合を検査する。
 
 ### finite
 
@@ -284,7 +287,7 @@ mode: finite
 ### continuous
 
 現在目標を更新しながら継続する。`継続的使命`、固定ID付き`成功指標`、`見直し・終了条件`を持つ。
-現在目標の達成を理由に`completed`へ変更しない。
+`completed`は使わない。終了・転換は`projects/LIFECYCLE.md`の遷移（利用者の決定）に従う。
 
 ## 参照するKnowledgeとSkill
 
@@ -312,7 +315,11 @@ finiteの完了条件とcontinuousの成功指標だけに、`- **PC-01** <安�
 
 ## STATE.md
 
-- 現在目標は一つの到達状態とし、`対象契約: PROJECT.md#PC-xx`を一つ示す。
+- 現在目標は一つの到達状態とし、`対象契約: PROJECT.md#PC-xx`を一つ示す
+  （状態遷移そのものを扱う作業だけ`PROJECT.md#status`を使う。completed Projectは常に`#status`）。
+- 必須見出し集合は`projects/_template/STATE.md`を規範とする（現在の到達点、現在の目標、
+  目標の合格条件、検証結果、未完了・ブロッカー、現在有効な決定、失敗・却下済み、次の一手）。
+  validatorがこの集合を検査する。
 - 合格条件は第三者が判定できる形にする。
 - 検証結果は対象、確認日、方法、客観的結果を持ち、最新の有効な証拠だけを残す。
 - 有効な決定、失敗・却下済み、ブロッカー、次の一手を現在形で短く保つ。
@@ -320,11 +327,13 @@ finiteの完了条件とcontinuousの成功指標だけに、`- **PC-01** <安�
 - 現在判断ではactiveなKnowledgeとSkillを優先する。
 
 状態遷移と削除条件は必要な場合だけ[projects/LIFECYCLE.md](LIFECYCLE.md)を読む。
-利用者から間違い、重複、目的不一致を指摘された場合だけ[projects/RECOVERY.md](RECOVERY.md)を読む。
+利用者から間違い、重複、目的不一致、過去決定の見落としを指摘された場合、またはIndependent
+repositoryの接続不一致を検出した場合だけ[projects/RECOVERY.md](RECOVERY.md)を読む。
 
 ## 検証
 
-- Project固有の検証は`PROJECT.md`に実行方法、期待結果、入力、必要な環境変数名を記す
+- Project固有の検証は`PROJECT.md`の`## 検証方法`に実行手順、合格条件、不合格時の扱い、
+  必要な環境変数（キー名のみ）、使用した入力を記す
   （コードの置き場は`tools/TOOLS.md#一時作業と固定化`）。
 - 外部公開、本番反映、送信、課金、権限変更、`gated`なpushは実行前に承認を得る。承認がない限り
   完了条件を満たしたとしない。内部で完結する可逆な検証と修正は承認を待たずに行う。

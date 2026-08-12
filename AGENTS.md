@@ -33,7 +33,7 @@
 - 明示相対パス最優先。明示targetでは検索しない。探索は`tools/find-context.sh`、確定後に正本を読む。
 - 台帳、INDEX、LOG、履歴、`runs/`、`docs/**`、`.agent-cache/`を一括読込しない。
 - 24KiB超の正本は見出し・検索で絞って読む。
-- 読込予算は32KiB・12ファイル=`min(16,000 tokens, 25%)`。到達時は停止報告。
+- 読込予算は32KiB・12ファイルを上限とする（≈16,000 tokens、コンテキストウィンドウの約25%）。到達時は停止報告。
 
 ## 自律実行
 
@@ -61,7 +61,7 @@ TriggerはHumanまたはRoutine（Routeではない、同一規則）。関連�
 | 方針・契約 | 目的、`PC-xx`、優先順位、Project新設・廃止 | `projects/LIFECYCLE.md` |
 | 不可逆 | 永久削除、履歴改変、force push、reset | `tools/BACKUP.md` |
 | 外部影響 | 公開、本番、送信、権限、承認push | `projects/PROJECTS.md` |
-| 安全性・衝突 | divergence、Single Writer違反、秘密情報、所有者不明変更 | `tools/CONTROL.md` |
+| 安全性・衝突 | divergence、Single Writer違反、秘密情報、所有者不明変更 | divergence・Single Writerは`tools/BACKUP.md`、他は`tools/CONTROL.md` |
 
 決定方針は正本へ記録し繰り返し質問しない。上流Issue報告だけは、`tools/UPSTREAM.md`の
 検査を通過し宛先固定Toolで送る場合に限り事前承認済みの送信とする。
@@ -69,7 +69,9 @@ TriggerはHumanまたはRoutine（Routeではない、同一規則）。関連�
 ## 禁止事項
 
 - APIキー・パスワード等を保存・コミットしない（実値は`.env*`のみ）。
-- GitHubを正本・実行基盤にしない。GitHubへはbackup Tool（backup remote）と上流報告Toolのみ書き、pull/merge/rebase/force push不可。
+- GitHubを正本・実行基盤にしない。GitHubへの書込はbackup Tool（backup remote）、上流報告Tool、
+  および`tools/BACKUP.md`のremote分類が認める`origin`への通常push（`projects/PROJECTS.md`のpush policy準拠）
+  のみとし、pull/merge/rebase/force push不可。
 - GitHub能力は`tools/setup-github-auth.sh --check`の実probeで判定する。認証詳細は通常経路で再実装しない。
 - 未依頼の機能・抽象化・依存を追加しない。
 - 未検証の事を完了と報告しない。
@@ -87,6 +89,7 @@ TriggerはHumanまたはRoutine（Routeではない、同一規則）。関連�
 - `projects/LIFECYCLE.md` / `projects/RECOVERY.md` — 状態遷移 / 復旧
 - `tools/SAFETY.md` — 通常判断で守る6つの安全不変条件
 - `tools/TOOLS.md` — 標準入口、探索、commit、自己修復、予算
+- `tools/REFERENCE.md` — 全Toolの呼び出し形と出力契約
 - `tools/BACKUP.md` — backup、remote分類、divergence、Single Writer
 - `tools/UPSTREAM.md` — 上流Issue報告、匿名化検査、送信条件
 - `tools/CONTROL.md` — 境界執行と違反分類

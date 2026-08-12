@@ -4,6 +4,9 @@ fixture: context-search
 request: |
   派生catalogが壊れている状態で、資本配分のKnowledgeを探して。
 
+# 前提（壊れたcatalog）はrequest文で与える設計。`.agent-cache/`は隔離copyへ複製されないため
+# fixtureは壊れた実catalogを置かず、読み・拒否・報告の期待だけを検証する（EVALS.md#YAMLと
+# Integration fixtureの分担）。
 expect:
   route: knowledge
   must_search:

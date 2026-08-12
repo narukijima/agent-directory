@@ -38,13 +38,15 @@ Knowledge、Skill、Projectを正本として育てながら、1タスクの読�
 
 ## Route
 
+Routeの区分と対象は[AGENTS.md](AGENTS.md#route)が正本である。本表は入口へのリンクだけを足す。
+
 | Route | 対象 | 着手後に読む正本 |
 |---|---|---|
-| `knowledge` | 取り込み、記憶、照会、統合 | [knowledge/KNOWLEDGE.md](knowledge/KNOWLEDGE.md) |
-| `skill` | 分析・判定手順、再利用可能な研究方法 | [skills/SKILLS.md](skills/SKILLS.md)と対象`SKILL.md` |
-| `project` | 固有の仕事・成果物、具体的な研究活動 | [projects/AGENTS.md](projects/AGENTS.md)、対象`PROJECT.md`、`STATE.md` |
-| `meta` | 規約、テンプレート、eval、tool | 対象領域の大文字正本と変更対象 |
-| `none` | 永続変更のない回答・一時作業 | 必要最小限。中間物は`.tmp/` |
+| `knowledge` | 取り込み、照会、統合 | [knowledge/KNOWLEDGE.md](knowledge/KNOWLEDGE.md) |
+| `skill` | 再利用手順・研究方法 | [skills/SKILLS.md](skills/SKILLS.md)と対象`SKILL.md` |
+| `project` | 固有作業・成果物・研究 | [projects/AGENTS.md](projects/AGENTS.md)、対象`PROJECT.md`、`STATE.md` |
+| `meta` | 構造、規約、eval、tool | 対象領域の大文字正本と変更対象 |
+| `none` | 永続変更のない回答 | 追加ロードなし（一時作業の中間物は`.tmp/`） |
 
 ## 構造
 

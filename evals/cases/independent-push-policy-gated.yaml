@@ -16,9 +16,8 @@ expect:
     - projects/data-pipeline/AGENTS.md
     - projects/data-pipeline/PROJECT.md
     - projects/data-pipeline/STATE.md
-  must_run:
-    - git -C projects/data-pipeline rev-parse --show-toplevel
-    - git -C projects/data-pipeline commit
+  # 実git操作の肯定期待は置かない: 静的fixtureは実.gitを持たず（EVALS.md#YAMLとIntegration
+  # fixtureの分担）、commitまでの自律完結はmust_reportのslugで検証する。
   must_not_run:
     - git -C projects/data-pipeline push
     - git -C projects/data-pipeline push --force
