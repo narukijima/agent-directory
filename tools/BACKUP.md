@@ -91,7 +91,7 @@ root前提条件は次である。ひとつでも満たさない場合、Toolは
 6. `projects/REPOSITORIES.md`の構造と、`projects/.gitignore`のmanaged blockが登録集合と一致する。
 7. root indexが登録済み`projects/<name>/`配下のpathもmode 160000のgitlinkも持たない。
 8. 旧`projects/<name>/repository/`、旧repository frontmatter、旧`## Repository State`が残っていない。
-9. rootのremote branchが未作成であるか、remote SHAがローカルHEADのancestorである。
+9. rootのremote branchが未作成であるか、remote SHAがbackup開始時に固定した監査対象SHAのancestorである。
 
 `--root-only`でも6〜8の静的境界は検査する。workspace scopeでは、さらに各Independent repositoryを
 次の順で監査する。remote refsとlocal refsの到達性は一時bare repositoryで検査する。
@@ -107,9 +107,12 @@ root前提条件は次である。ひとつでも満たさない場合、Toolは
 
 停止reasonの網羅的な正本はTool出力とvalidatorの隔離fixtureである。
 
-Toolはfast-forward pushだけを行い、push後に`git ls-remote`でremote SHAとローカルHEADの完全一致を
+Toolはbackup開始時のroot HEADを監査対象SHAとして固定し、object監査、Independent repository監査後の
+push source、事後検証を同じSHAへ束縛する。push後に`git ls-remote`でremote SHAと監査対象SHAの完全一致を
 確認する。remote通信はこのpushと事後検証だけで、無条件の事前照会はdry-runに限り、push拒否時だけ
-remoteを読んで`remote-diverged`等へ分類する（拒否はremoteを変更しない）。事後検証済みSHAは
+remoteを読んで`remote-diverged`等へ分類する（拒否はremoteを変更しない）。実行中にroot HEADが動いた場合、
+新しいcommitを送信せず、または既に監査対象SHAだけを送信した後に`head-moved-during-backup`で停止し、
+checkpointを更新しない。事後検証済みSHAは
 `.agent-cache/`のcheckpoint（削除可能な派生状態。remote URLはhash保持）へ記録し、次回の
 oversized object監査を新規範囲だけにする。欠損・破損・不一致・非ancestorでは全履歴監査へ
 fallbackする。

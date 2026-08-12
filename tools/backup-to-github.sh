@@ -131,6 +131,17 @@ write_backup_checkpoint() {
   } > "$(checkpoint_path)" 2>/dev/null || true
 }
 
+ensure_root_head_unchanged() {
+  local current_ref current_sha
+  current_ref="$(git -C "$repo_root" symbolic-ref --quiet HEAD 2>/dev/null || true)"
+  current_sha="$(git -C "$repo_root" rev-parse --verify --quiet HEAD 2>/dev/null || true)"
+  if [[ "$current_ref" != "$head_ref" || "$current_sha" != "$local_head" ]]; then
+    blocked 'head-moved-during-backup' \
+      "audited=$local_head current=${current_sha:-none}" \
+      'the root HEAD changed after the backup audit started; rerun against the new clean state'
+  fi
+}
+
 frontmatter_key_count() {
   awk -v key="$2" '
     NR == 1 && $0 != "---" { exit }
@@ -679,6 +690,9 @@ fi
 # --- 10. root push -------------------------------------------------------------------
 # The push itself refuses a non-fast-forward update without writing anything, so a
 # failure is classified afterwards with one remote read instead of querying up front.
+# Recheck the moving root ref, then push the immutable commit captured before any audit.
+# If HEAD moves after this check, the fixed refspec still prevents the new commit from
+# being sent; the post-push check below reports the local race before checkpointing.
 
 classify_push_failure() {
   local push_detail="$1"
@@ -703,8 +717,9 @@ classify_push_failure() {
 }
 
 push_output=''
+ensure_root_head_unchanged
 if ! push_output="$(github_git_run "$repo_root" "$remote_url" -C "$repo_root" \
-  push --porcelain "$remote" "HEAD:refs/heads/$branch" 2>&1)"; then
+  push --porcelain "$remote" "$local_head:refs/heads/$branch" 2>&1)"; then
   classify_push_failure "$push_output"
 fi
 note "$(printf '%s\n' "$push_output" | tr '\n' ' ')"
@@ -721,6 +736,7 @@ verified_sha="$(printf '%s\n' "$verify_listing" | awk 'NF >= 2 && $1 ~ /^[0-9a-f
 if [[ "$verified_sha" != "$local_head" ]]; then
   blocked 'remote-verification-mismatch' "remote=${verified_sha:-none} local=$local_head"
 fi
+ensure_root_head_unchanged
 # Record the remote-verified SHA so the next run's object audit is incremental.
 write_backup_checkpoint
 
