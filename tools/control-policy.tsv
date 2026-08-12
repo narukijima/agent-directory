@@ -43,6 +43,8 @@ guarded	evals/profiles/core.txt	Core品質gate
 guarded	evals/cases/route-to-knowledge.yaml	Core route invariant
 guarded	evals/cases/route-to-skill.yaml	Core route invariant
 guarded	evals/cases/route-to-project.yaml	Core route invariant
+guarded	evals/cases/context-budget-stop.yaml	Core context budget invariant
+guarded	evals/cases/knowledge-bounded-retrieval.yaml	Core bounded retrieval invariant
 guarded	evals/cases/project-required-only.yaml	Core context invariant
 guarded	evals/cases/project-work-scoped-validation.yaml	Core verification invariant
 guarded	evals/cases/project-goal-change-protection.yaml	Core contract invariant
