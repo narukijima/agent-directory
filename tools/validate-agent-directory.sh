@@ -3443,10 +3443,10 @@ RACE_GIT
   backup_output="$(env "${backup_env[@]}" PATH="$race_bin:$PATH" \
     AGENT_BACKUP_REAL_GIT="$(command -v git)" \
     AGENT_BACKUP_RACE_MARKER="$race_marker" AGENT_BACKUP_RACE_WORK="$backup_work" \
-    AGENT_DIRECTORY_ROOT="$backup_work" bash "$backup_tool" --root-only 2>&1)"
+    AGENT_DIRECTORY_ROOT="$backup_work" bash "$backup_tool" 2>&1)"
   backup_status=$?
   set -e
-  backup_expect_blocked 'head-moved-during-backup' 'root HEAD moving after audit and before push resolution'
+  backup_expect_blocked 'head-moved-during-backup' 'root HEAD moving during a workspace backup'
   unaudited_b="$(backup_git rev-parse HEAD)"
   [[ "$unaudited_b" != "$audited_a" ]] || \
     fail 'backup fixture: the race hook did not advance root HEAD from audited A to unaudited B'
