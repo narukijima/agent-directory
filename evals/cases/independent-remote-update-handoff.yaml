@@ -15,11 +15,8 @@ expect:
     - projects/data-pipeline/AGENTS.md    # ## Push Policy の宣言が既定より優先する
     - projects/data-pipeline/PROJECT.md   # 契約と状態はProject固有Gitが所有する
     - projects/data-pipeline/STATE.md
-  must_run:
-    - git -C projects/data-pipeline rev-parse --show-toplevel
-    - git -C projects/data-pipeline commit
-    - git -C projects/data-pipeline push origin
-    - git -C projects/data-pipeline ls-remote --heads origin
+  # 実git操作の肯定期待は置かない: 静的fixtureは実.gitを持たず（EVALS.md#YAMLとIntegration
+  # fixtureの分担）、commit→push→SHA確認の流れはmust_reportのslugで検証する。
   must_not_run:
     - git push                                    # root remoteへは決してpushしない
     - bash tools/backup-to-github.sh              # workspace backupは別のroot sessionのタスク境界

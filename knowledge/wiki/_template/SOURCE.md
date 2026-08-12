@@ -9,7 +9,7 @@ source: <knowledge/raw/internal/またはknowledge/raw/external/の相対パス>
 
 ## 書誌・原資料
 
-- 原資料: `<repository-relative-path>`
+<!-- 原資料パスの正本はfrontmatterの`source`。本文へ複製しない。 -->
 - 取得元: <URL、提供者、取得日など。内部原記録ならその旨>
 
 ## 要約

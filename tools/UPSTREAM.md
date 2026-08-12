@@ -1,12 +1,12 @@
 # UPSTREAM.md — 上流Issue報告
 
-下流Workspaceが上流由来の欠陥・汎用改善を、`#宛先許可リスト`内の公開上流のGitHub Issueへ
+下流Workspaceが上流由来の欠陥・汎用改善を、`tools/UPSTREAM.md#宛先許可リスト`内の公開上流のGitHub Issueへ
 報告する契約の正本。送信経路は`tools/report-upstream-issue.sh`だけとし、
 `gh`の直接操作でIssueを作成・コメントしない。
 
 ## 位置づけ
 
-- 投稿者は利用者のGitHub認証（`#認証`の順序で解決）であり、投稿者は匿名化しない。
+- 投稿者は利用者のGitHub認証（`tools/UPSTREAM.md#認証`の順序で解決）であり、投稿者は匿名化しない。
   匿名化するのは発見元（どのAgent・どのWorkspaceか）だけとする。
 - 上流報告はmeta Routeとして扱う。下書きと検査退避は`.agent-cache/upstream-reports/`
   （Git管理外の派生物）へ置き、正本にもcommitにも含めない。
@@ -17,14 +17,14 @@
 
 | repository | 位置づけ | revision自動解決 |
 |---|---|---|
-| `claudagt/agent-directory`（既定） | 本テンプレートの公開上流 | あり（`#上流revisionの解決`） |
+| `claudagt/agent-directory`（既定） | 本テンプレートの公開上流 | あり（`tools/UPSTREAM.md#上流revisionの解決`） |
 | `claudagt/agent-skills` | 共有Skillライブラリの配布元（`skills/SKILLS.md#共有Skillライブラリ`） | なし（報告者が本文`## 対象`へ記す） |
 
 - 宛先はこの許可リストへ固定する。`--repo`は許可リスト内の選択だけを行い、リスト外は
   `destination-not-allowed`で拒否する。リストを広げる引数・環境変数を持たない。
 - 許可リストの変更は`AGENTS.md#人間へ上げる例外`の`方針・契約`であり、利用者の承認を経た
   本正本の改定としてだけ行う。
-- 匿名化検査（`#公開禁止情報`）は宛先によらず同一に通す。許可リスト内の公開上流の名称は
+- 匿名化検査（`tools/UPSTREAM.md#公開禁止情報`）は宛先によらず同一に通す。許可リスト内の公開上流の名称は
   公開情報であり遮断語にしない。
 
 ## 認証
@@ -37,7 +37,7 @@
 
 次の全条件を満たす送信だけを、実行前確認なしの事前承認済み外部操作とする。
 
-1. 宛先が`#宛先許可リスト`内のIssue（新規またはコメント）である。
+1. 宛先が`tools/UPSTREAM.md#宛先許可リスト`内のIssue（新規またはコメント）である。
 2. `tools/report-upstream-issue.sh`を経由する。
 3. 固有名・秘密情報の機械検査を通過している。
 4. 添付ファイルを持たない。
@@ -99,7 +99,7 @@ OK: privateなdownstream Workspaceの通常Project作業中に発生した
 ## 修正候補（分かる場合のみ）
 ```
 
-宛先が`claudagt/agent-directory`のとき、`<upstream-sha>`はToolが`#上流revisionの解決`の
+宛先が`claudagt/agent-directory`のとき、`<upstream-sha>`はToolが`tools/UPSTREAM.md#上流revisionの解決`の
 順序で自動解決する。他の宛先では報告者が採用revision（取り込み記録`agents/upstream.yaml`の
 commit SHA等）へ置き換える。再現方法は固有情報を除いた最小手順だけを書く。
 
@@ -147,7 +147,7 @@ bash tools/report-upstream-issue.sh --title "[bug] <問題>" --body-file <path> 
 bash tools/report-upstream-issue.sh --search "<主要語>" [--repo <owner/repo>] [--dry-run]
 ```
 
-- 宛先は`#宛先許可リスト`へ固定する。`--repo`はリスト内の選択だけを行い、リスト外は
+- 宛先は`tools/UPSTREAM.md#宛先許可リスト`へ固定する。`--repo`はリスト内の選択だけを行い、リスト外は
   `destination-not-allowed`で拒否する（既定は`claudagt/agent-directory`）。添付は
   受け付けない。`--dry-run`はネットワークへ書き込まない。
 - 検査条件はWorkspaceから実行時に導出する: `AGENTS.md#自己定義`の名乗り行（`- あなたは…`）の
@@ -167,7 +167,7 @@ bash tools/report-upstream-issue.sh --search "<主要語>" [--repo <owner/repo>]
   `UPSTREAM_REPORT_SEARCH_OK count=<n>` / `UPSTREAM_REPORT_SEARCH_DRY_RUN_OK`。
   終了コードは、実送信・コメント・検索・明示dry-run成功=`0`、policy・入力・匿名化・宛先拒否=`1`、
   usage=`2`、認証・権限・通信問題で未送信=`3`。`DRAFTED`は必ず`3`である。
-- 認証・疎通のreasonは`#認証`の区分を使う。report modeは内容hashで再利用する下書き
+- 認証・疎通のreasonは`tools/UPSTREAM.md#認証`の区分を使う。report modeは内容hashで再利用する下書き
   （`UPSTREAM_REPORT_DRAFTED`）、search modeは`UPSTREAM_REPORT_BLOCKED`で同じreasonを使い、
   一律の`gh-unavailable`へ潰さない。
 - 検査違反のDETAILは規則名だけを出し、一致した値そのものを出力しない。

@@ -7,6 +7,9 @@ request: |
   そのcloneには未コミットの変更と未pushのcommitが残っている。
   projects/ad-hoc-tool/repo/には登録のないnested .gitも見つかる。
 
+# 前提（dirty clone、未push commit、未登録nested .git）はrequest文で与える設計。静的fixtureは
+# 実.gitを持たないため、これらをmaterializeせず、読み・拒否・報告の期待だけを検証する
+# （EVALS.md#YAMLとIntegration fixtureの分担）。
 expect:
   route: meta
   must_read:

@@ -6,9 +6,9 @@ Projectは「何を作り残すか」を所有する。再利用可能な研究�
 
 ## 共有Skillライブラリ
 
-Agent間で再利用する汎用Skillは、別リポジトリの [`agent-skills`](https://github.com/claudagt/agent-skills) が配布元です。
-このWorkspaceへSkillを標準で自動導入・自動同期はしません。必要なタスクで利用者が明示したときだけ、配布元のimport toolで
-`skills/<skill-name>/`をコピーし、取り込んだSkillをこのWorkspaceの正本にします。
+Agent間で再利用する汎用Skillは、別リポジトリの [`agent-skills`](https://github.com/claudagt/agent-skills) が配布元である。
+このWorkspaceへSkillを標準で自動導入・自動同期はしない。必要なタスクで利用者が明示したときだけ、配布元のimport toolで
+`skills/<skill-name>/`をコピーし、取り込んだSkillをこのWorkspaceの正本にする。
 
 ```bash
 bash /path/to/agent-skills/tools/import-skill.sh <skill-name> \
@@ -16,7 +16,7 @@ bash /path/to/agent-skills/tools/import-skill.sh <skill-name> \
 ```
 
 インポート先には `skills/<skill-name>/agents/upstream.yaml` が作られ、配布元repository、commit SHA、Skill version、
-インポート時刻を記録します。既存Skillは上書きせず、更新時は上流との差分を確認してから明示的に再インポートします。
+インポート時刻を記録する。既存Skillは上書きせず、更新時は上流との差分を確認してから明示的に再インポートする。
 
 ## 対象の選択
 

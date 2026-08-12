@@ -24,4 +24,5 @@ Project固有の作業差分と条件付きDocs Routeだけを持つ。契約は
 
 ## Project Notes
 
+<!-- 本節とSTATE.mdの相互参照行、automation/のplistは issue #38-41 の回帰ガード。削除しない。 -->
 - 兄弟instance文書への参照はProject root内で解決する。
