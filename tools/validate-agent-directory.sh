@@ -408,6 +408,41 @@ check_size_warning() {
   fi
 }
 
+root_agents_router_bytes() {
+  local file="$1"
+  [[ -f "$file" ]] || { printf '0'; return 0; }
+  # `## 自己定義` is deployment-specific identity, not router content. Keep the
+  # whole-file hard limit separate, and exclude this exact H2 through the next H2
+  # or EOF from the router metric. Stripping a trailing CR only for heading matching
+  # preserves CRLF bytes in every emitted router line. awk + wc are available on the
+  # macOS bash 3.2 / BSD toolchain and avoid GNU-only section flags.
+  if ! LC_ALL=C grep -Eq '^## 自己定義?$' "$file"; then
+    wc -c < "$file" | tr -d ' '
+    return 0
+  fi
+  LC_ALL=C awk '
+    {
+      heading = $0
+      sub(/\r$/, "", heading)
+      if (heading == "## 自己定義") { in_self_definition = 1; next }
+      if (in_self_definition && heading ~ /^##[[:space:]]/) in_self_definition = 0
+      if (!in_self_definition) print
+    }
+  ' "$file" | wc -c | tr -d ' '
+}
+
+check_root_agents_router_size_warning() {
+  local file="$1"
+  local warning_limit="$2"
+  local label="$3"
+  local bytes
+  [[ -f "$file" ]] || return 0
+  bytes="$(root_agents_router_bytes "$file")"
+  if (( bytes > warning_limit )); then
+    warn "$(relative_path "$file") exceeds the $label soft budget: ${bytes}B > ${warning_limit}B"
+  fi
+}
+
 # CLAUDE.md is a bridge holding only @AGENTS.md and must not own any rules of its own.
 validate_claude_bridge() {
   local agents_file="$1"
@@ -1340,7 +1375,7 @@ for template_entry in AGENTS.md CLAUDE.md ARCHITECTURE.md docs; do
 done
 
 check_size "$repo_root/AGENTS.md" 8192 'root AGENTS.md'
-check_size_warning "$repo_root/AGENTS.md" 6144 'root AGENTS.md router'
+check_root_agents_router_size_warning "$repo_root/AGENTS.md" 6144 'root AGENTS.md router'
 check_size "$repo_root/projects/AGENTS.md" 2048 'projects AGENTS.md'
 check_size "$repo_root/README.md" 32768 'README.md'
 check_size "$repo_root/knowledge/KNOWLEDGE.md" 20480 'KNOWLEDGE.md'
@@ -1363,6 +1398,115 @@ check_heading_warning "$repo_root/AGENTS.md" 20
 check_heading_warning "$repo_root/knowledge/KNOWLEDGE.md" 30
 check_heading_warning "$repo_root/skills/SKILLS.md" 30
 check_heading_warning "$repo_root/projects/PROJECTS.md" 30
+
+if [[ "$full" == true && -z "${AGENT_VALIDATOR_NESTED_FIXTURE:-}" ]]; then
+  # Root router budget fixture: deployment identity may grow without changing the
+  # router metric, while router growth and the whole-file hard limit remain enforced.
+  router_budget_fixture_dir="$(mktemp -d "${TMPDIR:-/tmp}/agent-router-budget.XXXXXX")"
+  cleanup_paths+=("$router_budget_fixture_dir")
+  placeholder_identity="$router_budget_fixture_dir/placeholder-identity.md"
+  deployed_identity="$router_budget_fixture_dir/deployed-identity.md"
+  placeholder_agents="$router_budget_fixture_dir/placeholder-AGENTS.md"
+  deployed_agents="$router_budget_fixture_dir/deployed-AGENTS.md"
+
+  cat > "$placeholder_identity" <<'PLACEHOLDER_IDENTITY'
+## 自己定義
+
+- あなたは`<agent-name>`（役割:`<agent-role>`）。作業領域は本ツリー内。
+- **使命:** `<agent-mission>` **ビジョン:** `<agent-vision>`。明示指示時のみ変更。
+- **運用者応対言語:** `<operator-language>`。運用者への質問、確認、進捗、報告は常にこの言語。
+  資料・Tool出力・作業対象が別言語でも切り替えず、明示指示時のみ変更。
+- 成果物・コード・引用・外部宛て文面の言語は対象Projectの契約に従い、応対言語と分離する。
+- `<...>`は導入時に置換する。
+PLACEHOLDER_IDENTITY
+  cat > "$deployed_identity" <<'DEPLOYED_IDENTITY'
+## 自己定義
+
+- あなたは`調査運用エージェント`（役割:`事業・技術横断の調査、実装、検証、記録を一貫して担う運用担当`）。作業領域は本ツリー内。
+- **使命:** 運用者から受け取った目的を、リポジトリに保存された正本と検証可能な事実へ結び付け、必要な調査、設計、実装、検証、記録までを一つの作業単位として完結する。短期的に回答を返すだけでなく、次回の担当者が同じ判断を再現できる証拠と経路を残し、外部サービスや自動化を扱う場合も承認境界、秘密情報、所有権、復旧可能性を崩さない。
+- **ビジョン:** 日々の小さな依頼から長期プロジェクトまで、Knowledge、Skill、Projectの責務を混ぜずに育て、文脈量が増えても必要な情報だけを正確に取り出せる持続可能なWorkspaceをつくる。人間は目的、優先順位、成果契約、不可逆な判断に集中し、定型的な調査と安全に検証できる実装はエージェントが自律的に完了する協働状態を目指す。
+- **運用者応対言語:** 日本語。運用者への質問、確認、進捗、報告は常に日本語で行う。資料・Tool出力・作業対象が別言語でも切り替えず、明示指示時のみ変更する。
+- 成果物・コード・引用・外部宛て文面の言語は対象Projectの契約に従い、応対言語と分離する。
+DEPLOYED_IDENTITY
+
+  write_router_budget_fixture() {
+    local identity_file="$1" output_file="$2"
+    awk '
+      FNR == NR { identity = identity $0 ORS; next }
+      {
+        heading = $0
+        sub(/\r$/, "", heading)
+        if (heading == "## 自己定義") { printf "%s", identity; skip = 1; next }
+        if (skip && heading ~ /^##[[:space:]]/) skip = 0
+        if (!skip) print
+      }
+    ' "$identity_file" "$repo_root/AGENTS.md" > "$output_file"
+  }
+  write_router_budget_fixture "$placeholder_identity" "$placeholder_agents"
+  write_router_budget_fixture "$deployed_identity" "$deployed_agents"
+
+  deployed_identity_bytes="$(wc -c < "$deployed_identity" | tr -d ' ')"
+  if (( deployed_identity_bytes < 1024 || deployed_identity_bytes > 1536 )); then
+    fail "router budget fixture: realistic Japanese self-definition must stay within 1-1.5KiB, got ${deployed_identity_bytes}B"
+  fi
+  placeholder_router_bytes="$(root_agents_router_bytes "$placeholder_agents")"
+  deployed_router_bytes="$(root_agents_router_bytes "$deployed_agents")"
+  [[ "$placeholder_router_bytes" == "$deployed_router_bytes" ]] || \
+    fail 'router budget fixture: placeholder and deployed self-definitions changed the router byte metric'
+
+  placeholder_budget_probe="$( (
+    warnings=0
+    check_root_agents_router_size_warning "$placeholder_agents" 6144 'root AGENTS.md router'
+    printf 'warnings=%s\n' "$warnings"
+  ) 2>&1 )"
+  deployed_budget_probe="$( (
+    warnings=0
+    check_root_agents_router_size_warning "$deployed_agents" 6144 'root AGENTS.md router'
+    printf 'warnings=%s\n' "$warnings"
+  ) 2>&1 )"
+  printf '%s\n' "$placeholder_budget_probe" | grep -Fqx 'warnings=0' || \
+    fail "router budget fixture: placeholder identity triggered a router warning: $placeholder_budget_probe"
+  printf '%s\n' "$deployed_budget_probe" | grep -Fqx 'warnings=0' || \
+    fail "router budget fixture: realistic deployed identity triggered a router warning: $deployed_budget_probe"
+
+  router_overflow_agents="$router_budget_fixture_dir/router-overflow-AGENTS.md"
+  cp "$placeholder_agents" "$router_overflow_agents"
+  awk 'BEGIN { printf "\n## Router overflow\n\n"; for (i = 0; i < 6200; i++) printf "x"; printf "\n" }' \
+    >> "$router_overflow_agents"
+  router_overflow_probe="$( (
+    warnings=0
+    check_root_agents_router_size_warning "$router_overflow_agents" 6144 'root AGENTS.md router'
+    printf 'warnings=%s\n' "$warnings"
+  ) 2>&1 )"
+  printf '%s\n' "$router_overflow_probe" | grep -Fqx 'warnings=1' || \
+    fail "router budget fixture: actual router overflow did not warn: $router_overflow_probe"
+
+  hard_overflow_agents="$router_budget_fixture_dir/hard-overflow-AGENTS.md"
+  cp "$deployed_agents" "$hard_overflow_agents"
+  awk 'BEGIN { for (i = 0; i < 8193; i++) printf "h"; printf "\n" }' >> "$hard_overflow_agents"
+  hard_overflow_probe="$( (
+    failures=0
+    check_size "$hard_overflow_agents" 8192 'root AGENTS.md'
+    printf 'failures=%s\n' "$failures"
+  ) 2>&1 )"
+  printf '%s\n' "$hard_overflow_probe" | grep -Fqx 'failures=1' || \
+    fail "router budget fixture: whole-file hard overflow did not fail: $hard_overflow_probe"
+
+  placeholder_crlf="$router_budget_fixture_dir/placeholder-crlf.md"
+  deployed_crlf="$router_budget_fixture_dir/deployed-crlf.md"
+  awk '{ printf "%s\r\n", $0 }' "$placeholder_agents" > "$placeholder_crlf"
+  awk '{ printf "%s\r\n", $0 }' "$deployed_agents" > "$deployed_crlf"
+  [[ "$(root_agents_router_bytes "$placeholder_crlf")" == "$(root_agents_router_bytes "$deployed_crlf")" ]] || \
+    fail 'router budget fixture: CRLF self-definition boundaries changed the router metric'
+
+  eof_prefix="$router_budget_fixture_dir/eof-prefix.md"
+  eof_identity="$router_budget_fixture_dir/eof-identity.md"
+  printf '# Router\n\n## Route\n\nroute\n\n' > "$eof_prefix"
+  cp "$eof_prefix" "$eof_identity"
+  printf '## 自己定義\n\nidentity at EOF without a following H2' >> "$eof_identity"
+  [[ "$(root_agents_router_bytes "$eof_identity")" == "$(wc -c < "$eof_prefix" | tr -d ' ')" ]] || \
+    fail 'router budget fixture: a self-definition ending at EOF leaked into the router metric'
+fi
 
 if [[ "$strict" == true ]]; then
   if grep -Eq "$agent_definition_placeholders" "$repo_root/AGENTS.md"; then
