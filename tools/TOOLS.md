@@ -161,6 +161,10 @@ Toolへの決定的な入力不備、自分の変更が壊したtestである。
 実行時の読込予算は`AGENTS.md`が所有する。90%到達のwarningは質問事項ではなく、
 次節の標準処理を自律実行する合図である。
 
+ルート`AGENTS.md`の8KiB hard limitはfile全体へ適用する。6KiB warningはrouter肥大化を減らす指標であり、
+導入先固有のidentityを持つH2 `## 自己定義`節（次のH2またはEOFまで）を除いたbyte数へ適用する。
+自己定義もfile全体hard limitの内側にあり、無制限ではない。
+
 | 対象 | hard limit |
 |---|---:|
 | `AGENTS.md`（ルート） | 8KiB。6KiB超はwarning |
