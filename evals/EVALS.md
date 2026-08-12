@@ -1,15 +1,8 @@
 # EVALS.md — 振る舞いの品質保証
 
 エージェントがルーティング、正本優先、限定取得、成果契約を守るかを1ケース1 YAMLで表す。
-成果内容の品質はProjectの条件と固定検証、evalは横断的な行動不変条件を所有する。
-
-## Skill scriptsとの分離
-
-```text
-skills/<skill>/scripts/ = Skill固有の処理と検証
-projects/<project>/scripts/ = Project固有の成果検証
-evals/ = Route、読込、書込、状態遷移、予算、fallbackの横断検証
-```
+成果内容の品質はProjectの条件と固定検証（`scripts/`の所有は`tools/TOOLS.md#一時作業と固定化`）、
+evalはRoute、読込、書込、状態遷移、予算、fallbackの横断的な行動不変条件を所有する。
 
 ## ケースschema
 
@@ -88,8 +81,7 @@ report_match:                 # 任意。expectの外
 
 - `report_match`のslugは、同じケースの`must_report`に存在する項目だけを持つ（validatorが検査する）。
 - パターンを持たない`must_report`項目は従来どおり未検証として残し、PASSへ数えない。曖昧な
-  キーワード照合を強制せず、誤採点を安全性系の判定へ持ち込まない。
-- パターンは言い回しを縛らず、slugの意味の最小核だけを照合する。
+  キーワード照合を強制せず、誤採点を安全性系の判定へ持ち込まない。パターンはslugの意味の最小核だけを照合する。
 - Tool実行・Git変更の事実はTool traceで判定する。最終報告文は「何を報告したか」の判定だけに使う。
 
 ## ケースの粒度
@@ -153,46 +145,17 @@ ignore projectionで隠れるfixture pathは`git add -f`で明示追跡する。
 
 ## Context trace
 
-行動evalの実行adapterは、可能なら次のJSONLを記録する。
+行動evalの実行adapterは、可能なら採点根拠のJSONL traceを記録する。最小形:
 
 ```json
-{"event":"trace","source":"client","case":"route-to-knowledge","coverage":["route","search","read","reference","run","write","escalation","final_response","metrics"]}
-{"event":"phase","name":"resolve","duration_ms":42}
+{"event":"trace","source":"client","case":"route-to-knowledge","coverage":["route","read","final_response"]}
 {"event":"route","route":"knowledge"}
-{"event":"search","route":"knowledge","query":"...","returned":5,"duration_ms":120}
-{"event":"cache","mode":"stat-fast|full-check|rebuild"}
 {"event":"read","path":"knowledge/wiki/topics/example.md","bytes":4200}
-{"event":"run","command":"...","exit_code":0,"duration_ms":800}
-{"event":"write","path":"knowledge/wiki/topics/example.md","operation":"update"}
 {"event":"final_response","text":"..."}
-{"event":"summary","tool_calls":6,"wall_time_ms":21000}
 ```
 
-`source`は`client`、`harness`、`agent`のいずれかとし、先頭`trace` eventの値を後続eventが継承する。
-`client`はクライアントのTool履歴、`harness`はsandbox・filesystem observer等の外部観測、`agent`は
-Agent自身の申告を表す。`coverage`は、そのsourceが当該event種別を漏れなく観測した場合だけ列挙する。
-肯定期待は信頼できる一致eventで検証できるが、不在から負条件をPASSにできるのは対応するcoverageが
-ある場合だけである。source欠落・未知source・`agent`だけのeventはPASS根拠にせず`UNVERIFIED`とする。
-
-検査対象:
-
-- 検索候補数、読込ファイル数、正本byte合計
-- 読んだpathと順序、status優先
-- 実行commandと終了コード
-- 書込・更新・保持・禁止path
-- 予算停止時の未読範囲と不確実性の報告
-- 最終報告文（`final_response`）への`report_match`照合。traceが`final_response`を
-  提供しない場合、当該`must_report`は未検証として扱う
-- phase別duration、cache mode（stat-fast / full-check / rebuild）、Tool call数、全体wall time
-- 明示target時の検索不実行、不要な確認・停止、回答が参照したpath
-
-効率指標は品質期待の代替にしない。route正解率、必須読込、検証合格、backup保証の正確な報告が
-同一水準で維持されることを前提に、wall time、Tool call数、読込byte、統合fixture実行数の悪化を
-効率regressionとして扱う。duration系のfieldはクライアントが提供する場合だけ検査し、
-自己申告のみの値は未検証として扱う。
-
-自己申告だけで合格させず、クライアントのTool履歴、sandbox記録、またはadapterのアクセス記録を使う。
-クライアントが実トレースを提供しない場合は、その項目を未検証として扱う。
+全event語彙、source/coverageの信頼規則、fieldとexpectの対応、検査対象、効率regressionは
+`evals/TRACE.md`が所有する。信頼できないeventはPASS根拠にせず`UNVERIFIED`とする。
 
 ## Projectケースの最低条件
 
@@ -316,16 +279,16 @@ Agent自身の申告を表す。`coverage`は、そのsourceが当該event種別
 ## 実行
 
 ケースの`request`をエージェントへ与え、実際のtraceと変更を`expect`へ照合する。
-fixtureは隔離コピーへ重ね、元の作業ツリーを変更しない。
+fixtureは隔離コピーへ重ねる。
 
 `tools/validate-agent-directory.sh`はschema、必須ケース、fixture、構造を静的に検査し、context Toolの
 決定的なfixture検索も実行する。モデルへ依頼する行動evalそのものとは別である。
 
 `python3 tools/run-evals.py score`は既存traceを採点し、`run`は実行可能adapterをcaseごとの隔離copyへ
-接続してtrace取得から採点まで行う。外部AI Providerや特定クライアントを必須にせず、adapter失敗や
-trace未生成は`INFRA`、期待違反は`FAIL`、観測不能は`UNVERIFIED`へ分ける。summaryはcase pass rate、
-verified / unverified check rate、route accuracy、human escalation、Tool call数、読込file数・bytes、
-wall time、phase duration、cache mode、baseline比regressionをJSONで持つ。既定出力は
+接続してtrace取得から採点まで行う（呼び出し契約と隔離保証は`evals/TRACE.md#adapter呼び出し契約`）。
+外部AI Providerや特定クライアントを必須にせず、adapter失敗やtrace未生成は`INFRA`、期待違反は`FAIL`、
+観測不能は`UNVERIFIED`へ分ける。summaryは採点集計と効率metrics（route accuracy、escalation、
+Tool call、読込、wall time、phase、cache mode、baseline比regression）をJSONで持つ。既定出力は
 `.agent-cache/evals/`の派生物であり、case YAMLだけが期待の正本である。
 
 baseline比較は既定20%に短時間noise用の絶対幅（wall / phase 100ms、Tool / read 1件、context 1KiB）を

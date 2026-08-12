@@ -104,7 +104,8 @@ Independent repository、利用者の未追跡ファイルを「古そう」と�
 - 安全なtracked修正が必須検証に合格した場合だけ、意味的に1つのscoped commitを作る。
   利用者や別Writerの変更を混ぜない。
 - schedule到達はbackup triggerではない。検証済みRoutine commitができた場合だけ、
-  `tools/BACKUP.md`の既存event-driven triggerとtask classに従ってbackupへ進む。
+  `tools/BACKUP.md`の既存event-driven triggerと`tools/TOOLS.md#タスク分類と終端処理`の
+  task classに従ってbackupへ進む。
   backup-only Routineは作らない。
 - Routineは公開スケルトンの`origin`へ自動pushしない。
 

@@ -17,7 +17,7 @@
 | 経路 | 対象 | 必須処理 |
 |---|---|---|
 | ordinary | 通常のProject、Knowledge、Skill、文書、コード | 対象検証、secret検査、差分確認 |
-| protected | 上記6項目を実装・定義する正本とTool | full検証、明示ack、index-bound receipt |
+| protected | 上記6項目を実装・定義する正本とTool | full検証、明示ack、index-bound receipt（receiptはworkspace rootのみ） |
 | external | push、公開、送信、本番、課金、権限、破壊操作 | 対象固有の承認gateと実行後照合 |
 
 `guarded`は「重要そうなファイル全部」ではなく、protected経路の実装だけへ限定する。

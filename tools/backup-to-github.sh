@@ -231,12 +231,12 @@ detect_deprecated_layout() {
   local project_md project_dir retired_key legacy_dir legacy_tracked
 
   legacy_tracked="$(git -C "$repo_root" ls-files -- \
-    'projects/*/repository' 'projects/*/repository/*' | head -n 5)"
+    'projects/*/repository' 'projects/*/repository/*' | sed -n '1,5p')"
   [[ -z "$legacy_tracked" ]] || blocked 'deprecated-repository-layout' \
     'the retired projects/<name>/repository/ layout is still tracked; migrate it per tools/BACKUP.md' \
     "$legacy_tracked"
   legacy_dir="$(find "$repo_root/projects" -mindepth 3 -maxdepth 3 -type d \
-    -path '*/repository/.git' -print 2>/dev/null | head -n 5)"
+    -path '*/repository/.git' -print 2>/dev/null | sed -n '1,5p')"
   [[ -z "$legacy_dir" ]] || blocked 'deprecated-repository-layout' \
     'a clone still lives at the retired projects/<name>/repository/ path; migrate it per tools/BACKUP.md' \
     "$legacy_dir"
@@ -307,7 +307,7 @@ audit_independent_repository() {
     "$project_dir declares .gitmodules; submodules are unsupported"
 
   nested_child="$(find "$target" -path "$target/.git" -prune -o \
-    -mindepth 2 \( -type d -o -type f \) -name .git -print 2>/dev/null | head -n 5)"
+    -mindepth 2 \( -type d -o -type f \) -name .git -print 2>/dev/null | sed -n '1,5p')"
   [[ -z "$nested_child" ]] || blocked 'independent-nested-repository' \
     "$project_dir contains a nested Git repository" "$nested_child"
 
@@ -428,7 +428,7 @@ validate_root_repository_ownership() {
   local tracked_under_project gitlink_paths entry_index
 
   # Check gitlinks first, keeping their stop reason distinct from a plain-tracked file at the same path.
-  gitlink_paths="$(git -C "$repo_root" ls-files --stage | awk '$1 == "160000" { print $4 }' | head -n 10)"
+  gitlink_paths="$(git -C "$repo_root" ls-files --stage | awk '$1 == "160000" { print $4 }' | sed -n '1,10p')"
   [[ -z "$gitlink_paths" ]] || blocked 'unsupported-root-gitlink' \
     'the root index holds a gitlink; Independent repositories are plain clones, not submodules' \
     "$gitlink_paths"
@@ -436,7 +436,7 @@ validate_root_repository_ownership() {
   entry_index=0
   while (( entry_index < ${#independent_names[@]} )); do
     tracked_under_project="$(git -C "$repo_root" ls-files -- \
-      "projects/${independent_names[$entry_index]}" | head -n 10)"
+      "projects/${independent_names[$entry_index]}" | sed -n '1,10p')"
     [[ -z "$tracked_under_project" ]] || blocked 'root-tracks-independent-repository' \
       "the root repository must not track anything under projects/${independent_names[$entry_index]}/" \
       "$tracked_under_project"
@@ -570,7 +570,7 @@ if (( independent_count > 0 )); then
   done
 fi
 nested_git="$(find "$repo_root" \( "${nested_prune[@]}" \) -prune -o \
-  -mindepth 2 \( -type d -o -type f \) -name .git -print | head -n 10)"
+  -mindepth 2 \( -type d -o -type f \) -name .git -print | sed -n '1,10p')"
 if [[ -n "$nested_git" ]]; then
   blocked 'nested-git-repository' \
     'nested .git entries are forbidden unless they are registered Independent Project clones' "$nested_git"
