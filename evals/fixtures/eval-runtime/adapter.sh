@@ -13,4 +13,18 @@ while (( $# > 0 )); do
   esac
 done
 [[ -s "$request" && -f "$workspace/eval-runtime-marker.txt" && -n "$trace" ]] || exit 1
-cp "$workspace/evals/fixtures/eval-runtime/pass.jsonl" "$trace"
+case "${AGENT_EVAL_CASE:-}" in
+  runtime-decay-aged)
+    if [[ "${AGENT_EVAL_DECAY_REGRESSION:-false}" == true ]]; then
+      cp "$workspace/evals/fixtures/eval-runtime/runtime-decay-aged-regressed.jsonl" "$trace"
+    else
+      cp "$workspace/evals/fixtures/eval-runtime/${AGENT_EVAL_CASE}.jsonl" "$trace"
+    fi
+    ;;
+  runtime-decay-clean)
+    cp "$workspace/evals/fixtures/eval-runtime/${AGENT_EVAL_CASE}.jsonl" "$trace"
+    ;;
+  *)
+    cp "$workspace/evals/fixtures/eval-runtime/pass.jsonl" "$trace"
+    ;;
+esac

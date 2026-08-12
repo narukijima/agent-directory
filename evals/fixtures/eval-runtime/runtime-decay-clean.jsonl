@@ -1,0 +1,5 @@
+{"event":"trace","source":"harness","case":"runtime-decay-clean","coverage":["route","read","reference","escalation","metrics"]}
+{"event":"route","route":"meta"}
+{"event":"read","path":"AGENTS.md","bytes":500}
+{"event":"read","path":"evals/EVALS.md","bytes":500}
+{"event":"summary","tool_calls":2,"wall_time_ms":1000}
