@@ -1982,8 +1982,8 @@ if [[ -f "$backup_tool" ]]; then
   if (( push_invocations != 1 )); then
     fail "tools/backup-to-github.sh must contain exactly one shared-wrapper push invocation (found $push_invocations)"
   fi
-  if ! grep -Eq '^[[:space:]]*push[[:space:]]+--porcelain[[:space:]]+"\$remote"[[:space:]]+"HEAD:refs/heads/\$branch"' "$backup_tool"; then
-    fail 'tools/backup-to-github.sh must push only the explicit HEAD:refs/heads/$branch refspec'
+  if ! grep -Eq '^[[:space:]]*push[[:space:]]+--porcelain[[:space:]]+"\$remote"[[:space:]]+"\$local_head:refs/heads/\$branch"' "$backup_tool"; then
+    fail 'tools/backup-to-github.sh must push only the immutable audited SHA in $local_head:refs/heads/$branch'
   fi
   grep -Fq 'lib/github-auth.sh' "$backup_tool" || \
     fail 'tools/backup-to-github.sh must use the shared GitHub authentication resolver'
@@ -3411,6 +3411,56 @@ if [[ -f "$backup_tool" ]] && command -v git >/dev/null 2>&1; then
     'root-only backup'
   [[ "$(independent_remote_sha)" == "$independent_remote_before" ]] || \
     fail 'backup fixture: the root-only backup pushed to the Independent remote'
+
+  # Move root HEAD deterministically inside the git push invocation, after the pre-push
+  # audit check. The immutable source ref must send only A; the newly committed B was not
+  # audited and must remain local. The local race has its own reason and never advances the
+  # checkpoint to either an unverified or a now-stale root state.
+  race_bin="$backup_fixture_dir/race-bin"
+  race_marker="$backup_fixture_dir/race-fired"
+  mkdir -p "$race_bin"
+  cat > "$race_bin/git" <<'RACE_GIT'
+#!/usr/bin/env bash
+set -euo pipefail
+for arg in "$@"; do
+  if [[ "$arg" == push && ! -e "$AGENT_BACKUP_RACE_MARKER" ]]; then
+    : > "$AGENT_BACKUP_RACE_MARKER"
+    printf 'not audited\n' > "$AGENT_BACKUP_RACE_WORK/head-moved.txt"
+    "$AGENT_BACKUP_REAL_GIT" -C "$AGENT_BACKUP_RACE_WORK" add head-moved.txt
+    "$AGENT_BACKUP_REAL_GIT" -C "$AGENT_BACKUP_RACE_WORK" commit -q -m 'fixture: unaudited head move'
+    break
+  fi
+done
+exec "$AGENT_BACKUP_REAL_GIT" "$@"
+RACE_GIT
+  chmod +x "$race_bin/git"
+  printf 'audited A\n' > "$backup_work/audited-a.txt"
+  backup_git add audited-a.txt
+  backup_git commit -q -m 'fixture: audited A'
+  audited_a="$(backup_git rev-parse HEAD)"
+  checkpoint_before_race="$(sed -n 's/^sha=//p' "$backup_checkpoint_file" | head -n 1)"
+  set +e
+  backup_output="$(env "${backup_env[@]}" PATH="$race_bin:$PATH" \
+    AGENT_BACKUP_REAL_GIT="$(command -v git)" \
+    AGENT_BACKUP_RACE_MARKER="$race_marker" AGENT_BACKUP_RACE_WORK="$backup_work" \
+    AGENT_DIRECTORY_ROOT="$backup_work" bash "$backup_tool" --root-only 2>&1)"
+  backup_status=$?
+  set -e
+  backup_expect_blocked 'head-moved-during-backup' 'root HEAD moving after audit and before push resolution'
+  unaudited_b="$(backup_git rev-parse HEAD)"
+  [[ "$unaudited_b" != "$audited_a" ]] || \
+    fail 'backup fixture: the race hook did not advance root HEAD from audited A to unaudited B'
+  [[ "$(backup_remote_sha)" == "$audited_a" ]] || \
+    fail 'backup fixture: the immutable push did not leave the remote at audited SHA A'
+  [[ "$(backup_remote_sha)" != "$unaudited_b" ]] || \
+    fail 'backup fixture: unaudited SHA B was sent to the remote'
+  if printf '%s\n' "$backup_output" | grep -Fq 'BACKUP_BLOCKED reason=remote-verification-mismatch'; then
+    fail 'backup fixture: a local HEAD move was misclassified as remote-verification-mismatch'
+  fi
+  [[ "$(sed -n 's/^sha=//p' "$backup_checkpoint_file" | head -n 1)" == "$checkpoint_before_race" ]] || \
+    fail 'backup fixture: a HEAD move advanced the verified checkpoint'
+  backup_git reset -q --hard "$backup_head"
+  env "${backup_env[@]}" git -C "$backup_remote_dir" update-ref refs/heads/main "$backup_head"
 
   # --- Cache boundaries----------------------------------------------------------------
   build_fixture_cache
