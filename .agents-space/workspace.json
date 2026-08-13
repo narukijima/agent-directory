@@ -1,0 +1,6 @@
+{
+  "schemaVersion": 1,
+  "agentKey": "<agent-key>",
+  "displayName": "<agent-name>",
+  "description": "<agent-role>"
+}

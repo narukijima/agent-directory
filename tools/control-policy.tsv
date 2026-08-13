@@ -15,6 +15,7 @@ frozen	knowledge/wiki/logs/*	閉鎖済みlog（追加のみ）
 guarded	AGENTS.md	最上位規約
 guarded	CLAUDE.md	bridge
 guarded	.gitignore	追跡境界の定義
+guarded	.agents-space/workspace.json	移植可能な論理Agent identity宣言
 guarded	.codex/*	Codex Desktop共有adapter
 guarded	.claude/*	Claude Code共有adapter
 guarded	tools/SAFETY.md	六つの安全不変条件
