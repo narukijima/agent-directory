@@ -78,7 +78,7 @@ Agent固有名、Workspace・ディレクトリ名、private repository名・URL
 固有名を抽象化した背景説明はよい。
 
 ```text
-NG: Fanimalのfa-zooプロジェクトで、YouTube投稿処理中に発生した
+NG: ExampleCorpのexample-projectで、YouTube投稿処理中に発生した
 OK: privateなdownstream Workspaceの通常Project作業中に発生した
 ```
 

@@ -2404,6 +2404,28 @@ if [[ "$full" == true && -z "${AGENT_VALIDATOR_NESTED_FIXTURE:-}" ]]; then
   [[ -z "$(git -C "$local_environment_fixture/work" config --local --get user.email 2>/dev/null || true)" ]] || \
     fail 'local environment fixture: setup inferred a repository-local email'
 
+  local_private_email='direct''@''public.test'
+  git -C "$local_environment_fixture/work" config --local user.email "$local_private_email"
+  local_environment_run
+  if (( local_environment_status == 0 )) || \
+    [[ "$local_environment_output" != *'reason=unsafe-git-email'* ]]; then
+    fail 'local environment fixture: setup accepted a direct email without explicit public approval'
+  fi
+  git -C "$local_environment_fixture/work" config --local --unset user.email
+
+  set +e
+  local_environment_output="$(env -i PATH="$PATH" HOME="$local_environment_fixture/home" \
+    GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL="$local_environment_fixture/global.gitconfig" \
+    /bin/bash "$local_environment_fixture/work/tools/setup-local-environment.sh" \
+    --git-author-email '123+fixture@users.noreply.github.com' 2>&1)"
+  local_environment_status=$?
+  set -e
+  [[ "$local_environment_status" == 0 && \
+    "$(git -C "$local_environment_fixture/work" config --local --get user.email)" == \
+      '123+fixture@users.noreply.github.com' ]] || \
+    fail 'local environment fixture: explicit GitHub noreply email was not configured'
+  git -C "$local_environment_fixture/work" config --local --unset user.email
+
   git -C "$local_environment_fixture/work" config --local user.name user-override
   local_environment_run
   [[ "$(git -C "$local_environment_fixture/work" config --local --get user.name)" == \
@@ -3139,6 +3161,27 @@ upstream_probe "$upstream_fixture_dir/body-clean.md"
 if (( upstream_probe_status != 0 )); then
   fail "report-upstream-issue.sh dry-run failed on an anonymized body: $(printf '%s' "$upstream_probe_output" | head -n 2 | tr '\n' ' ')"
 fi
+# Generic private-data classes must be blocked even when they differ from the
+# current Git identity and do not use one of the historically enumerated token families.
+printf 'contact=%s@%s\n' 'customer' 'public.test' > "$upstream_fixture_dir/body-email.md"
+upstream_probe "$upstream_fixture_dir/body-email.md"
+if (( upstream_probe_status == 0 )) || \
+  ! printf '%s\n' "$upstream_probe_output" | grep -Fq 'violated-rule: email-address'; then
+  fail 'report-upstream-issue.sh must block an unrelated email address without echoing it'
+fi
+printf 'Cookie: session=%s\n' 'fixture-cookie-value-123456' > "$upstream_fixture_dir/body-cookie.md"
+upstream_probe "$upstream_fixture_dir/body-cookie.md"
+if (( upstream_probe_status == 0 )) || \
+  ! printf '%s\n' "$upstream_probe_output" | grep -Fq 'violated-rule: cookie-material'; then
+  fail 'report-upstream-issue.sh must block cookie material'
+fi
+printf 'provider_token=%s\n' 'fixture-provider-secret-value-123456' > \
+  "$upstream_fixture_dir/body-secret-assignment.md"
+upstream_probe "$upstream_fixture_dir/body-secret-assignment.md"
+if (( upstream_probe_status == 0 )) || \
+  ! printf '%s\n' "$upstream_probe_output" | grep -Fq 'violated-rule: secret-assignment'; then
+  fail 'report-upstream-issue.sh must block non-enumerated secret assignments'
+fi
 # The operator interaction language is a contract value, not a proper noun: a body naming
 # the language must pass even though the language sits backticked in the self-definition.
 upstream_probe "$upstream_fixture_dir/body-language.md"
@@ -3229,6 +3272,14 @@ if (( upstream_probe_status != 0 )) || \
   ! printf '%s\n' "$upstream_probe_output" | grep -Fq 'UPSTREAM_REPORT_SEARCH_DRY_RUN_OK'; then
   fail 'report-upstream-issue.sh --search must support --dry-run for clean terms'
 fi
+# Public negative examples must remain unmistakably synthetic instead of preserving
+# private downstream identifiers in tracked policy and eval content.
+grep -Fq 'NG: ExampleCorpのexample-projectで、YouTube投稿処理中に発生した' \
+  "$repo_root/tools/UPSTREAM.md" || \
+  fail 'tools/UPSTREAM.md privacy example must use reserved synthetic identifiers'
+grep -Fq '/Users/example-user/agents/example-project' \
+  "$repo_root/evals/cases/upstream-issue-privacy.yaml" || \
+  fail 'upstream privacy eval must use an explicitly synthetic local path'
 # Upstream revision resolution: a verified declared adoption wins over merge-base, an
 # unverifiable declared sha is never published, an unfetched template remote is not
 # misdiagnosed as unrelated history, and every resolution carries resolved-from.
@@ -4972,6 +5023,54 @@ if [[ "$full" == true && -z "${AGENT_VALIDATOR_NESTED_FIXTURE:-}" ]]; then
   fi
   env "${control_env[@]}" git -C "$control_work" commit -q -m 'fixture: in-scope work'
 
+  # Staged ordinary blobs are inspected without printing matched values. Reserved examples,
+  # GitHub noreply identities, and explicitly synthetic home paths remain valid controls.
+  printf '%s@%s\n' 'customer' 'public.test' >> "$control_work/README.md"
+  env "${control_env[@]}" git -C "$control_work" add README.md
+  control_boundary
+  if (( control_status == 0 )) || \
+    ! printf '%s\n' "$control_output" | grep -Fq 'reason=sensitive-content'; then
+    fail "control fixture: a direct email in ordinary content was not refused: $control_output"
+  fi
+  env "${control_env[@]}" git -C "$control_work" reset -q --hard >/dev/null
+
+  printf 'github_pat_%s\n' 'ABCDEFGHIJKLMNOPQRSTUVWXYZ123456' >> "$control_work/README.md"
+  env "${control_env[@]}" git -C "$control_work" add README.md
+  control_boundary
+  if (( control_status == 0 )) || \
+    ! printf '%s\n' "$control_output" | grep -Fq 'reason=sensitive-content'; then
+    fail "control fixture: a credential in ordinary content was not refused: $control_output"
+  fi
+  env "${control_env[@]}" git -C "$control_work" reset -q --hard >/dev/null
+
+  printf '/Users/%s/private\n' 'real-user' >> "$control_work/README.md"
+  env "${control_env[@]}" git -C "$control_work" add README.md
+  control_boundary
+  if (( control_status == 0 )) || \
+    ! printf '%s\n' "$control_output" | grep -Fq 'reason=sensitive-content'; then
+    fail "control fixture: a personal home path in ordinary content was not refused: $control_output"
+  fi
+  env "${control_env[@]}" git -C "$control_work" reset -q --hard >/dev/null
+
+  printf 'fixture@example.invalid\n/Users/example-user/project\n' >> "$control_work/README.md"
+  env "${control_env[@]}" git -C "$control_work" add README.md
+  control_boundary
+  if (( control_status != 0 )); then
+    fail "control fixture: reserved synthetic privacy examples were refused: $control_output"
+  fi
+  env "${control_env[@]}" git -C "$control_work" reset -q --hard >/dev/null
+
+  control_direct_email='direct''@''public.test'
+  control_boundary GIT_AUTHOR_EMAIL="$control_direct_email"
+  if (( control_status == 0 )) || \
+    ! printf '%s\n' "$control_output" | grep -Fq 'reason=unsafe-git-email'; then
+    fail "control fixture: a direct prospective author email was not refused: $control_output"
+  fi
+  control_boundary GIT_AUTHOR_EMAIL='123+fixture@users.noreply.github.com'
+  if (( control_status != 0 )); then
+    fail "control fixture: a GitHub noreply prospective author was refused: $control_output"
+  fi
+
   # A forbidden path is refused even as an addition.
   printf 'SECRET=1\n' > "$control_work/.env"
   env "${control_env[@]}" git -C "$control_work" add -f .env
@@ -5217,6 +5316,34 @@ if [[ "$full" == true && -z "${AGENT_VALIDATOR_NESTED_FIXTURE:-}" ]]; then
   set -e
   if (( control_status == 0 )) || ! printf '%s\n' "$control_output" | grep -Fq 'reason=forbidden-path'; then
     fail "control fixture: the pre-push hook let a --no-verify forbidden commit through: $control_output"
+  fi
+  env "${control_env[@]}" git -C "$control_work" reset -q --hard HEAD~1 >/dev/null
+
+  # A content leak committed with --no-verify is still caught by the outgoing-object scan.
+  printf '%s@%s\n' 'customer' 'public.test' >> "$control_work/README.md"
+  env "${control_env[@]}" git -C "$control_work" add README.md
+  env "${control_env[@]}" git -C "$control_work" commit -q --no-verify -m 'fixture: smuggled private content'
+  set +e
+  control_output="$(env "${control_env[@]}" git -C "$control_work" push origin HEAD:main 2>&1)"
+  control_status=$?
+  set -e
+  if (( control_status == 0 )) || ! printf '%s\n' "$control_output" | grep -Fq 'reason=sensitive-content'; then
+    fail "control fixture: pre-push missed private content committed with --no-verify: $control_output"
+  fi
+  env "${control_env[@]}" git -C "$control_work" reset -q --hard HEAD~1 >/dev/null
+
+  # Outgoing commit headers are checked even when the commit hook was bypassed.
+  printf 'metadata probe\n' >> "$control_work/README.md"
+  env "${control_env[@]}" git -C "$control_work" add README.md
+  env "${control_env[@]}" GIT_AUTHOR_EMAIL="$control_direct_email" \
+    GIT_COMMITTER_EMAIL="$control_direct_email" \
+    git -C "$control_work" commit -q --no-verify -m 'fixture: smuggled direct email metadata'
+  set +e
+  control_output="$(env "${control_env[@]}" git -C "$control_work" push origin HEAD:main 2>&1)"
+  control_status=$?
+  set -e
+  if (( control_status == 0 )) || ! printf '%s\n' "$control_output" | grep -Fq 'reason=unsafe-git-email'; then
+    fail "control fixture: pre-push missed direct commit email metadata: $control_output"
   fi
   env "${control_env[@]}" git -C "$control_work" reset -q --hard HEAD~1 >/dev/null
 
