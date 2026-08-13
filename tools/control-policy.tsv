@@ -25,6 +25,7 @@ guarded	tools/check-boundary.sh	境界verifier
 guarded	tools/install-git-hooks.sh	hook installer
 guarded	tools/hooks/*	managed Git hooks
 guarded	tools/validate-agent-directory.sh	構造と安全性validator
+guarded	tools/validator/*	validator内部checker（receipt発行の検査実体）
 guarded	tools/task.sh	通常タスク入口
 guarded	tools/finalize-task.sh	commitとbackup終端
 guarded	tools/backup-to-github.sh	backup外部作用
@@ -40,6 +41,7 @@ guarded	tools/run-routine.sh	無人実行executor
 guarded	tools/manage-routine-schedule.sh	Scheduler変更
 guarded	tools/routine-reasoner.py	外部Provider adapter
 guarded	evals/EVALS.md	行動eval契約
+guarded	evals/TRACE.md	trace語彙とadapter契約
 guarded	evals/profiles/core.txt	Core品質gate
 guarded	evals/cases/route-to-knowledge.yaml	Core route invariant
 guarded	evals/cases/route-to-skill.yaml	Core route invariant
