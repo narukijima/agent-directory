@@ -1245,6 +1245,35 @@ projects/LIFECYCLE.md|projects/RECOVERY.md|projects/REPOSITORIES.md|projects/.gi
       validate_skill "$repo_root/skills/$scoped_name/SKILL.md"
     done <<< "$scoped_skills"
     [[ "$scoped_index_log" != true ]] || validate_knowledge_index_and_log
+    # 変更されたMarkdownから出ていく相互参照はscoped経路でも解決を検査する（#68）。
+    # 被参照側（他所からの参照が見出し改名で壊れる向き）は全ツリー走査が必要なため--fullが所有する。
+    scoped_reference_files=()
+    while IFS= read -r changed_path; do
+      [[ -n "$changed_path" ]] || continue
+      case "$changed_path" in
+        *.md)
+          [[ -f "$repo_root/$changed_path" ]] && scoped_reference_files+=("$changed_path") ;;
+      esac
+    done <<< "$changed_list"
+    if (( ${#scoped_reference_files[@]} > 0 )); then
+      scoped_reference_checker="$repo_root/tools/validator/check-markdown-references.sh"
+      if [[ ! -f "$scoped_reference_checker" ]]; then
+        fail 'tools/validator/check-markdown-references.sh is missing'
+      else
+        scoped_reference_status=0
+        scoped_reference_output="$(bash "$scoped_reference_checker" "$repo_root" \
+          "${scoped_reference_files[@]}" 2>&1)" || scoped_reference_status=$?
+        if (( scoped_reference_status != 0 )); then
+          if [[ -z "$scoped_reference_output" ]]; then
+            fail 'tools/validator/check-markdown-references.sh failed without a diagnostic'
+          else
+            while IFS= read -r scoped_reference_failure; do
+              [[ -n "$scoped_reference_failure" ]] && fail "$scoped_reference_failure"
+            done <<<"$scoped_reference_output"
+          fi
+        fi
+      fi
+    fi
     printf 'NOTE: scoped validation (--changed) covered %s changed path(s)\n' \
       "$(printf '%s\n' "$changed_list" | grep -c . || true)" >&2
     run_git_boundary_checks
@@ -2827,10 +2856,12 @@ changed_env=(
   GIT_COMMITTER_NAME=fixture GIT_COMMITTER_EMAIL=fixture@example.invalid
   AGENT_VALIDATOR_NESTED_FIXTURE=1
 )
-mkdir -p "$changed_fixture_dir/tools/lib" "$changed_fixture_dir/projects/scoped-proj"
+mkdir -p "$changed_fixture_dir/tools/lib" "$changed_fixture_dir/tools/validator" \
+  "$changed_fixture_dir/projects/scoped-proj"
 cp "$repo_root/tools/validate-agent-directory.sh" "$repo_root/tools/task.sh" \
   "$changed_fixture_dir/tools/"
 cp "$repo_root/tools/lib/project-registry.sh" "$changed_fixture_dir/tools/lib/"
+cp "$repo_root/tools/validator/check-markdown-references.sh" "$changed_fixture_dir/tools/validator/"
 {
   printf '%s\n' '---' 'name: scoped-proj' 'description: scoped validation fixture' \
     'status: active' 'mode: finite' '---' '' '> Scoped validation fixture goal.' '' \
