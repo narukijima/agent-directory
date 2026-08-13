@@ -199,6 +199,121 @@ record_violation() {
   printf 'DETAIL: %s %s %s\n' "$1" "$2" "$3" >&2
 }
 
+# Public Git identity and tracked-content privacy checks share one local allowlist.
+# Values are compared but never printed. GitHub noreply addresses and reserved
+# example.invalid fixtures are safe by construction; an intentionally public direct
+# address must be explicitly approved in repository-local Git config:
+#   git config --local --add agent-directory.allowed-public-email <address>
+email_is_public_safe() {
+  local candidate="$1" allowed
+  [[ -n "$candidate" ]] || return 1
+  case "$candidate" in
+    *@users.noreply.github.com|*@example.invalid) return 0 ;;
+  esac
+  while IFS= read -r allowed; do
+    [[ -n "$allowed" ]] || continue
+    [[ "$candidate" != "$allowed" ]] || return 0
+  done < <(git -C "$repo_root" config --get-all agent-directory.allowed-public-email 2>/dev/null || true)
+  return 1
+}
+
+check_git_email() {
+  # $1=role $2=email. Diagnostics intentionally omit the matched value.
+  local role="$1" candidate="$2"
+  if ! email_is_public_safe "$candidate"; then
+    record_violation 'unsafe-git-email' 'metadata' "($role-email)"
+  fi
+}
+
+blob_has_sensitive_content() {
+  # Return 0 only when the immutable Git blob contains a blocked value.
+  # Never print blob contents or matches.
+  local blob="$1" candidate
+  git -C "$repo_root" cat-file -e "$blob^{blob}" 2>/dev/null || return 1
+  # Empty and binary blobs are outside this text scanner. Known binary/document assets
+  # remain subject to repository structure checks and review.
+  git -C "$repo_root" cat-file blob "$blob" | LC_ALL=C grep -Iq . || return 1
+
+  while IFS= read -r candidate; do
+    [[ -n "$candidate" ]] || continue
+    email_is_public_safe "$candidate" || return 0
+  done < <(git -C "$repo_root" cat-file blob "$blob" | LC_ALL=C \
+    grep -Eo '[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}' | LC_ALL=C sort -u || true)
+
+  while IFS= read -r candidate; do
+    case "$candidate" in
+      /Users/example-user|/home/example-user) ;;
+      *) return 0 ;;
+    esac
+  done < <(git -C "$repo_root" cat-file blob "$blob" | LC_ALL=C \
+    grep -Eo '/(Users|home)/[A-Za-z0-9._-]+' | LC_ALL=C sort -u || true)
+
+  if git -C "$repo_root" cat-file blob "$blob" | LC_ALL=C grep -Eq \
+    'github_pat_[A-Za-z0-9_]{20,}|gh[pousr]_[A-Za-z0-9]{20,}|AKIA[0-9A-Z]{16}|AIza[0-9A-Za-z_-]{30,}|xox[baprs]-[A-Za-z0-9-]{20,}|sk-(proj-)?[A-Za-z0-9_-]{20,}'; then
+    return 0
+  fi
+  if git -C "$repo_root" cat-file blob "$blob" | LC_ALL=C grep -Eiq -- \
+    '-----BEGIN [A-Z ]*PRIVATE KEY-----|Authorization:[[:space:]]*Bearer[[:space:]]+[A-Za-z0-9._~+/-]{10,}|([Cc]ookie|[Ss]et-[Cc]ookie):[[:space:]]*[^[:space:]]+=[^[:space:];]+'; then
+    return 0
+  fi
+  if git -C "$repo_root" cat-file blob "$blob" | LC_ALL=C grep -Eiq -- \
+    '(^|[^A-Za-z0-9_])(api[_-]?key|access[_-]?token|auth[_-]?token|provider[_-]?token|secret|password|cookie)[A-Za-z0-9_-]*[[:space:]]*[:=][[:space:]]*[A-Za-z0-9._/+:-]{16,}'; then
+    return 0
+  fi
+  return 1
+}
+
+scan_blob() {
+  # $1=blob oid $2=path
+  if blob_has_sensitive_content "$1"; then
+    record_violation 'sensitive-content' 'blob' "$2"
+  fi
+}
+
+scan_staged_privacy() {
+  local ident email status path1 path2 path blob
+  ident="$(git -C "$repo_root" var GIT_AUTHOR_IDENT 2>/dev/null || true)"
+  email="$(printf '%s\n' "$ident" | sed -n 's/.*<\([^>]*\)>.*/\1/p')"
+  check_git_email author "$email"
+  ident="$(git -C "$repo_root" var GIT_COMMITTER_IDENT 2>/dev/null || true)"
+  email="$(printf '%s\n' "$ident" | sed -n 's/.*<\([^>]*\)>.*/\1/p')"
+  check_git_email committer "$email"
+
+  while IFS=$'\t' read -r status path1 path2; do
+    [[ -n "$status" ]] || continue
+    case "$status" in
+      A|M|T) path="$path1" ;;
+      R*|C*) path="$path2" ;;
+      *) continue ;;
+    esac
+    blob="$(git -C "$repo_root" ls-files -s -- "$path" | awk '$3 == 0 { print $2; exit }')"
+    [[ -n "$blob" ]] && scan_blob "$blob" "$path"
+  done <<EOF
+$diff_output
+EOF
+}
+
+scan_range_privacy() {
+  local revision_range commit email path blob
+  if [[ "$(git -C "$repo_root" cat-file -t "$range_old" 2>/dev/null || true)" == 'commit' ]]; then
+    revision_range="$range_old..$range_new"
+  else
+    revision_range="$range_new"
+  fi
+  while IFS= read -r commit; do
+    [[ -n "$commit" ]] || continue
+    email="$(git -C "$repo_root" show -s --format=%ae "$commit")"
+    check_git_email author "$email"
+    email="$(git -C "$repo_root" show -s --format=%ce "$commit")"
+    check_git_email committer "$email"
+    while IFS= read -r path; do
+      [[ -n "$path" ]] || continue
+      blob="$(git -C "$repo_root" ls-tree "$commit" -- "$path" | awk '$2 == "blob" { print $3; exit }')"
+      [[ -n "$blob" ]] && scan_blob "$blob" "$path"
+    done < <(git -C "$repo_root" diff-tree --root --no-commit-id --name-only -r "$commit")
+  done < <(git -C "$repo_root" rev-list "$revision_range")
+}
+
 check_op() {
   # $1=op（add|modify|delete） $2=repo相対path
   local op="$1" path="$2" tier
@@ -256,6 +371,13 @@ while IFS=$'\t' read -r status path1 path2; do
 done <<EOF
 $diff_output
 EOF
+
+# Privacy and secret checks run on immutable staged/outgoing Git objects. They apply to
+# guarded and ordinary paths alike and are never weakened by the path tier or ack flags.
+case "$mode" in
+  staged) scan_staged_privacy ;;
+  range) scan_range_privacy ;;
+esac
 
 # guarded / contractの変更は、通常の成果と同じcommitへ混ぜない（stagedモードだけの機械拒否）。
 if [[ "$mode" == 'staged' ]] && (( guarded_count + contract_count > 0 )) && (( normal_count > 0 )); then

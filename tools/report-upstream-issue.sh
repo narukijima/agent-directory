@@ -320,8 +320,11 @@ while IFS= read -r remote_url; do
 done < <(git -C "$repo_root" remote -v 2>/dev/null | awk '{print $2}' | LC_ALL=C sort -u)
 
 check_pattern absolute-local-path '/(Users|home)/[A-Za-z0-9._-]+'
+check_pattern email-address '[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}'
 check_pattern credential-token '(ghp|gho|ghu|ghs|ghr)_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|sk-[A-Za-z0-9_-]{20,}|AKIA[0-9A-Z]{16}'
 check_pattern authorization-header '[Aa]uthorization[[:space:]]*:'
+check_pattern cookie-material '([Cc]ookie|[Ss]et-[Cc]ookie)[[:space:]]*:'
+check_pattern secret-assignment '(^|[^A-Za-z0-9_])(api[_-]?key|access[_-]?token|auth[_-]?token|provider[_-]?token|secret|password|cookie)[A-Za-z0-9_-]*[[:space:]]*[:=][[:space:]]*[A-Za-z0-9._/+:-]{16,}'
 check_pattern private-key-block 'BEGIN [A-Z ]*PRIVATE KEY'
 check_pattern harness-signature 'Generated with|[Cc]o-[Aa]uthored-[Bb]y:'
 

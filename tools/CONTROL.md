@@ -34,6 +34,10 @@ bash tools/install-git-hooks.sh --install|--status|--remove
 ```
 
 verifierは差分をpolicy（既定は`tools/control-policy.tsv`、執行時はhookが渡すsnapshot）へ照らし、
+stage済み・送信予定の不変Git blobに含まれる実メール、個人home path、credential、private key、
+authorization・cookie・secret代入と、commitのauthor / committerメールを検査する。実値は出力しない。
+GitHub noreplyと`example.invalid`は安全な既定とし、意図的に公開する直接メールだけは
+repository-localな`agent-directory.allowed-public-email`へ明示登録する。
 合格は`BOUNDARY_OK checked=<n> guarded=<n> contract=<n>`、拒否は`BOUNDARY_BLOCKED reason=<reason>`を
 stdoutへ1行で出して非0で終了する（詳細はstderrの`DETAIL:`）。renameは旧pathの削除と新pathの追加へ
 分解し、`--range`（push再検査）はforbidden / frozenだけを執行する。環境変数rootと実Git rootの
