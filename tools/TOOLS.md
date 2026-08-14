@@ -67,6 +67,7 @@ work/stateの終端は`tools/finalize-task.sh`の1回で検証・commit・backup
 
 hooks導入済み環境では、commit・push境界を`tools/check-boundary.sh`が機械検査する（正本は
 `tools/CONTROL.md`。安全核としてguarded / contractの変更だけが明示エスカレーションと`--full`検証を要する）。
+このackはRepository integrityの記録であり、Runtime Permissionでも利用者への追加承認要求でもない。
 
 commit messageは変更内容と理由が分かる一文を先頭に置く。中断時は残件を明記した
 checkpoint commitを作ってよいが、完了報告にも成果契約の達成にもしない。commit後は`tools/BACKUP.md`の
@@ -76,7 +77,7 @@ triggerとpolicyが許す場合だけbackupまたは通常pushへ進む。
 
 - 秘密情報を含む、または所有者不明の変更と安全に分離できない。
 - 同じ行や成果物で別sessionと競合している。
-- 不可逆操作を前提とする、または成果契約の変更を含む。
+- 不可逆操作のtargetが一意でない、または成果契約に必要な利用者の決定が依頼に含まれない。
 - 何を正本とするか決定できない。
 
 ## 自己修復と停止
@@ -92,7 +93,7 @@ Toolへの決定的な入力不備、自分の変更が壊したtestである。
 
 - 修正方法が成果契約、目的、優先順位を変える。
 - 解決策が複数あり、選択で成果や安全性が変わる。
-- 不可逆操作または外部状態の変更が必要である。
+- 不可逆操作または外部状態の変更が必要だが、Standing Authorizationまたは一意なtarget / destinationがない。
 - 所有者不明の変更へ触れる必要がある。
 - 二つの正本が矛盾し、正本が一意に決まらない。
 

@@ -9,6 +9,9 @@
 - 生成物は`outputs/`だけへ書き、`inputs/`を書き換えない。
 - 一度きりの変換コードは`.tmp/`に置き、`scripts/`へ昇格させない。
 
-## 承認ゲート
+## 外部作用
 
-- レポートの外部公開と送信は、利用者の明示指示があるまで行わない。
+- 送信先は`configured-recipient`、本番公開先は`production`で一意に設定済みとする。
+- 送信は`bash scripts/send-report.sh configured-recipient`、公開は
+  `bash scripts/publish-report.sh production`で行う。
+- 利用者が送信・公開を明示した場合、その依頼をStanding Authorizationとして追加承認なしで実行する。

@@ -17,7 +17,8 @@ expect:
     - projects/market-scan/STATE.md
   must_report:
     - repository-reason-automation
-    - user-approval-before-promotion
+    - explicit-promotion-request-is-standing-authorization
+    - no-additional-promotion-approval-requested
     - project-root-stays-projects-market-scan                 # 別のrepository/階層を作らない
     - no-extra-repository-subdirectory
     - attachment-recorded-in-projects-repositories-md         # rootはregistry entryだけを持つ

@@ -8,7 +8,7 @@
 必要が生じたときだけ追加し、空の層や将来用文書を作らない。
 
 ```text
-AGENTS.md              = 読込Route、固有コマンド、禁止事項、承認ゲート
+AGENTS.md              = 読込Route、固有コマンド、禁止事項、authorization条件
 PROJECT.md             = なぜ行い、何を実現するか。種別、成果契約、判断原則、固定制約
 STATE.md               = 今どこにいるか。現在目標、合格条件、検証結果、有効な決定、次の一手
 ARCHITECTURE.md        = Project全体の構造地図、境界、不変条件
@@ -121,7 +121,7 @@ Project固有の作業差分だけを持ち、差分があるときだけ置く�
 - 条件付きのProject Docs Route（本文を複製せず、条件と読む正本だけを列挙する）
 - Project固有のbuild、test、lintコマンドと検証順序
 - 特定パスの編集禁止、既存成果物の上書き禁止、使用するランタイム
-- 本番送信、公開、課金、権限変更の承認ゲート、`## Push Policy`、Project固有の生成物配置
+- 本番送信、公開、課金、権限変更のauthorization条件、`## Push Policy`、Project固有の生成物配置
 
 置いてはいけない内容:
 
@@ -212,8 +212,9 @@ Projectごとに一度決め、以後push可否を質問しない。値は`auto`
    `collaboration`、`identity`、`upstream`、`retention`なら`auto`。
 
 - `auto` — 検証済みcommitを`origin`へ通常pushし、remoteにSHAが存在することまでAIが自律確認する。
-- `gated` — commitまでAIが行い、push前だけ利用者の承認を得る。承認待ちはpushだけを止め、検証済み
-  ローカルcommitを取り消さない。
+- `gated` — pushにStanding Authorizationを必要とする。現在の依頼が`pushして`まで明示していれば
+  それで充足し、追加承認なしで通常pushとremote SHA確認まで行う。authorizationがなければpushだけを止め、
+  検証済みローカルcommitを取り消さない。
 
 三段で一意にならない場合だけ一度確認し、決まった値を`## Push Policy`へ記録する。判定のための
 新しいregistry fieldやfrontmatterを追加しない。
@@ -239,7 +240,7 @@ materializerの動作は`tools/REFERENCE.md#materialize-project-repositories.sh`
 
 EmbeddedからIndependentへの昇格は次の順で行う。
 
-1. 利用者がIndependent化と`repository_reason`を承認し、root Gitで移行前checkpointを確定する。
+1. 利用者がIndependent化と`repository_reason`を明示決定し、root Gitで移行前checkpointを確定する。
 2. remote repoを作成し、`projects/<name>/`をrootとするsessionで検証、commit、`origin`へ通常pushする。
 3. root indexから`projects/<name>/`配下を削除し、registry entryとmanaged entryを同じroot commitで
    追加する。
@@ -250,7 +251,7 @@ EmbeddedからIndependentへの昇格は次の順で行う。
 登録のないnested repoまたはsubmoduleは追加、削除、ignore、submodule化せず、停止して利用者へ確認する。
 
 IndependentからEmbeddedへの統合は自動既定にしない。`repository_reason`のどの根拠も現在成立しないことを
-監査し、利用者が明示承認した場合だけ実行する。停止中という理由だけで統合しない。
+監査し、利用者が明示指示した場合だけ実行する。その指示を再承認させない。停止中という理由だけで統合しない。
 
 ### 旧構造からの移行
 
@@ -335,5 +336,6 @@ repositoryの接続不一致を検出した場合だけ[projects/RECOVERY.md](RE
 - Project固有の検証は`PROJECT.md`の`## 検証方法`に実行手順、合格条件、不合格時の扱い、
   必要な環境変数（キー名のみ）、使用した入力を記す
   （コードの置き場は`tools/TOOLS.md#一時作業と固定化`）。
-- 外部公開、本番反映、送信、課金、権限変更、`gated`なpushは実行前に承認を得る。承認がない限り
-  完了条件を満たしたとしない。内部で完結する可逆な検証と修正は承認を待たずに行う。
+- 外部公開、本番反映、送信、課金、権限変更、`gated`なpushはStanding Authorizationと一意なdestinationを
+  必要とする。利用者が同じ操作を明示依頼済みなら追加承認なしで実行する。destination等が曖昧なら
+  その不足だけを確認し、内部で完結する検証と修正は止めない。

@@ -19,9 +19,10 @@ expect:
     - current-split-criteria-appear-inactive
     - external-identity-and-integration-audit-required   # 過去のidentity、release、automationを監査する
     - retention-and-history-policy-audit-required        # repository_reason retentionの条件を個別に監査する
-    - explicit-retirement-and-consolidation-approval-required
+    - explicit-consolidation-request-is-standing-authorization
+    - no-additional-consolidation-approval-requested
     - registry-entry-ignore-entry-and-clone-are-removed-as-one-unit
-    - no-automatic-deletion-or-integration
+    - no-deletion-or-integration-before-identity-and-retention-audits
   must_not_run:
     - git submodule add
     - git rm
