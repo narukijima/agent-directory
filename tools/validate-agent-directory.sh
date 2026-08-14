@@ -1844,7 +1844,9 @@ required_cases=(
   backup-failure-local-success backup-workspace-repository-boundary independent-consolidation-audit
   autonomous-internal-change-commit autonomous-validator-self-repair
   router-size-overflow-delegation independent-push-policy-gated
-  external-effect-approval-gate canon-conflict-escalation unowned-change-conflict
+  external-effect-approval-gate external-effect-ambiguous-destination
+  explicit-file-delete-standing-authorization ambiguous-file-delete-refusal
+  provider-semantic-authorization-parity canon-conflict-escalation unowned-change-conflict
   independent-promotion-session-boundary independent-repository-materialization
   independent-remote-update-handoff root-clean-independent-repository-safety
   root-agents-router-scope project-agents-optional project-agents-diff-only
@@ -1898,7 +1900,9 @@ if [[ -f "$core_profile" ]]; then
   (( core_case_count >= 12 )) || fail 'evals/profiles/core.txt must retain at least 12 cross-cutting cases'
   for pinned_core_case in route-to-knowledge route-to-skill route-to-project \
     project-goal-change-protection protect-immutable-records protect-paused-project \
-    external-effect-approval-gate unowned-change-conflict backup-divergence-refusal \
+    external-effect-approval-gate external-effect-ambiguous-destination \
+    explicit-file-delete-standing-authorization ambiguous-file-delete-refusal \
+    provider-semantic-authorization-parity unowned-change-conflict backup-divergence-refusal \
     control-policy-tamper github-auth-no-token-leak upstream-issue-privacy; do
     printf '%s\n' "$core_seen" | grep -Fqx -- "$pinned_core_case" || \
       fail "evals/profiles/core.txt lost a pinned invariant: $pinned_core_case"
@@ -2246,10 +2250,10 @@ fi
 
 report_tool="$repo_root/tools/report-upstream-issue.sh"
 upstream_contract="$repo_root/tools/UPSTREAM.md"
-grep -Fqx '## 事前承認済み送信' "$upstream_contract" || \
-  fail 'tools/UPSTREAM.md is missing the pre-approved send section heading: ## 事前承認済み送信'
-grep -Fqx '次の全条件を満たす送信だけを、実行前確認なしの事前承認済み外部操作とする。' "$upstream_contract" || \
-  fail 'tools/UPSTREAM.md is missing the introductory contract for pre-approved Issue sends'
+grep -Fqx '## Standing Authorizationによる送信' "$upstream_contract" || \
+  fail 'tools/UPSTREAM.md is missing its Standing Authorization send contract'
+grep -Fqx '利用者の明示送信依頼、または次の全条件を満たす宛先固定の報告契約をStanding Authorizationとする。' "$upstream_contract" || \
+  fail 'tools/UPSTREAM.md is missing the explicit-or-fixed-contract authorization rule for Issue sends'
 if [[ -f "$report_tool" ]]; then
   [[ -x "$report_tool" ]] || fail 'tools/report-upstream-issue.sh is not executable'
   "$syntax_bash" -n "$report_tool" 2>/dev/null || fail 'tools/report-upstream-issue.sh fails bash -n'
@@ -2542,13 +2546,20 @@ grep -Fq 'tools/CONTROL.md' "$repo_root/AGENTS.md" || \
 grep -Fq 'backup' "$repo_root/tools/CONTROL.md" || \
   fail 'tools/CONTROL.md does not scope git hooks against the backup non-goal'
 
-# --- Verify the Human-on-the-loop contract exists in the canon ----------
+# --- Verify semantic authorization and Runtime responsibility boundaries ----------
 
-# The root holds the autonomy defaults and the escalation gates; each Owner holds the detailed enumeration.
+# The root owns Provider-independent semantic authorization; each Owner holds detailed integrity conditions.
 for autonomy_heading in '## 自律実行' '## 人間へ上げる例外'; do
   grep -Fqx -- "$autonomy_heading" "$repo_root/AGENTS.md" || \
-    fail "AGENTS.md must carry the Human-on-the-loop section: $autonomy_heading"
+    fail "AGENTS.md must carry the semantic authorization section: $autonomy_heading"
 done
+
+grep -Fqx -- '## Runtime Permissionの責務境界' "$repo_root/AGENTS.md" || \
+  fail 'AGENTS.md must separate Generic Runtime Permission from agent-directory responsibilities'
+grep -Fq 'Standing Authorization' "$repo_root/AGENTS.md" || \
+  fail 'AGENTS.md must treat explicit user instructions as Standing Authorization'
+grep -Fq 'Provider別permission wrapperを追加しない' "$repo_root/AGENTS.md" || \
+  fail 'AGENTS.md must reject Provider-specific permission wrappers'
 
 # Each of the four escalation categories routes to the canon that owns its details.
 for exception_owner in projects/LIFECYCLE.md projects/PROJECTS.md tools/BACKUP.md tools/TOOLS.md; do
@@ -2560,7 +2571,7 @@ done
 while IFS='|' read -r owner_doc owner_heading; do
   [[ -n "$owner_doc" ]] || continue
   grep -Fqx -- "$owner_heading" "$repo_root/$owner_doc" || \
-    fail "$owner_doc must own the Human-on-the-loop section: $owner_heading"
+    fail "$owner_doc must own the semantic authorization detail: $owner_heading"
 done <<'AUTONOMY_OWNERS'
 tools/TOOLS.md|## 自律実行の標準完了
 tools/TOOLS.md|## 自己修復と停止
@@ -5305,6 +5316,46 @@ if [[ "$full" == true && -z "${AGENT_VALIDATOR_NESTED_FIXTURE:-}" ]]; then
   if ! env "${control_env[@]}" git -C "$control_work" push -q origin HEAD:main >/dev/null 2>&1; then
     fail 'control fixture: the pre-push hook refused a plain fast-forward push'
   fi
+
+  # A new remote ref must scan only commits not already represented by a tracking ref for
+  # that named remote. Seed a legacy commit directly in the fixture remote: its unsafe email
+  # is pre-existing remote history, while a safe child is the only newly outgoing commit.
+  control_plain_tip="$(env "${control_env[@]}" git -C "$control_work" rev-parse HEAD)"
+  printf 'legacy remote history\n' >> "$control_work/projects/demo/note.md"
+  env "${control_env[@]}" git -C "$control_work" add projects/demo/note.md
+  env "${control_env[@]}" GIT_AUTHOR_EMAIL="$control_direct_email" \
+    GIT_COMMITTER_EMAIL="$control_direct_email" \
+    git -C "$control_work" commit -q --no-verify -m 'fixture: legacy remote metadata'
+  control_legacy_tip="$(env "${control_env[@]}" git -C "$control_work" rev-parse HEAD)"
+  env "${control_env[@]}" git -C "$control_bare" fetch -q "$control_work" \
+    "$control_legacy_tip:refs/heads/legacy"
+  env "${control_env[@]}" git -C "$control_work" fetch -q origin \
+    legacy:refs/remotes/origin/legacy
+
+  printf 'safe new branch work\n' >> "$control_work/projects/demo/note.md"
+  env "${control_env[@]}" git -C "$control_work" add projects/demo/note.md
+  control_commit 'fixture: safe child of remote legacy'
+  (( control_status == 0 )) || \
+    fail "control fixture: a safe child of remote legacy history was refused at commit: $control_output"
+  if ! env "${control_env[@]}" git -C "$control_work" push -q origin \
+    HEAD:refs/heads/safe-new >/dev/null 2>&1; then
+    fail 'control fixture: a new ref rescanned and rejected history already represented by the remote'
+  fi
+
+  # The remote ancestor optimization must not hide newly outgoing forbidden content.
+  env "${control_env[@]}" git -C "$control_work" reset -q --hard "$control_legacy_tip" >/dev/null
+  printf 'SECRET=1\n' > "$control_work/.env"
+  env "${control_env[@]}" git -C "$control_work" add -f .env
+  env "${control_env[@]}" git -C "$control_work" commit -q --no-verify -m 'fixture: new ref secret'
+  set +e
+  control_output="$(env "${control_env[@]}" git -C "$control_work" push \
+    origin HEAD:refs/heads/unsafe-new 2>&1)"
+  control_status=$?
+  set -e
+  if (( control_status == 0 )) || ! printf '%s\n' "$control_output" | grep -Fq 'reason=forbidden-path'; then
+    fail "control fixture: a new ref omitted newly outgoing forbidden content: $control_output"
+  fi
+  env "${control_env[@]}" git -C "$control_work" reset -q --hard "$control_plain_tip" >/dev/null
 
   # A forbidden file committed with --no-verify is still stopped before it reaches the remote.
   printf 'SECRET=1\n' > "$control_work/.env"

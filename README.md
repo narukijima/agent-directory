@@ -29,8 +29,8 @@ Knowledge、Skill、Projectを正本として育てながら、1タスクの読�
 
 - 通常経路は`Route → Target → Work → Verify`に固定し、`tools/task.sh`を共通入口にする。
 - 常時守る安全境界は[tools/SAFETY.md](tools/SAFETY.md)の6項目だけとし、実装詳細は条件付きで読む。
-- Human-on-the-loopで運用する。内部で完結する可逆な操作はAIが判断、実行、検証、commitまで完結し、
-  人間は方針・成果契約の変更、不可逆操作、外部影響、安全性と正本衝突だけを見る。
+- 明示依頼を同じ操作のStanding Authorizationとして扱う。target / destinationが一意でsemantic safetyを
+  満たす公開、送信、通常push、削除は追加承認なしで完了し、曖昧性と整合性の不足だけを人間へ確認する。
 - リポジトリ内の正本を会話記憶、製品側AIメモリ、検索結果より優先する。
 - `raw/internal/`と`raw/external/`の既存原資料は同じ強さで保護し、変更・削除しない。
 - 完了・停止・廃止を物理archiveで表さず、frontmatterの状態で検索から除外する。

@@ -9,6 +9,8 @@ commit・push境界の機械検査、違反の分類と代謝、将来拡張の�
 依存しない層で実行前に拒否すること。判定の正本（policy）と判定器（verifier）はこのリポジトリ内で
 完結し、特定のAIハーネス・モデル・実行環境に依存しない。非ゴール（実装しない）:
 
+- shell、filesystem、network、sandbox、tool approval、Claude / Codex permission modeの許可判定
+- Agent ACL、permission database、Runtime permission matrix、独自sandbox、Provider別permission wrapper
 - 監査用LLM、常駐daemon、Message Bus、Tool Brokerを通常経路へ入れること
 - 数値スコアの通信簿と、それを目的関数としてエージェントへ渡すこと
 - Git hookからのbackup、validator、ネットワーク操作の起動（hookは境界検査だけを行い、
@@ -48,6 +50,10 @@ installerはmanaged hook（pre-commit=snapshot verifier実行とreceipt検査、
 Independent repositoryへ冪等に導入する（導入元は下記のとおりHEAD blob）。marker行のない既存hookへは
 触れず`HOOKS_BLOCKED`で停止し、`--remove`もmanaged hookだけを除去する。出力は
 `HOOKS_INSTALLED|HOOKS_STATUS|HOOKS_REMOVED|HOOKS_BLOCKED`の1行（independent数を含む）。
+
+pre-pushで新規remote refのSHAが全ゼロの場合は、同じnamed remoteのtracking refからlocal SHAの最も近い
+ancestorを選び、それ以後の送信commitだけを再検査する。ancestorを証明できなければempty treeからの
+全履歴検査へfallbackする。既存remote refは通知されたremote SHAをbaseとするため、この補完を使わない。
 
 ### 承認済みsnapshot
 
@@ -104,13 +110,16 @@ policyの緩和・行削除はそれ自体がguarded変更であり、下記の�
 ## 明示エスカレーション
 
 `AGENT_GUARDED_COMMIT=true`（guarded）と`AGENT_CONTRACT_COMMIT=true`（contract。対応する
-人間の決定が先に存在すること）は、該当正本を変更するcommitへの明示的な承認記録であり、
+利用者の決定が先に存在すること）は、該当正本を変更するcommitへの明示的なRepository integrity記録であり、
 次をすべて満たす1回のcommitだけへ付与する。
 
 - task classが`boundary`、またはmeta Routeのwork/stateであり、`--full`検証を同じ作業内で実行する。
-- 変更が依頼範囲内であり、`AGENTS.md#人間へ上げる例外`の4区分に該当しない
-  （contractは`方針・契約`の決定が済んでいる場合だけ）。
+- 変更が依頼範囲内であり、`AGENTS.md#人間へ上げる例外`の不足・衝突がない
+  （contractは利用者の決定が済んでいる場合だけ）。
 - validatorやevalを通すことだけを目的にpolicy、採点基準、size budgetを弱める変更を含まない。
+
+現在の明示依頼がguarded / contract変更を含むなら、その依頼がこの記録のauthorizationを満たす。
+環境変数を付けるための追加承認は求めない。これはRuntime Permissionや操作権限の付与ではない。
 
 ackは自己申告であり、それ単独では通らない。workspace rootでは次の機械的な束縛が加わる。
 
@@ -168,14 +177,15 @@ hookの拒否で実害なく止まった通常の誤操作は、やり直すだ�
 
 ## 導入基準（将来拡張の凍結）
 
-次の機構は現時点で実装しない。導入は場当たりに判断せず、条件成立時に`meta` Routeの
-方針判断（`AGENTS.md#人間へ上げる例外`の`方針・契約`）として人間と設計する。
+Runtime Permission systemは将来拡張にも含めず、Operator / Runtime / Agents Space側へ委ねる。
+agent-directory内で将来検討できるのはsemantic safetyとrepository integrityの次の機構だけである。
+導入は場当たりに判断せず、利用者の方針決定に基づいて設計する。
 
 - **Capability State永続化と復権プロトコル** — 外部作用（公開、送信、本番反映、課金）を持つ
   Routineが稼働し、人間が全commitを目視しなくなったとき。
-- **Strict Mode（Workspace外のcontrol state、資格情報のController分離、OS権限分離）** —
-  本番・金銭・公開の資格情報をWorkspace内のエージェントが扱う必要が生じたとき。
-- **ハーネスadapter（Claude Code hooks等の環境固有hook）** — 利用ハーネスが固定され、追加防壁の
-  利益が設定の保守コストを上回るとき。adapterは`tools/check-boundary.sh`を呼ぶだけの数行に限定する。
+- **資格情報のsemantic boundary** — 本番・金銭・公開のcredentialについて、秘密保護とdestination固定を
+  強化する必要が生じたとき。credentialの利用可否そのものはRuntime側が所有する。
+- **Repository hook adapter** — 利用ハーネスが固定され、commit差分の追加防壁が設定保守コストを
+  上回るとき。adapterは`tools/check-boundary.sh`を呼ぶだけとし、permission判定を持たない。
 
 いずれを導入する場合も、判定の正本は第1層・第2層に置いたまま動かさない。

@@ -130,13 +130,14 @@ GitHubリポジトリの作成・可視性変更、GitHub Actionsの実行、Ind
 
 ## remoteの分類
 
-remoteを目的ごとに分け、許可操作と承認を混同しない。
+remoteを目的ごとに分け、許可操作とauthorizationを混同しない。Runtimeのnetwork・credential利用可否は
+本表の責務ではない。
 
-| remote | 目的 | 許可操作 | 承認 |
+| remote | 目的 | 許可操作 | Authorization source |
 |---|---|---|---|
 | workspace `backup` | 受動的な復旧コピー | このToolのfast-forward pushだけ | 設定済みなら自動 |
 | skeleton `origin` | 公開スケルトンの開発remote | 読み取り専用fetch、検証済みcommitの通常push | スケルトン保守の依頼範囲内 |
-| Independent `origin` | Project固有remote | Independent sessionのfetchと通常push | Projectのpush policy |
+| Independent `origin` | Project固有remote | Independent sessionのfetchと通常push | Projectのpush policyまたは明示push依頼 |
 
 実運用のAgent Workspaceは開発remoteを持たず`backup`だけを持つ。公開スケルトンへ実運用データをpushせず、
 導入時にスケルトンの`origin`を`template`へ改名するか削除する。`AGENTS.md#禁止事項`のpull、merge、rebase、
@@ -160,9 +161,10 @@ migrationの実行中は対象repositoryのWriterを停止する。
 - `git clean -X`
 - `git clean`への二つ以上の`-f`（`-ff`、`-ffd`、`-ffdx`など）
 
-これらは未pushのIndependent commit、stash、未追跡の作業を不可逆に削除しうる。掃除が必要な場合は
-対象pathを明示した最小のコマンドを利用者へ提示し、削除対象と失われる範囲を先に報告する。
-危険性の検証は破棄前提の一時fixtureだけで行う。
+これらは未pushのIndependent commit、stash、未追跡の作業を不可逆に削除しうる。曖昧な掃除依頼では
+実行せず、削除対象の指定だけを確認する。対象pathが一意に明示され、未所有変更・未push履歴を巻き込まない
+最小操作なら、その依頼をStanding Authorizationとして追加承認なしで実行する。危険性の検証は
+破棄前提の一時fixtureだけで行う。
 
 ## 実行trigger
 
@@ -254,7 +256,7 @@ sourceに限り、fresh cloneで置き換えてよい）。
 
 dirty、staged、untracked、stash、未pushが残るcloneを置換せず、reset、clean、stash作成、force push
 で移行しない。旧copyの削除は、新cloneが一致する`origin`を持ち、旧copyの全refが到達可能かつcleanで、
-利用者が明示承認した場合だけ行う。マシン固有のsource pathを正本へ保存しない。
+利用者が旧copyの削除を明示指示した場合だけ行い、その指示を再承認させない。マシン固有のsource pathを正本へ保存しない。
 
 ## 大容量ファイル
 

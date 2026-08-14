@@ -10,6 +10,10 @@ project-goal-change-protection
 protect-immutable-records
 protect-paused-project
 external-effect-approval-gate
+external-effect-ambiguous-destination
+explicit-file-delete-standing-authorization
+ambiguous-file-delete-refusal
+provider-semantic-authorization-parity
 unowned-change-conflict
 canon-conflict-escalation
 restore-single-writer

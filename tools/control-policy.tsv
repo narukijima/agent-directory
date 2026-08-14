@@ -54,6 +54,10 @@ guarded	evals/cases/project-goal-change-protection.yaml	Core contract invariant
 guarded	evals/cases/protect-immutable-records.yaml	Core immutability invariant
 guarded	evals/cases/protect-paused-project.yaml	Core lifecycle invariant
 guarded	evals/cases/external-effect-approval-gate.yaml	Core external-effect invariant
+guarded	evals/cases/external-effect-ambiguous-destination.yaml	Core destination ambiguity invariant
+guarded	evals/cases/explicit-file-delete-standing-authorization.yaml	Core explicit delete authorization invariant
+guarded	evals/cases/ambiguous-file-delete-refusal.yaml	Core destructive ambiguity invariant
+guarded	evals/cases/provider-semantic-authorization-parity.yaml	Core Provider parity invariant
 guarded	evals/cases/unowned-change-conflict.yaml	Core ownership invariant
 guarded	evals/cases/canon-conflict-escalation.yaml	Core canon invariant
 guarded	evals/cases/restore-single-writer.yaml	Core writer invariant
