@@ -4291,10 +4291,12 @@ fi
     mv "$routine_ignore_pending" "$routine_ignore"
   fi
 
+  mkdir -p "$routine_fixture_dir/tmp"
   routine_env=(HOME="$routine_fixture_dir" GIT_CONFIG_NOSYSTEM=1
     GIT_AUTHOR_NAME=fixture GIT_AUTHOR_EMAIL=fixture@example.invalid
     GIT_COMMITTER_NAME=fixture GIT_COMMITTER_EMAIL=fixture@example.invalid
-    AGENT_VALIDATOR_NESTED_FIXTURE=1)
+    AGENT_VALIDATOR_NESTED_FIXTURE=1
+    TMPDIR="$routine_fixture_dir/tmp")
   routine_git() { env "${routine_env[@]}" git -C "$routine_work" "$@"; }
   routine_git init -q
   routine_git symbolic-ref HEAD refs/heads/main

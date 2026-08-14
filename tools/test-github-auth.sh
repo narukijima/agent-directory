@@ -18,7 +18,7 @@ expect_source() {
   local output status
   set +e
   output="$(env -i PATH="$PATH" HOME="$fixture/home" XDG_CONFIG_HOME="$fixture/config" \
-    AGENT_DIRECTORY_ROOT="$fixture/workspace" "$@" /bin/bash -c \
+    TMPDIR="$fixture/tmp" AGENT_DIRECTORY_ROOT="$fixture/workspace" "$@" /bin/bash -c \
     '. "$1"; github_auth_resolve "$AGENT_DIRECTORY_ROOT"; printf "%s" "$GITHUB_AUTH_SOURCE"' \
     auth-test "$tool_root/lib/github-auth.sh" 2>&1)"
   status=$?
@@ -28,7 +28,7 @@ expect_source() {
   fi
 }
 
-mkdir -p "$fixture/home" "$fixture/config" "$fixture/workspace" "$fixture/bin"
+mkdir -p "$fixture/home" "$fixture/config" "$fixture/workspace" "$fixture/bin" "$fixture/tmp"
 printf 'GH_TOKEN=workspace-token\n' > "$fixture/workspace/.env"
 expect_source process-gh-token env GH_TOKEN=process-token
 expect_source process-github-token env GITHUB_TOKEN=github-process-token
@@ -135,7 +135,7 @@ printf 'privateなdownstream Workspaceで観測した。\n' > "$fixture/report/b
 set +e
 report_output="$(env -i PATH="$fixture/bin:$PATH" HOME="$fixture/home" \
   XDG_CONFIG_HOME="$fixture/report-config" AGENT_DIRECTORY_ROOT="$fixture/report" \
-  AGENT_CACHE_DIR="$fixture/report/.agent-cache" FAKE_GH_MODE=ok \
+  TMPDIR="$fixture/tmp" AGENT_CACHE_DIR="$fixture/report/.agent-cache" FAKE_GH_MODE=ok \
   AGENT_GITHUB_AUTH_DISABLE_REPAIR=true /bin/bash "$tool_root/report-upstream-issue.sh" \
   --search 'bootloader auth capability' 2>&1)"
 report_status=$?
@@ -148,7 +148,7 @@ for attempt in 1 2; do
   set +e
   report_output="$(env -i PATH="$fixture/bin:$PATH" HOME="$fixture/home" \
     XDG_CONFIG_HOME="$fixture/report-config" AGENT_DIRECTORY_ROOT="$fixture/report" \
-    AGENT_CACHE_DIR="$fixture/report/.agent-cache" FAKE_GH_MODE=401 \
+    TMPDIR="$fixture/tmp" AGENT_CACHE_DIR="$fixture/report/.agent-cache" FAKE_GH_MODE=401 \
     AGENT_GITHUB_AUTH_DISABLE_REPAIR=true /bin/bash "$tool_root/report-upstream-issue.sh" \
     --title '[bug] headless credential unavailable' --body-file "$fixture/report/body.md" 2>&1)"
   report_status=$?

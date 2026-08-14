@@ -477,6 +477,7 @@ sed -n 's/^FILE //p' "$inspect_output_file" > "$patched_files_file"
 snapshot_dir="$tmp_root/snapshot"
 mkdir -p "$snapshot_dir"
 git -C "$repo_root" archive --format=tar "$base_sha" | tar -xf - -C "$snapshot_dir"
+git -C "$snapshot_dir" init -q
 if ! (cd "$snapshot_dir" && git apply --whitespace=nowarn "$patch_file") 2>>"$run_log"; then
   emit "ROUTINE_BLOCKED id=$routine_id reason=unsafe-model-patch detail=patch-does-not-apply"
   exit 1
