@@ -2332,6 +2332,21 @@ if [[ ! -f "$reference_checker" ]]; then
 elif ! "$syntax_bash" -n "$reference_checker" 2>/dev/null; then
   fail 'tools/validator/check-markdown-references.sh fails bash -n'
 elif [[ "$full" == true ]]; then
+  reference_schema_fixture="$(mktemp -d "${TMPDIR:-/tmp}/agent-validator-reference-schema.XXXXXX")"
+  cleanup_paths+=("$reference_schema_fixture")
+  mkdir -p "$reference_schema_fixture/docs"
+  printf '%s\n' '# Project' '' '- **PC-01** Concrete criterion.' > \
+    "$reference_schema_fixture/PROJECT.md"
+  printf '%s\n' '`PROJECT.md#PC-xx` is schema notation; `PROJECT.md#PC-01` is concrete.' > \
+    "$reference_schema_fixture/docs/schema.md"
+  if ! bash "$reference_checker" "$reference_schema_fixture" docs/schema.md >/dev/null 2>&1; then
+    fail 'Markdown reference checker rejected PC-xx schema notation beside a valid concrete criterion'
+  fi
+  printf '%s\n' '`PROJECT.md#PC-99` is an invalid concrete criterion.' > \
+    "$reference_schema_fixture/docs/schema.md"
+  if bash "$reference_checker" "$reference_schema_fixture" docs/schema.md >/dev/null 2>&1; then
+    fail 'Markdown reference checker accepted a missing concrete Project criterion'
+  fi
   reference_output=''
   reference_status=0
   reference_output="$(bash "$reference_checker" "$repo_root" 2>&1)" || reference_status=$?
@@ -4286,6 +4301,32 @@ fi
     cp -p "$repo_root/$routine_copy_path" "$routine_work/$routine_copy_path"
     printf '%s\n' "$routine_copy_path" >> "$routine_copy_list"
   done < <(git -C "$repo_root" ls-files -co --exclude-standard 2>/dev/null | LC_ALL=C sort -u)
+
+  # Registered Independent repositories are deliberately excluded from this isolated
+  # Routine fixture: attachment integrity was already checked against the real clones
+  # above, and copying Project bodies here would cross the root ownership boundary.
+  # Keep the fixture internally consistent by projecting the same empty attachment set
+  # into both its canonical registry and derived ignore block.
+  routine_registry="$routine_work/projects/REPOSITORIES.md"
+  if [[ -f "$routine_registry" ]]; then
+    routine_registry_pending="$routine_fixture_dir/REPOSITORIES.pending"
+    awk '
+      { print }
+      $0 == "### 登録" { exit }
+    ' "$routine_registry" > "$routine_registry_pending"
+    printf '\n現在、Independent Projectは登録されていない。\n' >> "$routine_registry_pending"
+    mv "$routine_registry_pending" "$routine_registry"
+  fi
+  routine_ignore="$routine_work/projects/.gitignore"
+  if [[ -f "$routine_ignore" ]]; then
+    routine_ignore_pending="$routine_fixture_dir/projects.gitignore.pending"
+    awk '
+      $0 == "# BEGIN INDEPENDENT PROJECTS" { print; in_managed = 1; next }
+      $0 == "# END INDEPENDENT PROJECTS" { in_managed = 0; print; next }
+      !in_managed { print }
+    ' "$routine_ignore" > "$routine_ignore_pending"
+    mv "$routine_ignore_pending" "$routine_ignore"
+  fi
 
   routine_env=(HOME="$routine_fixture_dir" GIT_CONFIG_NOSYSTEM=1
     GIT_AUTHOR_NAME=fixture GIT_AUTHOR_EMAIL=fixture@example.invalid

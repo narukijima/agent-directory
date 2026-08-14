@@ -75,6 +75,9 @@ while IFS= read -r reference_md_rel; do
     reference_target="${markdown_reference#*#}"
     reference_target="${reference_target%%=*}" # Eval-only =<expected> notation.
     [[ -n "$reference_target" && -n "$reference_path" ]] || continue
+    case "$reference_target" in
+      PC-xx) continue ;; # Project-contract schema notation, not a concrete criterion link.
+    esac
 
     sibling_reference="$(dirname "$reference_md_abs")/$reference_path"
     root_reference="$repo_root/$reference_path"
