@@ -180,7 +180,7 @@ hookの拒否で実害なく止まった通常の誤操作は、やり直すだ�
 
 ## 導入基準（将来拡張の凍結）
 
-Runtime Permission systemは将来拡張にも含めず、Operator / Runtime / Agents Space側へ委ねる。
+Runtime Permission systemは将来拡張にも含めず、Operator / Runtime側へ委ねる。
 agent-directory内で将来検討できるのはsemantic safetyとrepository integrityの次の機構だけである。
 導入は場当たりに判断せず、利用者の方針決定に基づいて設計する。
 

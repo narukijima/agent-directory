@@ -15,13 +15,11 @@ Knowledge、Skill、Projectを正本として育てながら、1タスクの読�
 2. [AGENTS.md](AGENTS.md)の`<agent-name>`、役割、使命、ビジョン、`<operator-language>`（運用者応対言語）を置換する。
    Agent名・役割はbacktickを保ったまま置換する。自己定義の名乗り行（`- あなたは…`）のbacktick語だけが
    上流報告の匿名化遮断語になり、応対言語・使命・ビジョンは遮断語にならない。
-3. [.agents-space/workspace.json](.agents-space/workspace.json)の`<agent-key>`、`<agent-name>`、`<agent-role>`を置換する。
-   `agentKey`はMachineや保存pathが変わっても同じ論理Agentを識別する、小文字英数字始まりの安定slugにする。
-4. `skills/_template/`または`projects/_template/`を、明示された必要に応じてコピーする。
-5. Codex DesktopまたはClaude Codeで開く。どちらも`tools/setup-local-environment.sh`を共通の初期化入口に使う。
-6. `bash tools/install-git-hooks.sh --install`でcommit・push境界の検査hookを導入する。
-7. `bash tools/validate-agent-directory.sh --strict --full`を実行する。
-8. `tools/find-context.sh --route <route> --limit 5 -- "検索語"`で対象候補を絞って運用する。
+3. `skills/_template/`または`projects/_template/`を、明示された必要に応じてコピーする。
+4. Codex DesktopまたはClaude Codeで開く。どちらも`tools/setup-local-environment.sh`を共通の初期化入口に使う。
+5. `bash tools/install-git-hooks.sh --install`でcommit・push境界の検査hookを導入する。
+6. `bash tools/validate-agent-directory.sh --strict --full`を実行する。
+7. `tools/find-context.sh --route <route> --limit 5 -- "検索語"`で対象候補を絞って運用する。
 
 テンプレートのままではプレースホルダーが残るため、通常の検証は合格し、`--strict`は導入完了まで失敗する。
 
@@ -58,7 +56,6 @@ Routeの区分と対象は[AGENTS.md](AGENTS.md#route)が正本である。本�
 agent-directory/
 ├── AGENTS.md                     # ブートローダー兼ルーター兼目次
 ├── CLAUDE.md                     # @AGENTS.md
-├── .agents-space/workspace.json  # Agents Space向けの移植可能な論理Agent宣言
 ├── .codex/environments/          # Codex DesktopのLocal Environment
 ├── .claude/settings.json         # Claude Codeの共有project hook
 ├── .agent-cache/                 # Git管理外の派生物
@@ -91,10 +88,6 @@ agent-directory/
 ├── evals/                        # EVALS.md、cases/、fixtures/
 └── tools/                        # task.sh、SAFETY.md、固定ToolとOptional capability
 ```
-
-`.agents-space/workspace.json`は宣言専用であり、Machine ID、絶対path、認証情報、native session ref、ログを
-保存しない。これらのmachine-local runtime stateはAgents Space Connector側が管理する。同じ`agentKey`を持つ
-Workspaceを複数Machineへ配置すると、Agents Space上では同じ論理Agentの別Workspace Instanceとして扱える。
 
 ## ローカル実行環境
 
