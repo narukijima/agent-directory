@@ -5317,6 +5317,46 @@ if [[ "$full" == true && -z "${AGENT_VALIDATOR_NESTED_FIXTURE:-}" ]]; then
     fail 'control fixture: the pre-push hook refused a plain fast-forward push'
   fi
 
+  # A new remote ref must scan only commits not already represented by a tracking ref for
+  # that named remote. Seed a legacy commit directly in the fixture remote: its unsafe email
+  # is pre-existing remote history, while a safe child is the only newly outgoing commit.
+  control_plain_tip="$(env "${control_env[@]}" git -C "$control_work" rev-parse HEAD)"
+  printf 'legacy remote history\n' >> "$control_work/projects/demo/note.md"
+  env "${control_env[@]}" git -C "$control_work" add projects/demo/note.md
+  env "${control_env[@]}" GIT_AUTHOR_EMAIL="$control_direct_email" \
+    GIT_COMMITTER_EMAIL="$control_direct_email" \
+    git -C "$control_work" commit -q --no-verify -m 'fixture: legacy remote metadata'
+  control_legacy_tip="$(env "${control_env[@]}" git -C "$control_work" rev-parse HEAD)"
+  env "${control_env[@]}" git -C "$control_bare" fetch -q "$control_work" \
+    "$control_legacy_tip:refs/heads/legacy"
+  env "${control_env[@]}" git -C "$control_work" fetch -q origin \
+    legacy:refs/remotes/origin/legacy
+
+  printf 'safe new branch work\n' >> "$control_work/projects/demo/note.md"
+  env "${control_env[@]}" git -C "$control_work" add projects/demo/note.md
+  control_commit 'fixture: safe child of remote legacy'
+  (( control_status == 0 )) || \
+    fail "control fixture: a safe child of remote legacy history was refused at commit: $control_output"
+  if ! env "${control_env[@]}" git -C "$control_work" push -q origin \
+    HEAD:refs/heads/safe-new >/dev/null 2>&1; then
+    fail 'control fixture: a new ref rescanned and rejected history already represented by the remote'
+  fi
+
+  # The remote ancestor optimization must not hide newly outgoing forbidden content.
+  env "${control_env[@]}" git -C "$control_work" reset -q --hard "$control_legacy_tip" >/dev/null
+  printf 'SECRET=1\n' > "$control_work/.env"
+  env "${control_env[@]}" git -C "$control_work" add -f .env
+  env "${control_env[@]}" git -C "$control_work" commit -q --no-verify -m 'fixture: new ref secret'
+  set +e
+  control_output="$(env "${control_env[@]}" git -C "$control_work" push \
+    origin HEAD:refs/heads/unsafe-new 2>&1)"
+  control_status=$?
+  set -e
+  if (( control_status == 0 )) || ! printf '%s\n' "$control_output" | grep -Fq 'reason=forbidden-path'; then
+    fail "control fixture: a new ref omitted newly outgoing forbidden content: $control_output"
+  fi
+  env "${control_env[@]}" git -C "$control_work" reset -q --hard "$control_plain_tip" >/dev/null
+
   # A forbidden file committed with --no-verify is still stopped before it reaches the remote.
   printf 'SECRET=1\n' > "$control_work/.env"
   env "${control_env[@]}" git -C "$control_work" add -f .env

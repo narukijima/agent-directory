@@ -51,6 +51,10 @@ Independent repositoryへ冪等に導入する（導入元は下記のとおりH
 触れず`HOOKS_BLOCKED`で停止し、`--remove`もmanaged hookだけを除去する。出力は
 `HOOKS_INSTALLED|HOOKS_STATUS|HOOKS_REMOVED|HOOKS_BLOCKED`の1行（independent数を含む）。
 
+pre-pushで新規remote refのSHAが全ゼロの場合は、同じnamed remoteのtracking refからlocal SHAの最も近い
+ancestorを選び、それ以後の送信commitだけを再検査する。ancestorを証明できなければempty treeからの
+全履歴検査へfallbackする。既存remote refは通知されたremote SHAをbaseとするため、この補完を使わない。
+
 ### 承認済みsnapshot
 
 hookはworking treeのverifier・policyを実行しない。実行するのは`.git/agent-control/`の

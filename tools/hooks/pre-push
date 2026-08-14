@@ -1,11 +1,12 @@
 #!/bin/bash
-# agent-directory managed hook v2 — pre-push
+# agent-directory managed hook v3 — pre-push
 # ref削除と非fast-forward push（force push相当）を拒否し、さらに送信対象のcommit内容を
 # 承認済みsnapshot（.git/agent-control/）のpolicyで再検査する。pre-commitを迂回して作られた
 # forbidden / frozen違反もremoteへ出る前に止める。backupを起動しない（tools/CONTROL.md）。
 # stdin: "<local ref> <local sha> <remote ref> <remote sha>" を1 pushed refごとに1行受け取る。
 set -euo pipefail
 
+remote_name="${1:-}"
 repo_root="$(cd "$(git rev-parse --show-toplevel)" && pwd -P)"
 export AGENT_DIRECTORY_ROOT="$repo_root"
 
@@ -49,6 +50,24 @@ zero='0000000000000000000000000000000000000000'
 empty_tree="$(git hash-object -t tree /dev/null)"
 status=0
 
+nearest_remote_ancestor() {
+  # New remote refs report an all-zero remote SHA. Exclude history already represented by
+  # this named remote's tracking refs, while retaining a full-history fallback for bootstrap.
+  local local_sha="$1" candidate distance best='' best_distance=''
+  [[ -n "$remote_name" ]] && git remote get-url "$remote_name" >/dev/null 2>&1 || return 1
+  while IFS= read -r candidate; do
+    [[ -n "$candidate" ]] || continue
+    git merge-base --is-ancestor "$candidate" "$local_sha" 2>/dev/null || continue
+    distance="$(git rev-list --count "$candidate..$local_sha")"
+    if [[ -z "$best_distance" ]] || (( distance < best_distance )); then
+      best="$candidate"
+      best_distance="$distance"
+    fi
+  done < <(git for-each-ref --format='%(objectname)' "refs/remotes/$remote_name/")
+  [[ -n "$best" ]] || return 1
+  printf '%s\n' "$best"
+}
+
 while read -r local_ref local_sha remote_ref remote_sha; do
   [[ -n "$local_ref" ]] || continue
   if [[ "$local_sha" == "$zero" ]]; then
@@ -57,7 +76,11 @@ while read -r local_ref local_sha remote_ref remote_sha; do
     continue
   fi
   range_base="$empty_tree"
-  if [[ "$remote_sha" != "$zero" ]]; then
+  if [[ "$remote_sha" == "$zero" ]]; then
+    # A new branch/tag has no target-side base in the hook input. Prefer the nearest ancestor
+    # already tracked for this remote; with no provable base, scan the entire local history.
+    range_base="$(nearest_remote_ancestor "$local_sha" || printf '%s\n' "$empty_tree")"
+  else
     # remote先端がローカル履歴のancestorでなければfast-forwardではない。remote objectを
     # 持っていない場合も、fast-forwardであることを証明できないため拒否する。
     if ! git cat-file -e "$remote_sha" 2>/dev/null || \
