@@ -293,7 +293,9 @@ scan_staged_privacy() {
       *) continue ;;
     esac
     blob="$(git -C "$repo_root" ls-files -s -- "$path" | awk '$3 == 0 { print $2; exit }')"
-    [[ -n "$blob" ]] && scan_blob "$blob" "$path"
+    if [[ -n "$blob" ]]; then
+      scan_blob "$blob" "$path"
+    fi
   done <<EOF
 $diff_output
 EOF
@@ -315,7 +317,9 @@ scan_range_privacy() {
     while IFS= read -r path; do
       [[ -n "$path" ]] || continue
       blob="$(git -C "$repo_root" ls-tree "$commit" -- "$path" | awk '$2 == "blob" { print $3; exit }')"
-      [[ -n "$blob" ]] && scan_blob "$blob" "$path"
+      if [[ -n "$blob" ]]; then
+        scan_blob "$blob" "$path"
+      fi
     done < <(git -C "$repo_root" diff-tree --root --no-commit-id --name-only -r "$commit")
   done < <(git -C "$repo_root" rev-list "$revision_range")
 }
