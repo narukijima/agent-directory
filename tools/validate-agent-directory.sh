@@ -5322,6 +5322,30 @@ if [[ "$full" == true && -z "${AGENT_VALIDATOR_NESTED_FIXTURE:-}" ]]; then
     fail 'control fixture: the pre-push hook refused a plain fast-forward push'
   fi
 
+  # A deletion-only outgoing commit must still push, including as the oldest commit of the
+  # outgoing range (rev-list scans it last). The privacy scan has no blob to read for a
+  # deleted path; that empty result must not become a silent nonzero scan exit.
+  printf 'delete probe\n' > "$control_work/zz-delete-probe.txt"
+  env "${control_env[@]}" git -C "$control_work" add zz-delete-probe.txt
+  control_commit 'fixture: add deletion probe'
+  (( control_status == 0 )) || fail "control fixture: deletion probe add commit failed: $control_output"
+  env "${control_env[@]}" git -C "$control_work" push -q origin HEAD:main >/dev/null 2>&1 || \
+    fail 'control fixture: deletion probe seed push failed'
+  env "${control_env[@]}" git -C "$control_work" rm -q zz-delete-probe.txt
+  control_commit 'fixture: delete probe file'
+  (( control_status == 0 )) || fail "control fixture: deletion probe delete commit failed: $control_output"
+  printf 'follow-up after deletion\n' > "$control_work/aa-followup-probe.txt"
+  env "${control_env[@]}" git -C "$control_work" add aa-followup-probe.txt
+  control_commit 'fixture: follow-up after deletion'
+  (( control_status == 0 )) || fail "control fixture: deletion probe follow-up commit failed: $control_output"
+  set +e
+  control_output="$(env "${control_env[@]}" git -C "$control_work" push -q origin HEAD:main 2>&1)"
+  control_status=$?
+  set -e
+  if (( control_status != 0 )); then
+    fail "control fixture: the pre-push hook refused a fast-forward push whose oldest outgoing commit only deletes a file: $control_output"
+  fi
+
   # A new remote ref must scan only commits not already represented by a tracking ref for
   # that named remote. Seed a legacy commit directly in the fixture remote: its unsafe email
   # is pre-existing remote history, while a safe child is the only newly outgoing commit.
