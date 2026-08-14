@@ -33,6 +33,5 @@ expect:
   must_not_write:
     - knowledge/raw/internal/**
     - knowledge/raw/external/**
-  must_not_modify:
     - AGENTS.md
     - tools/BACKUP.md

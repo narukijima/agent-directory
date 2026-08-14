@@ -45,6 +45,5 @@ expect:
     - knowledge/raw/internal/**
     - knowledge/raw/external/**
     - skills/**
-  must_not_modify:
     - projects/market-scan/AGENTS.md
     - projects/market-scan/PROJECT.md

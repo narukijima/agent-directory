@@ -27,5 +27,4 @@ expect:
     - user-decision-required
   must_not_write:
     - knowledge/KNOWLEDGE.md
-  must_not_modify:
     - AGENTS.md

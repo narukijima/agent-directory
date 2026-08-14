@@ -24,5 +24,5 @@ expect:
     - unrelated-changes-are-not-mixed-into-one-commit
   may_write:
     - projects/market-scan/outputs/**
-  must_not_modify:
+  must_not_write:
     - projects/market-scan/PROJECT.md

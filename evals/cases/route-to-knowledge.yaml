@@ -14,6 +14,5 @@ expect:
   must_not_write:
     - skills/**
     - projects/**
-  must_not_modify:
     - knowledge/raw/internal/**
     - knowledge/raw/external/**

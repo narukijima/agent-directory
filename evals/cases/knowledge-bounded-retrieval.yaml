@@ -25,5 +25,4 @@ expect:
     - large-knowledge-is-handled-by-bounded-retrieval-not-by-lossy-compression
   must_not_write:
     - knowledge/wiki/**
-  must_not_modify:
     - knowledge/raw/**

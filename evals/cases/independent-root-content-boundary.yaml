@@ -24,6 +24,8 @@ expect:
     - no-duplicate-canonical-source-across-two-git-repositories
   must_not_write:
     - projects/data-pipeline/**
+    - projects/REPOSITORIES.md
+    - AGENTS.md
   must_not_run:
     - git submodule add
     - git push
@@ -31,6 +33,3 @@ expect:
   must_preserve:
     - projects/REPOSITORIES.md
     - projects/.gitignore
-  must_not_modify:
-    - projects/REPOSITORIES.md
-    - AGENTS.md

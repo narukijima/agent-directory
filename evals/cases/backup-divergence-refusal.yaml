@@ -26,6 +26,5 @@ expect:
     - knowledge/**
     - skills/**
     - projects/**
-  must_not_modify:
     - AGENTS.md
     - tools/BACKUP.md

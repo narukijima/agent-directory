@@ -105,7 +105,9 @@ patternはリポジトリ相対pathへのshell globである。
 | `guarded` | 6つの安全不変条件を定義・執行する正本とTool。`AGENT_GUARDED_COMMIT=true`の明示がない変更を拒否する |
 | `contract` | Project成果契約。人間の決定事項であり、`AGENT_CONTRACT_COMMIT=true`の明示がない変更を拒否する |
 
-`guarded`は`tools/SAFETY.md`の不変条件を機械的に定義・執行する最小集合とする。説明文書、テンプレート、
+`guarded`は`tools/SAFETY.md`の不変条件を執行する実装（Tool、hook、validator、policy、Core eval）と、
+lifecycle・attachment・Routeの状態遷移正本の最小集合とする。大型の詳細正本（`projects/PROJECTS.md`、
+`tools/BACKUP.md`等）はordinaryのままとし、その不変条件はTool側guardが執行する。説明文書、テンプレート、
 非Core eval、外部作用を持たない補助Toolを「metaだから」という理由だけでguardedにしない。
 validator `--changed`は品質確認のため、guardedより広いmeta変更でfull staticへfallbackしてよい。
 policyの緩和・行削除はそれ自体がguarded変更であり、下記のエスカレーション条件と`--full`検証を要求する。

@@ -19,5 +19,4 @@ expect:
   must_not_write:
     - tools/TOOLS.md
     - tools/BACKUP.md
-  must_not_modify:
     - AGENTS.md

@@ -41,7 +41,7 @@ Runtime Permissionのdatabase、matrix、sandbox、Provider別permission wrapper
 - 明示相対パス最優先。明示targetでは検索しない。探索は`tools/find-context.sh`、確定後に正本を読む。
 - 台帳、INDEX、LOG、履歴、`runs/`、`docs/**`、`.agent-cache/`を一括読込しない。
 - 24KiB超の正本は見出し・検索で絞って読む。
-- 読込予算は32KiB・12ファイルを上限とする（≈16,000 tokens、コンテキストウィンドウの約25%）。到達時は停止報告。
+- 読込予算は32KiB・12ファイルを上限とする。到達時は停止報告。
 
 ## 自律実行
 
@@ -70,7 +70,8 @@ Single Writer・所有者不明変更との衝突なし`なら追加承認なし
   （`projects/LIFECYCLE.md`、`projects/PROJECTS.md`）。
 - 「不要なもの」のような不可逆対象の曖昧性（`tools/BACKUP.md`）。
 - paused / retired、Project削除条件のlifecycle不整合
-- secret、divergence、Single Writer、所有者不明変更、正本衝突（`tools/BACKUP.md`、`tools/CONTROL.md`）
+- secret、divergence、Single Writer、所有者不明変更（`tools/BACKUP.md`、`tools/CONTROL.md`）
+- 正本同士の衝突（`tools/TOOLS.md#自己修復と停止`）
 
 外部作用だけでは止めない。決定は正本へ記録し、`tools/TOOLS.md`で再実行する。
 
