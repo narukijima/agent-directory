@@ -1327,7 +1327,8 @@ for accepted_settings in \
 done
 for rejected_settings in \
   fail-missing-session-start.json fail-command-changed.json fail-matcher-changed.json \
-  fail-extra-session-hook.json fail-secret-setting.json; do
+  fail-extra-session-hook.json fail-secret-setting.json \
+  fail-secret-setting-unicode-escaped.json; do
   require_file "$claude_settings_fixture_dir/$rejected_settings"
   if validate_claude_settings_file "$claude_settings_fixture_dir/$rejected_settings"; then
     fail "Claude settings fixture must reject a changed pinned hook or secret setting: $rejected_settings"

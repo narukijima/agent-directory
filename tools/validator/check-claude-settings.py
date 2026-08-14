@@ -16,6 +16,20 @@ EXPECTED_SESSION_START = [
         ],
     }
 ]
+FORBIDDEN_SETTING_TEXT = (".env", "GH_TOKEN", "GITHUB_TOKEN", "API_KEY")
+
+
+def contains_forbidden_text(value: object) -> bool:
+    if isinstance(value, str):
+        return any(forbidden in value for forbidden in FORBIDDEN_SETTING_TEXT)
+    if isinstance(value, list):
+        return any(contains_forbidden_text(item) for item in value)
+    if isinstance(value, dict):
+        return any(
+            contains_forbidden_text(key) or contains_forbidden_text(item)
+            for key, item in value.items()
+        )
+    return False
 
 
 def main() -> int:
@@ -31,7 +45,9 @@ def main() -> int:
     hooks = settings.get("hooks")
     if not isinstance(hooks, dict):
         return 1
-    return 0 if hooks.get("SessionStart") == EXPECTED_SESSION_START else 1
+    if hooks.get("SessionStart") != EXPECTED_SESSION_START:
+        return 1
+    return 1 if contains_forbidden_text(settings) else 0
 
 
 if __name__ == "__main__":
