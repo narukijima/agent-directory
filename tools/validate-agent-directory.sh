@@ -5439,6 +5439,25 @@ if [[ "$full" == true && -z "${AGENT_VALIDATOR_NESTED_FIXTURE:-}" ]]; then
   fi
   env "${control_env[@]}" git -C "$control_work" reset -q --hard HEAD~1 >/dev/null
 
+  # GitHub creates the PR merge commit server-side with its fixed service noreply
+  # committer. The post-merge range scan must accept that identity without opening
+  # the allowlist to arbitrary github.com addresses.
+  control_service_base="$(git -C "$control_work" rev-parse HEAD)"
+  printf 'service metadata probe\n' >> "$control_work/README.md"
+  env "${control_env[@]}" git -C "$control_work" add README.md
+  env "${control_env[@]}" GIT_AUTHOR_EMAIL='123+fixture@users.noreply.github.com' \
+    GIT_COMMITTER_EMAIL='noreply''@''github.com' \
+    git -C "$control_work" commit -q --no-verify -m 'fixture: GitHub service merge metadata'
+  set +e
+  control_output="$(cd "$control_work" && env "${control_env[@]}" \
+    /bin/bash tools/check-boundary.sh --range "$control_service_base" HEAD 2>&1)"
+  control_status=$?
+  set -e
+  if (( control_status != 0 )); then
+    fail "control fixture: GitHub service noreply merge metadata was refused: $control_output"
+  fi
+  env "${control_env[@]}" git -C "$control_work" reset -q --hard "$control_service_base" >/dev/null
+
   # Rewritten history is refused as non-fast-forward, and remote ref deletion is refused.
   env "${control_env[@]}" git -C "$control_work" reset -q --hard HEAD~1 >/dev/null
   printf 'diverged\n' >> "$control_work/projects/demo/note.md"
