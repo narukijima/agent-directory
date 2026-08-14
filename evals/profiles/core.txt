@@ -6,6 +6,7 @@ knowledge-bounded-retrieval
 context-budget-stop
 project-required-only
 project-work-scoped-validation
+autonomous-internal-change-commit
 project-goal-change-protection
 protect-immutable-records
 protect-paused-project
