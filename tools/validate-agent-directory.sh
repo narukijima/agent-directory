@@ -1223,6 +1223,38 @@ projects/LIFECYCLE.md|projects/RECOVERY.md|projects/REPOSITORIES.md|projects/.gi
     esac
   done <<< "$changed_list"
 
+  # Check outgoing references from every changed Markdown file before deciding whether
+  # the rest of the changed set can use the scoped path. Meta canon falls back to the
+  # full static run, but that run does not own the all-Markdown reference scan unless
+  # --full was requested. Inbound breakage still belongs to --full's whole-tree scan.
+  scoped_reference_files=()
+  while IFS= read -r changed_path; do
+    [[ -n "$changed_path" ]] || continue
+    case "$changed_path" in
+      *.md)
+        [[ -f "$repo_root/$changed_path" ]] && scoped_reference_files+=("$changed_path") ;;
+    esac
+  done <<< "$changed_list"
+  if (( ${#scoped_reference_files[@]} > 0 )); then
+    scoped_reference_checker="$repo_root/tools/validator/check-markdown-references.sh"
+    if [[ ! -f "$scoped_reference_checker" ]]; then
+      fail 'tools/validator/check-markdown-references.sh is missing'
+    else
+      scoped_reference_status=0
+      scoped_reference_output="$(bash "$scoped_reference_checker" "$repo_root" \
+        "${scoped_reference_files[@]}" 2>&1)" || scoped_reference_status=$?
+      if (( scoped_reference_status != 0 )); then
+        if [[ -z "$scoped_reference_output" ]]; then
+          fail 'tools/validator/check-markdown-references.sh failed without a diagnostic'
+        else
+          while IFS= read -r scoped_reference_failure; do
+            [[ -n "$scoped_reference_failure" ]] && fail "$scoped_reference_failure"
+          done <<<"$scoped_reference_output"
+        fi
+      fi
+    fi
+  fi
+
   if [[ "$scope_supported" == true ]]; then
     while IFS= read -r scoped_name; do
       [[ -n "$scoped_name" ]] || continue
@@ -1245,35 +1277,6 @@ projects/LIFECYCLE.md|projects/RECOVERY.md|projects/REPOSITORIES.md|projects/.gi
       validate_skill "$repo_root/skills/$scoped_name/SKILL.md"
     done <<< "$scoped_skills"
     [[ "$scoped_index_log" != true ]] || validate_knowledge_index_and_log
-    # 変更されたMarkdownから出ていく相互参照はscoped経路でも解決を検査する（#68）。
-    # 被参照側（他所からの参照が見出し改名で壊れる向き）は全ツリー走査が必要なため--fullが所有する。
-    scoped_reference_files=()
-    while IFS= read -r changed_path; do
-      [[ -n "$changed_path" ]] || continue
-      case "$changed_path" in
-        *.md)
-          [[ -f "$repo_root/$changed_path" ]] && scoped_reference_files+=("$changed_path") ;;
-      esac
-    done <<< "$changed_list"
-    if (( ${#scoped_reference_files[@]} > 0 )); then
-      scoped_reference_checker="$repo_root/tools/validator/check-markdown-references.sh"
-      if [[ ! -f "$scoped_reference_checker" ]]; then
-        fail 'tools/validator/check-markdown-references.sh is missing'
-      else
-        scoped_reference_status=0
-        scoped_reference_output="$(bash "$scoped_reference_checker" "$repo_root" \
-          "${scoped_reference_files[@]}" 2>&1)" || scoped_reference_status=$?
-        if (( scoped_reference_status != 0 )); then
-          if [[ -z "$scoped_reference_output" ]]; then
-            fail 'tools/validator/check-markdown-references.sh failed without a diagnostic'
-          else
-            while IFS= read -r scoped_reference_failure; do
-              [[ -n "$scoped_reference_failure" ]] && fail "$scoped_reference_failure"
-            done <<<"$scoped_reference_output"
-          fi
-        fi
-      fi
-    fi
     printf 'NOTE: scoped validation (--changed) covered %s changed path(s)\n' \
       "$(printf '%s\n' "$changed_list" | grep -c . || true)" >&2
     run_git_boundary_checks
@@ -2908,8 +2911,10 @@ mkdir -p "$changed_fixture_dir/tools/lib" "$changed_fixture_dir/tools/validator"
   "$changed_fixture_dir/projects/scoped-proj"
 cp "$repo_root/tools/validate-agent-directory.sh" "$repo_root/tools/task.sh" \
   "$changed_fixture_dir/tools/"
+cp "$repo_root/tools/TOOLS.md" "$changed_fixture_dir/tools/"
 cp "$repo_root/tools/lib/project-registry.sh" "$changed_fixture_dir/tools/lib/"
 cp "$repo_root/tools/validator/check-markdown-references.sh" "$changed_fixture_dir/tools/validator/"
+printf '# Scoped validation fixture\n' > "$changed_fixture_dir/README.md"
 {
   printf '%s\n' '---' 'name: scoped-proj' 'description: scoped validation fixture' \
     'status: active' 'mode: finite' '---' '' '> Scoped validation fixture goal.' '' \
@@ -2994,6 +2999,17 @@ if (( changed_status == 0 )) || ! printf '%s\n' "$changed_output" | grep -Fq 'de
   fail 'validator --changed silently passed a deleted Knowledge page'
 fi
 env "${changed_env[@]}" git -C "$changed_fixture_dir" checkout -q -- knowledge/wiki/topics/scoped-page.md
+
+# The fallback static run does not perform --full's whole-tree reference scan, so a
+# changed meta-canon Markdown file must still have its outgoing references checked.
+printf '\nBroken reference: `tools/TOOLS.md#no-such-heading`\n' >> "$changed_fixture_dir/README.md"
+changed_run
+if (( changed_status == 0 )) || \
+  ! printf '%s\n' "$changed_output" | grep -Fq \
+    'README.md reference does not resolve: tools/TOOLS.md#no-such-heading'; then
+  fail 'validator --changed skipped outgoing Markdown references on the meta-canon fallback path'
+fi
+env "${changed_env[@]}" git -C "$changed_fixture_dir" checkout -q -- README.md
 
 printf '# scoped fixture meta edit\n' >> "$changed_fixture_dir/tools/validate-agent-directory.sh"
 set +e
