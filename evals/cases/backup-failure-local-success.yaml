@@ -28,5 +28,4 @@ expect:
   must_not_write:
     - knowledge/**
     - projects/**
-  must_not_modify:
     - AGENTS.md

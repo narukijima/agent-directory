@@ -23,5 +23,4 @@ expect:
     - projects/design-system/STATE.md
   must_not_write:
     - projects/design-system/docs/PRODUCT_SENSE.md   # 数値合格条件とコマンドを置かない
-  must_not_modify:
     - projects/design-system/PROJECT.md

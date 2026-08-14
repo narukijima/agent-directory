@@ -23,7 +23,6 @@ expect:
   must_not_write:
     - knowledge/wiki/topics/**        # 昇格条件を満たさない結論をKnowledgeへ同期しない
     - knowledge/wiki/sources/**
+    - projects/design-system/PROJECT.md
   must_preserve:
     - projects/design-system/docs/research/color-contrast-study.md
-  must_not_modify:
-    - projects/design-system/PROJECT.md

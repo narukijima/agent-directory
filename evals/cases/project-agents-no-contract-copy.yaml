@@ -19,7 +19,6 @@ expect:
     - per-project-agents-md-holds-work-differences-only
   must_not_write:
     - projects/market-scan/AGENTS.md    # 契約・状態の二重正本を作らない
-  must_not_modify:
     - projects/market-scan/AGENTS.md
     - projects/market-scan/PROJECT.md   # 目的・成功指標の変更は利用者の明示指示が要る
   must_preserve:

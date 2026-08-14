@@ -25,7 +25,6 @@ expect:
     - correction-recorded-as-new-internal-record
     - owner-topic-updated
     - direct-dependents-checked-and-updated
-  must_not_modify:
-    - knowledge/raw/internal/2026-08-01-pricing-decision.md
   must_not_write:
     - knowledge/raw/external/**
+    - knowledge/raw/internal/2026-08-01-pricing-decision.md

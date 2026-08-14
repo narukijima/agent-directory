@@ -56,6 +56,7 @@ Routeの区分と対象は[AGENTS.md](AGENTS.md#route)が正本である。本�
 agent-directory/
 ├── AGENTS.md                     # ブートローダー兼ルーター兼目次
 ├── CLAUDE.md                     # @AGENTS.md
+├── PROJECT.md / STATE.md         # このリポジトリ自身の開発契約と状態（テンプレート機能ではない）
 ├── .codex/environments/          # Codex DesktopのLocal Environment
 ├── .claude/settings.json         # Claude Codeの共有project hook
 ├── .agent-cache/                 # Git管理外の派生物
@@ -85,8 +86,8 @@ agent-directory/
 ├── routines/
 │   ├── ROUTINES.md               # Routine Trigger層の正本
 │   └── maintenance/ROUTINE.md    # Maintenance Routineの契約
-├── evals/                        # EVALS.md、cases/、fixtures/
-└── tools/                        # task.sh、SAFETY.md、固定ToolとOptional capability
+├── evals/                        # EVALS.md、TRACE.md、cases/、fixtures/、profiles/
+└── tools/                        # task.sh、SAFETY.mdほかTool正本、固定ToolとOptional capability
 ```
 
 ## ローカル実行環境
@@ -134,16 +135,9 @@ projects/<independent-project>/   # Git top-level = このディレクトリ自�
 └── src/ tests/ …
 ```
 
-| 所有 | 対象 |
-|---|---|
-| root Gitが追跡 | 全Embedded Project、`projects/REPOSITORIES.md`、`projects/.gitignore` |
-| Independent Gitが追跡 | `PROJECT.md`、`STATE.md`、`AGENTS.md`、`ARCHITECTURE.md`、`docs/`、コード、tests、Git履歴 |
-| root Gitがignore | 登録済みの`projects/<name>/`。gitlinkもmanifest登録も検索候補も持たない |
-
-`PROJECT.md`はattachmentを宣言しない。root側の正本は`projects/REPOSITORIES.md`のattachment registryだけで、
-name、`repository_url`、`repository_reason`、採用`revision`を持つ。`projects/.gitignore`のmanaged blockは
-その派生projectionである。statusにかかわらず全Independent repositoryがmaterialize済みであることを健全な
-状態とする。
+root側の正本は`projects/REPOSITORIES.md`のattachment registryだけで、`projects/.gitignore`のmanaged block
+はその派生projectionである。所有境界の完全な表、昇格条件、`repository_reason`、session rootとSHA handoff、
+remote操作の境界とpush policy（`auto` / `gated`）は[projects/PROJECTS.md](projects/PROJECTS.md)が所有する。
 
 ```bash
 bash tools/materialize-project-repositories.sh --all --check
@@ -151,15 +145,10 @@ bash tools/materialize-project-repositories.sh --all
 bash tools/materialize-project-repositories.sh --project <name>
 ```
 
-昇格条件、`repository_reason`、session rootとSHA handoff、remote操作の境界とpush policy（`auto` / `gated`）は
-[projects/PROJECTS.md](projects/PROJECTS.md)が所有する。Independentの`origin`はworkspace backupと別物であり、
-外部影響を持ちうるためProjectごとに一度push方針を決める。旧`projects/<name>/repository/`方式と
-agent-directory外へcloneを置く旧方式は現役構造として許可せず、移行対象としてだけ
-[tools/BACKUP.md](tools/BACKUP.md)が扱う。
-
 > [!WARNING]
-> **Git Clean の注意:** 登録済み Independent Project は root Git から ignore されています。root リポジトリで `git clean -x` や `git clean -ffdx` を実行すると、ignore されている Independent リポジトリの未コミット作業やクローンが不可逆的に削除される危険があります。root での非破壊的でない `git clean` は原則行わないでください。
-
+> 登録済みIndependent Projectはroot Gitからignoreされるため、rootでの破壊的な`git clean`は
+> それらの未コミット作業やcloneを不可逆に失わせうる。`git clean`の禁止条件は
+> [tools/BACKUP.md](tools/BACKUP.md)が所有する。
 
 ## コンテキスト探索
 
@@ -178,7 +167,7 @@ tools/task.sh context --route meta --target tools/TOOLS.md
 明示パスと正本の明示参照を最優先とし、検索結果は候補として扱う。選択後に正本を読む。
 `.agent-cache/`は正本から再生成され、検索のstale回復はrouting catalogだけを一度作り直す。
 manifest（全体inventory）はMaintenanceとfull検証だけが再生成する。
-探索順位と読込予算の原則は[tools/TOOLS.md](tools/TOOLS.md)と[AGENTS.md](AGENTS.md)が、
+探索順位は[tools/TOOLS.md](tools/TOOLS.md)、実行時の読込予算は[AGENTS.md](AGENTS.md)、
 固定Toolの呼び出し形・入出力・fallbackは[tools/REFERENCE.md](tools/REFERENCE.md)が所有する。
 
 ## 検証
@@ -255,6 +244,8 @@ Toolは前提違反ならremoteを変更せず停止する。backup失敗は検�
 | [projects/LIFECYCLE.md](projects/LIFECYCLE.md) / [projects/RECOVERY.md](projects/RECOVERY.md) | 状態遷移と削除条件 / 目的不一致からの復旧 |
 | [routines/ROUTINES.md](routines/ROUTINES.md) | Routine Trigger層、Scheduler分離、送信境界、commit/backup条件 |
 | [evals/EVALS.md](evals/EVALS.md) | 振る舞いevalの契約、ケースschema、fixture、最低条件 |
+| [evals/TRACE.md](evals/TRACE.md) | trace event語彙、採点根拠、adapter呼び出し契約 |
+| [tools/UPSTREAM.md](tools/UPSTREAM.md) | 上流Issue報告の契約、匿名化検査、送信条件 |
 | [tools/SAFETY.md](tools/SAFETY.md) | 通常判断で守る6つの安全不変条件とリスク別経路 |
 | [tools/TOOLS.md](tools/TOOLS.md) | 通常入口、Core/Optional分類、Tool登録、自律commit、自己修復、サイズ予算 |
 | [tools/REFERENCE.md](tools/REFERENCE.md) | 固定Toolの呼び出し形、入出力、生成物、停止reason、fallback |

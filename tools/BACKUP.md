@@ -137,6 +137,7 @@ remoteを目的ごとに分け、許可操作とauthorizationを混同しない�
 |---|---|---|---|
 | workspace `backup` | 受動的な復旧コピー | このToolのfast-forward pushだけ | 設定済みなら自動 |
 | skeleton `origin` | 公開スケルトンの開発remote | 読み取り専用fetch、検証済みcommitの通常push | スケルトン保守の依頼範囲内 |
+| workspace `template` | 導入後に残す上流スケルトン参照 | 読み取り専用fetch（上流比較・first-push検証） | 設定済みなら自動 |
 | Independent `origin` | Project固有remote | Independent sessionのfetchと通常push | Projectのpush policyまたは明示push依頼 |
 
 実運用のAgent Workspaceは開発remoteを持たず`backup`だけを持つ。公開スケルトンへ実運用データをpushせず、

@@ -26,7 +26,6 @@ expect:
     - .tmp/**
   must_not_write:
     - projects/market-scan/inputs/**    # 差分ファイルが禁じた入力の書き換えを行わない
-  must_not_modify:
     - projects/market-scan/AGENTS.md
     - projects/market-scan/PROJECT.md
   must_preserve:
