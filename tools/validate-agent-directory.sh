@@ -5020,6 +5020,7 @@ if [[ "$full" == true && -z "${AGENT_VALIDATOR_NESTED_FIXTURE:-}" ]]; then
   cleanup_paths+=("$control_fixture_dir")
   control_work="$control_fixture_dir/work"
   control_bare="$control_fixture_dir/bare.git"
+  control_backup_bare="$control_fixture_dir/backup.git"
   control_decoy="$control_fixture_dir/decoy"
   control_env=(
     HOME="$control_fixture_dir" GIT_CONFIG_NOSYSTEM=1
@@ -5373,6 +5374,15 @@ if [[ "$full" == true && -z "${AGENT_VALIDATOR_NESTED_FIXTURE:-}" ]]; then
   env "${control_env[@]}" git -C "$control_work" fetch -q origin \
     legacy:refs/remotes/origin/legacy
 
+  # An empty canonical backup remote may trust the nearest ancestor already published by
+  # the fetched template remote. This keeps initial workspace backup from rescanning legacy
+  # public metadata while still scanning every downstream commit.
+  env "${control_env[@]}" git init -q --bare "$control_backup_bare"
+  env "${control_env[@]}" git -C "$control_work" remote add backup "$control_backup_bare"
+  env "${control_env[@]}" git -C "$control_work" remote add template "$control_bare"
+  env "${control_env[@]}" git -C "$control_work" fetch -q template \
+    legacy:refs/remotes/template/legacy
+
   printf 'safe new branch work\n' >> "$control_work/projects/demo/note.md"
   env "${control_env[@]}" git -C "$control_work" add projects/demo/note.md
   control_commit 'fixture: safe child of remote legacy'
@@ -5381,6 +5391,10 @@ if [[ "$full" == true && -z "${AGENT_VALIDATOR_NESTED_FIXTURE:-}" ]]; then
   if ! env "${control_env[@]}" git -C "$control_work" push -q origin \
     HEAD:refs/heads/safe-new >/dev/null 2>&1; then
     fail 'control fixture: a new ref rescanned and rejected history already represented by the remote'
+  fi
+  if ! env "${control_env[@]}" git -C "$control_work" push -q backup \
+    HEAD:refs/heads/main >/dev/null 2>&1; then
+    fail 'control fixture: initial backup rescanned and rejected history already published by template'
   fi
 
   # The remote ancestor optimization must not hide newly outgoing forbidden content.

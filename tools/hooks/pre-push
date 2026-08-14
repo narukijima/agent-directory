@@ -52,18 +52,28 @@ status=0
 
 nearest_remote_ancestor() {
   # New remote refs report an all-zero remote SHA. Exclude history already represented by
-  # this named remote's tracking refs, while retaining a full-history fallback for bootstrap.
-  local local_sha="$1" candidate distance best='' best_distance=''
+  # this named remote's tracking refs. An initial push to the canonical private backup may
+  # also exclude ancestry already published by the fetched template remote; only downstream
+  # commits are newly leaving the workspace. Retain a full-history fallback when neither
+  # source proves an ancestor.
+  local local_sha="$1" candidate distance best='' best_distance='' namespace
+  local tracking_namespaces=()
   [[ -n "$remote_name" ]] && git remote get-url "$remote_name" >/dev/null 2>&1 || return 1
-  while IFS= read -r candidate; do
-    [[ -n "$candidate" ]] || continue
-    git merge-base --is-ancestor "$candidate" "$local_sha" 2>/dev/null || continue
-    distance="$(git rev-list --count "$candidate..$local_sha")"
-    if [[ -z "$best_distance" ]] || (( distance < best_distance )); then
-      best="$candidate"
-      best_distance="$distance"
-    fi
-  done < <(git for-each-ref --format='%(objectname)' "refs/remotes/$remote_name/")
+  tracking_namespaces+=("refs/remotes/$remote_name/")
+  if [[ "$remote_name" == 'backup' ]] && git remote get-url template >/dev/null 2>&1; then
+    tracking_namespaces+=("refs/remotes/template/")
+  fi
+  for namespace in "${tracking_namespaces[@]}"; do
+    while IFS= read -r candidate; do
+      [[ -n "$candidate" ]] || continue
+      git merge-base --is-ancestor "$candidate" "$local_sha" 2>/dev/null || continue
+      distance="$(git rev-list --count "$candidate..$local_sha")"
+      if [[ -z "$best_distance" ]] || (( distance < best_distance )); then
+        best="$candidate"
+        best_distance="$distance"
+      fi
+    done < <(git for-each-ref --format='%(objectname)' "$namespace")
+  done
   [[ -n "$best" ]] || return 1
   printf '%s\n' "$best"
 }

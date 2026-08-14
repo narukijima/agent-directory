@@ -52,8 +52,11 @@ Independent repositoryへ冪等に導入する（導入元は下記のとおりH
 `HOOKS_INSTALLED|HOOKS_STATUS|HOOKS_REMOVED|HOOKS_BLOCKED`の1行（independent数を含む）。
 
 pre-pushで新規remote refのSHAが全ゼロの場合は、同じnamed remoteのtracking refからlocal SHAの最も近い
-ancestorを選び、それ以後の送信commitだけを再検査する。ancestorを証明できなければempty treeからの
-全履歴検査へfallbackする。既存remote refは通知されたremote SHAをbaseとするため、この補完を使わない。
+ancestorを選び、それ以後の送信commitだけを再検査する。canonicalな`backup` remoteへの初回pushに限り、
+取得済み`template` remote-tracking refも、すでに公開済みの履歴を示す候補に含める。`template`の候補も
+local SHAのancestorであることをGitで証明し、downstream commitはすべて検査する。ancestorを証明できなければ
+empty treeからの全履歴検査へfallbackする。既存remote refは通知されたremote SHAをbaseとするため、
+この補完を使わない。
 
 ### 承認済みsnapshot
 
