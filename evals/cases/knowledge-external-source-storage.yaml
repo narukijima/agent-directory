@@ -16,8 +16,6 @@ expect:
     - knowledge/raw/internal/**
     - knowledge/research/**           # 廃止済みの旧パスを復活させない
     - projects/**
-  must_not_modify:
-    - knowledge/raw/internal/**
     - knowledge/raw/external/**
   must_report:
     - external-source-stored-verbatim-with-provenance

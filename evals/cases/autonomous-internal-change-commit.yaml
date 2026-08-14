@@ -29,6 +29,5 @@ expect:
     - evals/**
   must_not_write:
     - AGENTS.md
-  must_not_modify:
     - knowledge/raw/internal/**
     - knowledge/raw/external/**

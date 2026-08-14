@@ -31,6 +31,4 @@ expect:
     - projects/REPOSITORIES.md
     - projects/.gitignore
     - projects/data-pipeline/**
-  must_not_modify:
-    - projects/REPOSITORIES.md
     - AGENTS.md

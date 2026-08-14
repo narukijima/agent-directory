@@ -404,18 +404,6 @@ validate_required_reference_statuses() {
   done < <(required_references "$file")
 }
 
-check_size_warning() {
-  local file="$1"
-  local warning_limit="$2"
-  local label="$3"
-  local bytes
-  [[ -f "$file" ]] || return 0
-  bytes="$(wc -c < "$file" | tr -d ' ')"
-  if (( bytes > warning_limit )); then
-    warn "$(relative_path "$file") exceeds the $label soft budget: ${bytes}B > ${warning_limit}B"
-  fi
-}
-
 root_agents_router_bytes() {
   local file="$1"
   [[ -f "$file" ]] || { printf '0'; return 0; }
@@ -1000,16 +988,10 @@ ignore_path='projects/.gitignore'
 # Project roots of registered Independent Projects are excluded from the root validator scan.
 # Keep the arrays permanently non-empty with a harmless entry duplicating the existing prune, so they are safe under set -u.
 independent_names=()
-independent_urls=()
-independent_reasons=()
-independent_revisions=()
 if [[ -f "$repo_root/$registry_path" ]]; then
   while IFS=$'\t' read -r registry_kind registry_a registry_b registry_c registry_d; do
     [[ "$registry_kind" == 'R' ]] || continue
     independent_names+=("$registry_a")
-    independent_urls+=("$registry_b")
-    independent_reasons+=("$registry_c")
-    independent_revisions+=("$registry_d")
   done < <(agent_registry_records "$repo_root/$registry_path")
 fi
 independent_count="${#independent_names[@]}"
@@ -1796,6 +1778,7 @@ validate_knowledge_page "$knowledge_topic_template"
 validate_knowledge_index_and_log
 
 required_cases=(
+  ai-inference-attribution knowledge-correction-propagation
   project-correction-recovery project-finite-completion
   project-goal-change-protection project-state-closeout protect-immutable-records protect-paused-project
   route-to-knowledge route-to-project route-to-skill temporary-code-isolation project-delete-requires-retired
@@ -1996,6 +1979,7 @@ if [[ -f "$eval_runtime" ]]; then
   if command -v python3 >/dev/null 2>&1; then
     python3 -c 'compile(open(__import__("sys").argv[1], encoding="utf-8").read(), __import__("sys").argv[1], "exec")' \
       "$eval_runtime" 2>/dev/null || fail 'tools/run-evals.py has invalid Python syntax'
+    if [[ "$full" == true ]]; then
     eval_pass_output="$(python3 "$eval_runtime" score --case "$eval_fixture/case.yaml" \
       --trace "$eval_fixture/pass.jsonl" --baseline "$eval_fixture/baseline.json" 2>&1)" || \
       fail "eval runtime fixture: trusted pass trace was rejected: $eval_pass_output"
@@ -2109,6 +2093,7 @@ PY
     (( eval_decay_regression_status == 1 )) && \
       printf '%s\n' "$eval_decay_regression_output" | grep -Fq 'decay=FAIL' || \
       fail 'eval runtime fixture: Aged read amplification did not fail the decay gate'
+    fi
   else
     warn 'python3 is unavailable; executable eval runtime fixtures were not run'
   fi
@@ -2485,7 +2470,7 @@ if [[ -f "$repo_root/tools/control-policy.tsv" ]]; then
     'guarded:tools/report-upstream-issue.sh' 'guarded:tools/lib/github-auth.sh' \
     'guarded:tools/lib/project-registry.sh' 'guarded:tools/materialize-project-repositories.sh' \
     'guarded:tools/setup-local-environment.sh' 'guarded:tools/setup-github-auth.sh' \
-    'guarded:tools/migrate-github-auth.sh' 'guarded:tools/run-evals.py' \
+    'guarded:tools/run-evals.py' \
     'guarded:tools/run-routine.sh' 'guarded:tools/manage-routine-schedule.sh' \
     'guarded:tools/routine-reasoner.py' 'guarded:evals/EVALS.md' \
     'guarded:evals/profiles/core.txt' 'guarded:routines/ROUTINES.md' \

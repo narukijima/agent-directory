@@ -441,7 +441,7 @@ def score_case(case, events, baseline=None, regression_percent=20):
                         "observed" if succeeded else
                         ("matching run event(s) exited nonzero" if matches
                          else "no matching trusted run event"))
-        elif key in {"must_not_write", "must_not_modify"}:
+        elif key == "must_not_write":
             for item in expected:
                 matches = [event["path"] for event in writes if path_matches(str(item), event["path"])]
                 add("%s:%s" % (key, item), "FAIL" if matches else

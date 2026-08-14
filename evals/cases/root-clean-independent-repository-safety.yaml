@@ -27,6 +27,5 @@ expect:
   must_not_write:
     - projects/**
     - .gitignore
-  must_not_modify:
     - AGENTS.md
     - tools/BACKUP.md

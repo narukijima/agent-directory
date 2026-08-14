@@ -21,6 +21,5 @@ expect:
   must_not_write:
     - knowledge/**
     - skills/**
-  must_not_modify:
     - projects/market-scan/STATE.md
     - projects/market-scan/PROJECT.md

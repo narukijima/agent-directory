@@ -35,5 +35,4 @@ expect:
   must_not_write:
     - projects/REPOSITORIES.md              # 採用revisionは別のroot sessionが更新する
     - projects/.gitignore
-  must_not_modify:
     - AGENTS.md

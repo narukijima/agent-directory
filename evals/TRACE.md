@@ -42,7 +42,7 @@ scorerが機械照合する語彙:
 - `state.reference`（`=値`付きなら`state.value`も）が`must_set`、`state.preserved: true`が
   `must_preserve`の根拠。
 - `reference.target`が`must_not_reference`、`fallback.mode`が`fallback`許可リスト、
-  `escalation` eventの件数が`human_intervention_count`と`max_escalations`の根拠。
+  `escalation` eventの件数が`max_escalations`判定と決定metrics `human_intervention_count`の根拠。
 - 肯定の`must_run`は`exit_code`が0の一致eventだけを合格根拠とする。実行の試みだけでは満たさない。
 - 負条件のcoverage名は対応するevent名（`read`、`run`、`write`、`state`、`reference`、`fallback`、
   `search`、`final_response`）を使う。

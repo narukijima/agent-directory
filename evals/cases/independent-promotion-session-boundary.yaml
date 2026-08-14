@@ -35,5 +35,4 @@ expect:
     - git push
   must_not_write:
     - .gitignore
-  must_not_modify:
     - AGENTS.md

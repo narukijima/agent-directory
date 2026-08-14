@@ -20,7 +20,7 @@ expect:
   must_report:
     - irreversible-delete-not-run-without-exact-target
     - only-delete-target-is-requested
-  must_not_modify:
+  must_not_write:
     - projects/**
 
 report_match:

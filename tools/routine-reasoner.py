@@ -341,7 +341,7 @@ def run_inspect(argv) -> int:
             allowed.append(argv[i + 1])
             i += 2
         else:
-            fail("invalid-arguments", 2)
+            reject("invalid-arguments")
 
     raw = sys.stdin.buffer.read()
     if len(raw) > MAX_PATCH_BYTES:
@@ -377,11 +377,10 @@ def run_inspect(argv) -> int:
                 reject("creates-file")
             if new_path == "/dev/null":
                 reject("deletes-file")
-            for prefix in ("a/", "b/"):
-                if old_path.startswith(prefix):
-                    old_path = old_path[2:]
-                if new_path.startswith(prefix):
-                    new_path = new_path[2:]
+            if old_path.startswith("a/"):
+                old_path = old_path[2:]
+            if new_path.startswith("b/"):
+                new_path = new_path[2:]
             if old_path != new_path:
                 reject("renames-file")
             if new_path.startswith("/") or ".." in new_path.split("/"):
@@ -418,7 +417,6 @@ def main() -> int:
     if mode == "--inspect-patch":
         return run_inspect(rest)
     fail("invalid-arguments", 2)
-    return 2
 
 
 if __name__ == "__main__":

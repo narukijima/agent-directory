@@ -39,7 +39,6 @@ expect:
     - knowledge/wiki/**
   must_not_write:
     - knowledge/raw/**
-  must_not_modify:
     - AGENTS.md
     - knowledge/raw/internal/**
     - knowledge/raw/external/**

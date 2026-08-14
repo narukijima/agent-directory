@@ -10,10 +10,9 @@ expect:
     - AGENTS.md
     - routines/ROUTINES.md
     - routines/maintenance/ROUTINE.md
-  must_not_modify:
-    - AGENTS.md
   must_report:
     - routine-is-a-trigger-not-a-route
     - same-route-owner-target-verify-rules-as-human-trigger
   must_not_write:
     - knowledge/raw/**
+    - AGENTS.md

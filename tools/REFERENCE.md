@@ -109,9 +109,12 @@ Projectの固定検証に委ね（`project-owned`）、pushはPush Policyに従�
 ## run-evals.py
 
 ```bash
-python3 tools/run-evals.py score --case <case-name|path> --trace <trace.jsonl> [--baseline <summary.json>]
-python3 tools/run-evals.py run --adapter <executable> (--case <name>... | --all)
+python3 tools/run-evals.py score --case <case-name|path> --trace <trace.jsonl> [--baseline <summary.json>] [--json]
+python3 tools/run-evals.py run --adapter <executable> (--case <name>... | --all | --profile <core|decay>) \
+  [--output-dir <dir>] [--allow-dirty] [--fail-on-regression] [--regression-percent <n>] [--fail-on-unverified]
 ```
+
+`--profile`は`evals/profiles/<name>.txt`のcase集合を実行する。
 
 `score`は保存済みtraceだけを採点し、`run`はcaseごとにGit管理対象とfixtureを一時workspaceへ重ねて
 adapterを実行後、同じ採点器へ渡す。adapterは`--request`、`--workspace`、`--trace`を受ける実行可能
@@ -163,13 +166,11 @@ SSHとGitHub以外のhostへGitHub credentialを渡さない。
 bash tools/setup-github-auth.sh --install-from-gh
 bash tools/setup-github-auth.sh --check
 bash tools/setup-github-auth.sh --repair-from-gh
-bash tools/migrate-github-auth.sh --workspace /absolute/path [--check]
 bash tools/test-github-auth.sh
 ```
 
 doctor成功は`GITHUB_AUTH_OK source=<source> login=<login> api=ok git=ok`、失敗は
-`GITHUB_AUTH_BLOCKED reason=<reason>`。migrationはsignature、Git root、auth fileのclean状態、対応version、
-patch適用可否を先に検査し、tokenやAgent固有設定を扱わない。
+`GITHUB_AUTH_BLOCKED reason=<reason>`。
 `--expected-login <github-login>`はaccountを固定したい場合だけ使う任意の厳格照合である。
 `--remote`未指定時は`remote.pushDefault`、`backup`、`origin`の順で実在remoteを解決し、存在しなければ
 `remote-not-configured`を返す。
@@ -258,3 +259,13 @@ commit・push境界のPortable Verifierと、managed hook・承認済みsnapshot
 結果line、導入・除去の契約、tier意味論、ack・receipt条件、違反分類は`tools/CONTROL.md`が
 所有し、扱うときだけ読む。hookは境界検査だけを行い、backup・validator・ネットワーク操作を
 起動しない（`tools/BACKUP.md`の非ゴールを変更しない）。
+
+## 内部実装ライブラリ
+
+単体の呼び出し契約を持たず、上記Toolからsourceされる共有実装。直接実行しない。
+
+- `tools/lib/project-registry.sh` — `projects/REPOSITORIES.md` registryの正規parseを単一実装として
+  提供し、validator・boundary検査・materializerが共有する。
+- `tools/lib/github-auth.sh` — GitHub認証の共有実装（契約は`#GitHub認証Tool`）。
+- `tools/validator/check-markdown-references.sh` — Markdown参照・anchor整合検査の実体。validatorと
+  receipt発行が呼ぶ。

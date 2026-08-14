@@ -57,7 +57,7 @@ backtick除去によるslugを使える。同じProject内でも対象ファイ�
 
 ## 自律実行の標準完了
 
-work/stateの終端は`tools/finalize-task.sh`の1回で検証・commit・backupまで完結させ、可否を質問しない。次をすべて満たすとき自動commitする。
+work/stateの終端は`tools/task.sh finish`（実体は`finalize-task.sh`）の1回で検証・commit・backupまで完結させ、可否を質問しない。次をすべて満たすとき自動commitする。
 
 - 依頼範囲内の変更であり、変更対象のOwnerが明確である。
 - 必須検証が合格している（未検証・不合格を完了commitとして扱わない）。
@@ -153,7 +153,7 @@ Toolへの決定的な入力不備、自分の変更が壊したtestである。
 | behavioral eval | `run-evals.py` | `evals/EVALS.md` |
 | backup | `backup-to-github.sh` | `tools/BACKUP.md` |
 | upstream report | `report-upstream-issue.sh` | `tools/UPSTREAM.md` |
-| GitHub auth | `lib/github-auth.sh`、`setup-github-auth.sh`、`test-github-auth.sh`、`migrate-github-auth.sh` | `tools/REFERENCE.md` |
+| GitHub auth | `lib/github-auth.sh`、`setup-github-auth.sh`、`test-github-auth.sh` | `tools/REFERENCE.md` |
 | Independent repository | `materialize-project-repositories.sh` | `tools/REFERENCE.md` |
 | Routine | `run-routine.sh`、`manage-routine-schedule.sh`、`routine-reasoner.py` | `routines/ROUTINES.md` |
 

@@ -9,6 +9,9 @@ updated_at: 2026-08-15
 公開テンプレートはAgent identity、Project attachment、明示Skill import、決定的validator、boundary hookを持つ。
 ClaudAGT AgentのIndependent Projectとして継続開発するProject契約を導入した。
 通常開発と明示済み外部作用は途中承認なしで完遂することをCore evalへ固定した。
+モデル更新に伴う全体再監査で、成立し得なくなったGitHub認証migration一式と死んだvalidatorコードを削除し、
+既定validator実行を宣言どおり静的検査だけへ戻し、`must_not_modify`別名を`must_not_write`へ統合し、
+正本間の参照矛盾（entry point、remote分類、escalation先、README構造）を解消した。
 
 ## 現在の目標
 
@@ -26,7 +29,7 @@ Workspace責務境界を壊さず、ClaudAGTエコシステムの変更と整合
 - 対象: `PROJECT.md#PC-01`
 - 確認日: 2026-08-15
 - 方法: `git diff --check`、`bash tools/validate-agent-directory.sh --full`。
-- 結果: 無確認完遂evalのCore昇格と`max_escalations: 0`を含む変更が0 warningで合格した。
+- 結果: 再監査後の全変更（validator縮小、eval語彙統合、migration削除、正本参照修正）が0 warningで合格した。
 
 ## 未完了・ブロッカー
 

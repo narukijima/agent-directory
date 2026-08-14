@@ -32,6 +32,5 @@ expect:
     - tools/TOOLS.md#サイズ予算
   must_not_write:
     - knowledge/raw/**
-  must_not_modify:
     - knowledge/raw/internal/**
     - knowledge/raw/external/**

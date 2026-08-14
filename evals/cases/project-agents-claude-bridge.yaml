@@ -24,6 +24,5 @@ expect:
   must_not_write:
     - projects/_template/AGENTS.md        # 新規Projectへ自動複製される構造にしない
     - projects/_template/CLAUDE.md
-  must_not_modify:
     - projects/site-migration/PROJECT.md
     - projects/site-migration/STATE.md

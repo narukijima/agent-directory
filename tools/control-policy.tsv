@@ -34,7 +34,6 @@ guarded	tools/lib/project-registry.sh	Git rootとOwner解決
 guarded	tools/materialize-project-repositories.sh	Independent復元とroot境界
 guarded	tools/setup-local-environment.sh	自動実行される共通setup
 guarded	tools/setup-github-auth.sh	認証setupとrepair
-guarded	tools/migrate-github-auth.sh	認証境界の移植
 guarded	tools/run-evals.py	Core eval scorer
 guarded	tools/run-routine.sh	無人実行executor
 guarded	tools/manage-routine-schedule.sh	Scheduler変更
@@ -77,6 +76,7 @@ guarded	projects/LIFECYCLE.md	状態遷移正本
 guarded	projects/RECOVERY.md	復旧正本
 guarded	projects/REPOSITORIES.md	attachment registry
 guarded	projects/.gitignore	registry projection
+contract	PROJECT.md	このrepository自身の成果契約（人間が決める）
 contract	projects/*/PROJECT.md	Project成果契約（人間が決める）
 guarded	projects/*/AGENTS.md	Project個別契約
 guarded	projects/*/CLAUDE.md	bridge

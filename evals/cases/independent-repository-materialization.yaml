@@ -32,6 +32,4 @@ expect:
   must_not_write:
     - projects/REPOSITORIES.md
     - projects/.gitignore
-  must_not_modify:
     - AGENTS.md
-    - projects/REPOSITORIES.md

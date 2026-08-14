@@ -25,7 +25,6 @@ expect:
     - projects/**/candidates/**
     - skills/**
     - tools/**
-  must_not_modify:
     - projects/market-scan/PROJECT.md
   must_not_reference:
     - .tmp/**

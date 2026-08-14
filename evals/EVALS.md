@@ -54,8 +54,6 @@ expect:
     - projects/**
   must_not_write:
     - knowledge/raw/**
-  must_not_modify:
-    - knowledge/raw/**
   must_not_reference:
     - .tmp/**
 ```
@@ -162,8 +160,8 @@ ignore projectionで隠れるfixture pathは`git add -f`で明示追跡する。
 
 - `AGENTS.md`、`projects/AGENTS.md`、対象`PROJECT.md`、`STATE.md`を読む。対象Projectに`AGENTS.md`が
   あれば`PROJECT.md`より先に読む。
-- 通常のProject実行で`projects/PROJECTS.md`を無条件に読まない。新設、状態遷移、契約種別の変更、
-  Independent昇格・移行、remote操作、復旧、規約保守、docs構造の設計、明示参照のいずれかがある場合だけ読む。
+- 通常のProject実行で`projects/PROJECTS.md`を無条件に読まない。読む条件は
+  `projects/AGENTS.md#PROJECTS.mdを読む条件`と同一とする。
 - 個別Projectの`AGENTS.md`へ成果契約、現在状態、Domain Canonの本文を書かず、`PROJECT.md`、`STATE.md`、
   `docs/<DOMAIN>.md`へ書く。
 - 現在目標と検証結果が`PROJECT.md#PC-xx`または`PROJECT.md#status`を参照する。
@@ -197,8 +195,8 @@ ignore projectionで隠れるfixture pathは`git add -f`で明示追跡する。
 - 再利用可能な研究手順そのものを作る依頼はSkill Routeとする。
 - Project Researchを自動的にRoot Knowledgeとして扱わない。昇格条件を満たした結論だけを
   `knowledge/wiki/`へ同期し、同じ結論を二つのactive正本として保守しない。
-- 新しい大文字の領域正本（`skills/SKILLS.md`、`projects/PROJECTS.md`、`evals/EVALS.md`、
-  `tools/TOOLS.md`）を読み、旧README入口や`knowledge/research/`を参照しない。
+- 大文字の領域正本（`skills/SKILLS.md`、`projects/PROJECTS.md`、`evals/EVALS.md`、
+  `tools/TOOLS.md`）を読み、`knowledge/research/`のような廃止済み入口を参照しない。
 
 ## 限定取得ケースの最低条件
 

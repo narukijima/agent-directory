@@ -34,7 +34,6 @@ expect:
     - projects/market-scan/outputs/**
   must_not_write:
     - projects/market-scan/inputs/**
-  must_not_modify:
     - AGENTS.md
     - projects/market-scan/PROJECT.md
 
