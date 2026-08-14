@@ -24,6 +24,7 @@ Human = 例外と方針変更を決定する
 tools/task.sh context --route <route> [--target <path>]
 tools/task.sh verify
 tools/task.sh finish --route <route> [--target <path>] --message "変更理由"
+tools/task.sh finish --route <route> --target <path> --message "変更理由" --current-work
 tools/task.sh status
 ```
 
@@ -69,6 +70,14 @@ hooks導入済み環境では、commit・push境界を`tools/check-boundary.sh`�
 `tools/CONTROL.md`。安全核としてguarded / contractの変更だけが明示エスカレーションと`--full`検証を要する）。
 このackはRepository integrityの記録であり、Runtime Permissionでも利用者への追加承認要求でもない。
 
+利用者が「今ある作業をバックアップして」と明示しtargetが一意な場合も、新しいbackup経路へ分岐せず
+同じwork終端を使う。`task.sh context`でGit rootとOwnerを解決し、変更一覧、Project契約、Single Writer、
+secret、target外差分を確認してProject固有検証を通す。今回対象だけをstageした後、
+`task.sh finish ... --current-work`を呼ぶ。`--current-work`はtarget外差分と未stageの対象差分をfail closedで
+再検査し、検証・commit後にprofileどおりbackupする。dirtyを見ただけでraw `backup-to-github.sh`を先に
+呼ばず、同じ操作の追加承認も求めない。所有者不明、別Writer、secret、target外差分、同じ成果物で
+分離不能な競合はstageせず停止する。
+
 commit messageは変更内容と理由が分かる一文を先頭に置く。中断時は残件を明記した
 checkpoint commitを作ってよいが、完了報告にも成果契約の達成にもしない。commit後は`tools/BACKUP.md`の
 triggerとpolicyが許す場合だけbackupまたは通常pushへ進む。
@@ -110,6 +119,10 @@ Toolへの決定的な入力不備、自分の変更が壊したtestである。
 | work | 成果物・コード・文書の変更 | `finalize-task.sh` 1回（`--changed`検証、commit、`--root-only` backup） |
 | state | 目標・到達点・検証結果の変化 | STATE更新後に同じfinalize 1回 |
 | boundary | 契約、attachment、registry、移行、復旧 | full検証、必要な承認、workspace backup（手動経路） |
+
+明示された現在作業のbackupは`work`であり、`--current-work`を付けた同じfinish経路を使う。
+Private backup設定済みのroot所有workは`--root-only`、未設定は`not-configured`、Independentは
+`push-policy`である。workspace scopeはboundary監査だけに使う。
 
 この表は`task.sh`配下の互換実装用であり、通常のAgent判断へ露出させない。直接呼び出す既存consumerの
 ために`prepare-context.sh --class`と`finalize-task.sh --class`は維持する。現在目標、到達点、検証結果、

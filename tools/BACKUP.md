@@ -173,6 +173,7 @@ migrationの実行中は対象repositoryのWriterを停止する。
 未設定なら実行せず、その事実を報告する。
 
 - 正常に検証・commitされた意味のある変更の後
+- 明示された現在作業を、Owner・target・secret・競合確認と固有検証後に正規finish経路でcommitした後
 - 復旧可能性に関わるmetadata変更後
 - Independent Projectの採用revision更新後
 - 破壊的変更前や長い作業を中断する際のcleanな検証済みcheckpoint
@@ -184,6 +185,11 @@ migrationの実行中は対象repositoryのWriterを停止する。
 cron/launchdのScheduled Maintenance Routine（`routines/ROUTINES.md`）でも、schedule到達自体は
 backup triggerではない。Routineが検証済みcommitを作った場合だけ上記triggerが成立する。
 backup-only Routineは作らない。
+
+「今ある作業をバックアップして」はdirty treeへ本Toolを直接実行するtriggerではない。明示targetの
+現在作業は`tools/TOOLS.md#自律実行の標準完了`に従い、対象だけを検証・stage・commitしてから
+`task.sh finish --current-work`の内部で本Toolへ到達する。本Toolのdirty拒否はこの上位完了経路でも
+弱めず、target外差分、所有者不明変更、secret、別Writerとの競合を自動commitしない。
 
 ## backupが失敗したとき
 

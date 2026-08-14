@@ -11,6 +11,7 @@
 tools/task.sh context --route <route> [--target <path>]
 tools/task.sh verify
 tools/task.sh finish --route <route> [--target <path>] --message "変更理由"
+tools/task.sh finish --route <route> --target <path> --message "変更理由" --current-work
 tools/task.sh status
 ```
 
@@ -21,6 +22,11 @@ full staticへ自動fallbackする。`finish`は通常変更だけを`finalize-t
 
 正規結果は`TASK_CONTEXT v2`、`TASK_OK`、`TASK_BLOCKED`、`TASK_FAILED`のいずれかである。下位Toolの
 診断はstderrへ保持し、既存consumer向けの結果語彙を変更しない。
+
+`--current-work`は「明示targetに今ある未commit成果をバックアップする」依頼専用で、通常のfinishへ
+追加のscope検査を掛ける。呼出前にAgentがGit root、変更一覧、Owner、Project契約、Single Writer、secret、
+固有検証を確認し、対象だけをstageする。下位`finalize-task.sh`はtarget外変更または対象内の未stage変更を
+commit前に拒否し、合格時だけ通常と同じ検証・commit・profile準拠backupを行う。
 
 ## build-context-cache.sh
 
@@ -94,7 +100,7 @@ scheduleの変更、ネットワーク接続は行わない。成功は`LOCAL_EN
 ## finalize-task.sh
 
 ```bash
-tools/finalize-task.sh --route project --target projects/<name> --class work --message "変更の一文"
+tools/finalize-task.sh --route project --target projects/<name> --class work --message "変更の一文" [--current-work]
 ```
 
 work/state専用の決定的終端。staged差分の確認、境界検査、profile準拠の検証（scoped=`--changed`、
@@ -105,6 +111,9 @@ Projectの固定検証に委ね（`project-owned`）、pushはPush Policyに従�
 合格は`FINALIZE_OK commit=<sha> validation=<profile> backup=<status>`、拒否は
 `FINALIZE_BLOCKED reason=<reason>`をstdoutへ1行で出し非0で終了する。backup失敗はcommit成功を
 取り消さない（`tools/BACKUP.md#backupが失敗したとき`）。
+`--current-work`は明示target必須で、現在の変更がすべてtarget内にあり、その全差分がstage済みであることを
+検査する。意味的なownership、secret、別Writer、Project固有検証はAgentが呼出前に判定し、Toolは
+それらを推測しない。
 
 ## run-evals.py
 
