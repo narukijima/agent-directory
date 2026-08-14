@@ -142,7 +142,7 @@ if [[ "$current_work" == true ]]; then
 
   current_change_count=0
   outside_change_count=0
-  while IFS= read -r current_path; do
+  while IFS= read -r -d '' current_path; do
     [[ -n "$current_path" ]] || continue
     current_change_count=$((current_change_count + 1))
     if [[ "$current_scope" != '.' && "$current_path" != "$current_scope" && \
@@ -150,11 +150,9 @@ if [[ "$current_work" == true ]]; then
       outside_change_count=$((outside_change_count + 1))
     fi
   done < <(
-    {
-      git -C "$git_root_abs" diff --name-only --
-      git -C "$git_root_abs" diff --cached --name-only --
-      git -C "$git_root_abs" ls-files --others --exclude-standard
-    } | LC_ALL=C sort -u
+    git -C "$git_root_abs" diff --name-only -z --
+    git -C "$git_root_abs" diff --cached --name-only -z --
+    git -C "$git_root_abs" ls-files -z --others --exclude-standard
   )
   (( current_change_count > 0 )) || blocked 'current-work-empty' 'the explicit target has no current work to preserve'
   (( outside_change_count == 0 )) || blocked 'unrelated-changes' \

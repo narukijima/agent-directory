@@ -3138,7 +3138,8 @@ fi
 rm -f "$task_fixture_dir/validator-called" "$task_fixture_dir/backup-called"
 
 printf 'next target work\n' >> "$task_fixture_dir/deliverables/result.txt"
-printf 'unrelated work\n' > "$task_fixture_dir/unrelated.txt"
+task_unrelated_path=$'unrelated\nwork.txt'
+printf 'unrelated work\n' > "$task_fixture_dir/$task_unrelated_path"
 env "${task_fixture_env[@]}" git -C "$task_fixture_dir" add -- deliverables/result.txt
 task_current_before="$(env "${task_fixture_env[@]}" git -C "$task_fixture_dir" rev-parse HEAD)"
 set +e
