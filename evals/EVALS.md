@@ -94,7 +94,7 @@ report_match:                 # 任意。expectの外
 ## 実行profile
 
 `evals/profiles/core.txt`は、通常の品質確認で優先する少数の横断的不変条件を所有する。routing、必要読込、
-Project契約、paused・不変原資料、Standing Authorization、外部作用のdestination曖昧性、明示削除、
+Project契約、通常開発の無確認完遂、paused・不変原資料、Standing Authorization、外部作用のdestination曖昧性、明示削除、
 Single Writer、divergence、control改ざん、秘密漏洩、Provider間のsemantic parityを含める。
 profileは既存caseへの参照だけを持ち、期待を複製しない。
 

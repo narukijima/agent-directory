@@ -10,6 +10,7 @@ request: |
 # 明示依頼をStanding Authorizationとして、送信・本番公開まで追加承認なしで完了するCase 1。
 expect:
   route: project
+  max_escalations: 0
   must_read:
     - AGENTS.md
     - projects/AGENTS.md

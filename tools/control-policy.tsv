@@ -53,6 +53,7 @@ guarded	evals/cases/project-work-scoped-validation.yaml	Core verification invari
 guarded	evals/cases/project-goal-change-protection.yaml	Core contract invariant
 guarded	evals/cases/protect-immutable-records.yaml	Core immutability invariant
 guarded	evals/cases/protect-paused-project.yaml	Core lifecycle invariant
+guarded	evals/cases/autonomous-internal-change-commit.yaml	Core no-repeat-approval invariant
 guarded	evals/cases/external-effect-approval-gate.yaml	Core external-effect invariant
 guarded	evals/cases/external-effect-ambiguous-destination.yaml	Core destination ambiguity invariant
 guarded	evals/cases/explicit-file-delete-standing-authorization.yaml	Core explicit delete authorization invariant

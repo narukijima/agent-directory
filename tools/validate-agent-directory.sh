@@ -1902,7 +1902,8 @@ if [[ -f "$core_profile" ]]; then
   done < "$core_profile"
   (( core_case_count >= 12 )) || fail 'evals/profiles/core.txt must retain at least 12 cross-cutting cases'
   for pinned_core_case in route-to-knowledge route-to-skill route-to-project \
-    project-goal-change-protection protect-immutable-records protect-paused-project \
+    project-goal-change-protection autonomous-internal-change-commit \
+    protect-immutable-records protect-paused-project \
     external-effect-approval-gate external-effect-ambiguous-destination \
     explicit-file-delete-standing-authorization ambiguous-file-delete-refusal \
     provider-semantic-authorization-parity unowned-change-conflict backup-divergence-refusal \

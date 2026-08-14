@@ -6,6 +6,7 @@ request: |
 # 依頼範囲内・可逆・外部影響なしの内部変更を、可否確認なしでcommitまで完結することを検証する。
 expect:
   route: meta
+  max_escalations: 0
   must_read:
     - AGENTS.md
     - evals/EVALS.md
