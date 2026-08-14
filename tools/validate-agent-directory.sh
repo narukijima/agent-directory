@@ -1287,7 +1287,7 @@ fi
 
 required_files=(
   'AGENTS.md' 'CLAUDE.md' 'projects/AGENTS.md' 'projects/CLAUDE.md'
-  '.agents-space/workspace.json' '.codex/environments/agent-directory.toml' '.claude/settings.json'
+  '.codex/environments/agent-directory.toml' '.claude/settings.json'
   'README.md' 'knowledge/KNOWLEDGE.md' "$knowledge_index_path" "$knowledge_log_path"
   'skills/SKILLS.md' 'skills/_template/SKILL.md' 'projects/PROJECTS.md' 'projects/LIFECYCLE.md' 'projects/RECOVERY.md'
   "$registry_path" "$ignore_path"
@@ -1305,45 +1305,6 @@ required_files=(
   "$knowledge_source_template_path" "$knowledge_topic_template_path"
 )
 for path in "${required_files[@]}"; do require_file "$repo_root/$path"; done
-
-# Agents Space manifest is a portable logical-Agent declaration only. It must never carry
-# machine-local paths, credentials, native session refs, or logs.
-workspace_manifest="$repo_root/.agents-space/workspace.json"
-if [[ -L "$workspace_manifest" ]]; then
-  fail '.agents-space/workspace.json must be a regular tracked file, not a symlink'
-elif [[ -f "$workspace_manifest" ]]; then
-  python3 - "$workspace_manifest" "$strict" <<'PY' || fail '.agents-space/workspace.json violates the portable workspace manifest contract'
-import json
-import re
-import sys
-
-path = sys.argv[1]
-strict = sys.argv[2] == "true"
-
-with open(path, encoding="utf-8") as handle:
-    manifest = json.load(handle)
-
-expected_keys = {"schemaVersion", "agentKey", "displayName", "description"}
-if not isinstance(manifest, dict) or set(manifest) != expected_keys:
-    raise SystemExit(1)
-if type(manifest["schemaVersion"]) is not int or manifest["schemaVersion"] != 1:
-    raise SystemExit(1)
-
-agent_key = manifest["agentKey"]
-display_name = manifest["displayName"]
-description = manifest["description"]
-if not isinstance(agent_key, str) or not 1 <= len(agent_key) <= 120:
-    raise SystemExit(1)
-if agent_key != "<agent-key>" and not re.fullmatch(r"[a-z0-9]+(?:[._-][a-z0-9]+)*", agent_key):
-    raise SystemExit(1)
-if not isinstance(display_name, str) or not 1 <= len(display_name) <= 120:
-    raise SystemExit(1)
-if not isinstance(description, str) or len(description) > 500:
-    raise SystemExit(1)
-if strict and any(value.startswith("<") and value.endswith(">") for value in (agent_key, display_name, description)):
-    raise SystemExit(1)
-PY
-fi
 
 # AIクライアント固有設定は共通Toolを呼ぶ薄いadapterに固定し、ロジックや秘密情報を複製しない。
 codex_environment="$repo_root/.codex/environments/agent-directory.toml"
@@ -2516,7 +2477,7 @@ if [[ -f "$repo_root/tools/control-policy.tsv" ]]; then
   fi
   # Pin the load-bearing rows so the policy is not silently weakened.
   for pinned_policy in 'forbidden:.env*' 'frozen:knowledge/raw/*' 'frozen:knowledge/wiki/logs/*' \
-    'guarded:AGENTS.md' 'guarded:.agents-space/workspace.json' 'guarded:.codex/*' 'guarded:.claude/*' \
+    'guarded:AGENTS.md' 'guarded:.codex/*' 'guarded:.claude/*' \
     'guarded:tools/SAFETY.md' 'guarded:tools/CONTROL.md' 'guarded:tools/control-policy.tsv' \
     'guarded:tools/check-boundary.sh' 'guarded:tools/install-git-hooks.sh' \
     'guarded:tools/validate-agent-directory.sh' 'guarded:tools/task.sh' \

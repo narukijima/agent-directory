@@ -20,7 +20,7 @@
 ## Runtime Permissionの責務境界
 
 Generic Runtime Permission（shell、filesystem、network、sandbox、各approval / permission mode）は
-Operator / Runtime / Agents Space側が所有する。agent-directoryはidentity、scope、契約、semantic safety、
+Operator / Runtime側が所有する。agent-directoryはidentity、scope、契約、semantic safety、
 integrity、lifecycle、secret、ambiguityだけを扱う。許可済み操作を再承認させず、
 Runtime Permissionのdatabase、matrix、sandbox、Provider別permission wrapperを追加しない。
 
