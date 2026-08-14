@@ -12,7 +12,7 @@ usage() {
 Usage:
   tools/task.sh context --route knowledge|skill|project|meta [--target <path>]
   tools/task.sh verify
-  tools/task.sh finish --route knowledge|skill|project|meta [--target <path>] --message <text>
+  tools/task.sh finish --route knowledge|skill|project|meta [--target <path>] --message <text> [--current-work]
   tools/task.sh status
 USAGE
 }
@@ -29,6 +29,7 @@ shift
 route=''
 target=''
 message=''
+current_work=false
 while (( $# > 0 )); do
   case "$1" in
     --route)
@@ -46,12 +47,17 @@ while (( $# > 0 )); do
       message="$2"
       shift 2
       ;;
+    --current-work)
+      current_work=true
+      shift
+      ;;
     *) usage; exit 2 ;;
   esac
 done
 
 case "$command_name" in
   context)
+    [[ "$current_work" == false ]] || { usage; exit 2; }
     case "$route" in knowledge|skill|project|meta) ;; *) usage; exit 2 ;; esac
     args=(--route "$route" --class work)
     [[ -z "$target" ]] || args+=(--target "$target")
@@ -65,7 +71,7 @@ case "$command_name" in
     '
     ;;
   verify)
-    [[ -z "$route$target$message" ]] || { usage; exit 2; }
+    [[ -z "$route$target$message" && "$current_work" == false ]] || { usage; exit 2; }
     if ! git -C "$repo_root" rev-parse --show-toplevel >/dev/null 2>&1; then
       blocked verify not-a-git-repository
     fi
@@ -89,6 +95,10 @@ case "$command_name" in
     [[ -n "$message" ]] || { usage; exit 2; }
     args=(--route "$route" --class work --message "$message")
     [[ -z "$target" ]] || args+=(--target "$target")
+    if [[ "$current_work" == true ]]; then
+      [[ -n "$target" ]] || { usage; exit 2; }
+      args+=(--current-work)
+    fi
     if output="$(bash "$tool_root/finalize-task.sh" "${args[@]}" 2>&1)"; then
       printf '%s\n' "$output" >&2
       printf 'TASK_OK action=finish\n'
@@ -107,7 +117,7 @@ case "$command_name" in
     fi
     ;;
   status)
-    [[ -z "$route$target$message" ]] || { usage; exit 2; }
+    [[ -z "$route$target$message" && "$current_work" == false ]] || { usage; exit 2; }
     git_root="$(git -C "$repo_root" rev-parse --show-toplevel 2>/dev/null)" || \
       blocked status not-a-git-repository
     changed_count="$({ git -C "$repo_root" status --porcelain --untracked-files=normal || true; } | wc -l | tr -d ' ')"

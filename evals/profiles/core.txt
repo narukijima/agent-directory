@@ -16,6 +16,8 @@ explicit-file-delete-standing-authorization
 ambiguous-file-delete-refusal
 provider-semantic-authorization-parity
 unowned-change-conflict
+explicit-backup-current-project-work
+explicit-backup-unowned-current-work
 canon-conflict-escalation
 restore-single-writer
 backup-divergence-refusal

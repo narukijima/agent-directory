@@ -1280,7 +1280,7 @@ required_files=(
   'tools/append-knowledge-log.sh' 'tools/backup-to-github.sh' 'tools/validate-agent-directory.sh'
   'tools/setup-local-environment.sh'
   'tools/materialize-project-repositories.sh' 'tools/finalize-task.sh' 'tools/run-evals.py'
-  'tools/lib/project-registry.sh' '.gitignore'
+  'tools/lib/project-registry.sh' 'tools/validator/check-claude-settings.py' '.gitignore'
   'tools/UPSTREAM.md' 'tools/report-upstream-issue.sh' 'tools/REFERENCE.md'
   'routines/ROUTINES.md' 'routines/maintenance/ROUTINE.md'
   'tools/run-routine.sh' 'tools/manage-routine-schedule.sh' 'tools/routine-reasoner.py'
@@ -1307,33 +1307,35 @@ if grep -Fq -- '--expected-login' "$codex_environment"; then
   fail 'Codex Local Environment must not pin a user-specific GitHub login'
 fi
 
-python3 - "$repo_root/.claude/settings.json" <<'PY' || fail 'Claude Code settings must be valid JSON with the pinned SessionStart setup hook'
-import json
-import sys
-
-with open(sys.argv[1], encoding="utf-8") as handle:
-    settings = json.load(handle)
-
-expected = {
-    "hooks": {
-        "SessionStart": [
-            {
-                "matcher": "startup",
-                "hooks": [
-                    {
-                        "type": "command",
-                        "command": 'bash "$CLAUDE_PROJECT_DIR/tools/setup-local-environment.sh"',
-                    }
-                ],
-            }
-        ]
-    }
+claude_settings_checker="$repo_root/tools/validator/check-claude-settings.py"
+validate_claude_settings_file() {
+  local settings_path="$1"
+  python3 "$claude_settings_checker" "$settings_path" || return 1
+  ! grep -Eq '\.env|GH_TOKEN|GITHUB_TOKEN|API_KEY' "$settings_path"
 }
-if settings != expected:
-    raise SystemExit(1)
-PY
 
-if grep -Eq '\.env|GH_TOKEN|GITHUB_TOKEN|API_KEY' "$codex_environment" "$repo_root/.claude/settings.json"; then
+validate_claude_settings_file "$repo_root/.claude/settings.json" || \
+  fail 'Claude Code settings must keep the exact pinned SessionStart setup hook without secret-bearing settings'
+
+claude_settings_fixture_dir="$repo_root/evals/fixtures/claude-settings"
+for accepted_settings in \
+  pass-permissions.json pass-permissions-allow.json pass-unrelated-top-level.json \
+  pass-other-hook-event.json; do
+  require_file "$claude_settings_fixture_dir/$accepted_settings"
+  validate_claude_settings_file "$claude_settings_fixture_dir/$accepted_settings" || \
+    fail "Claude settings fixture must accept Runtime-owned settings: $accepted_settings"
+done
+for rejected_settings in \
+  fail-missing-session-start.json fail-command-changed.json fail-matcher-changed.json \
+  fail-extra-session-hook.json fail-secret-setting.json \
+  fail-secret-setting-unicode-escaped.json; do
+  require_file "$claude_settings_fixture_dir/$rejected_settings"
+  if validate_claude_settings_file "$claude_settings_fixture_dir/$rejected_settings"; then
+    fail "Claude settings fixture must reject a changed pinned hook or secret setting: $rejected_settings"
+  fi
+done
+
+if grep -Eq '\.env|GH_TOKEN|GITHUB_TOKEN|API_KEY' "$codex_environment"; then
   fail 'local environment adapters must not copy or name secret-bearing files and variables'
 fi
 
@@ -1789,6 +1791,8 @@ required_cases=(
   knowledge-log-auto-rotation scale-sqlite-auto-enable
   backup-auto-after-verified-commit backup-divergence-refusal restore-single-writer
   backup-failure-local-success backup-workspace-repository-boundary independent-consolidation-audit
+  explicit-backup-current-project-work explicit-backup-unowned-current-work
+  explicit-backup-unsafe-current-work
   autonomous-internal-change-commit autonomous-validator-self-repair
   router-size-overflow-delegation independent-push-policy-gated
   external-effect-approval-gate external-effect-ambiguous-destination
@@ -1850,7 +1854,9 @@ if [[ -f "$core_profile" ]]; then
     protect-immutable-records protect-paused-project \
     external-effect-approval-gate external-effect-ambiguous-destination \
     explicit-file-delete-standing-authorization ambiguous-file-delete-refusal \
-    provider-semantic-authorization-parity unowned-change-conflict backup-divergence-refusal \
+    provider-semantic-authorization-parity unowned-change-conflict \
+    explicit-backup-current-project-work explicit-backup-unowned-current-work \
+    backup-divergence-refusal \
     control-policy-tamper github-auth-no-token-leak upstream-issue-privacy; do
     printf '%s\n' "$core_seen" | grep -Fqx -- "$pinned_core_case" || \
       fail "evals/profiles/core.txt lost a pinned invariant: $pinned_core_case"
@@ -3043,6 +3049,7 @@ cp "$repo_root/tools/lib/project-registry.sh" "$task_fixture_dir/tools/lib/"
 {
   printf '#!/bin/bash\n'
   printf 'touch "$AGENT_DIRECTORY_ROOT/backup-called"\n'
+  printf 'printf "ROOT_BACKUP_OK remote=backup branch=main sha=%%s scope=root-only\\n" "$(git -C "$AGENT_DIRECTORY_ROOT" rev-parse HEAD)"\n'
   printf 'exit 0\n'
 } > "$task_fixture_dir/tools/backup-to-github.sh"
 chmod 755 "$task_fixture_dir/tools/"*.sh
@@ -3109,6 +3116,46 @@ done
   fail 'task facade fixture: invalid input changed the worktree'
 [[ ! -e "$task_fixture_dir/validator-called" && ! -e "$task_fixture_dir/backup-called" ]] || \
   fail 'task facade fixture: invalid input reached validation or backup'
+
+# An explicit current-work finish must commit before it reaches backup, and it must reject
+# any changed path outside the explicit target before validation, commit, or backup.
+mkdir -p "$task_fixture_dir/deliverables"
+printf 'current work\n' > "$task_fixture_dir/deliverables/result.txt"
+env "${task_fixture_env[@]}" git -C "$task_fixture_dir" add -- deliverables/result.txt
+set +e
+task_current_output="$(env "${task_fixture_env[@]}" \
+  bash "$task_fixture_dir/tools/task.sh" finish --route meta --target deliverables \
+  --message 'fixture: preserve current work' --current-work 2>&1)"
+task_current_status=$?
+set -e
+task_current_head="$(env "${task_fixture_env[@]}" git -C "$task_fixture_dir" rev-parse HEAD)"
+if (( task_current_status != 0 )) || \
+  [[ "$task_current_head" == "$task_fixture_head" ]] || \
+  ! printf '%s\n' "$task_current_output" | grep -Fqx 'TASK_OK action=finish' || \
+  ! printf '%s\n' "$task_current_output" | grep -Fq \
+    "ROOT_BACKUP_OK remote=backup branch=main sha=$task_current_head scope=root-only"; then
+  fail "task facade fixture: explicit current work did not commit before backup: $task_current_output"
+fi
+rm -f "$task_fixture_dir/validator-called" "$task_fixture_dir/backup-called"
+
+printf 'next target work\n' >> "$task_fixture_dir/deliverables/result.txt"
+task_unrelated_path=$'unrelated\nwork.txt'
+printf 'unrelated work\n' > "$task_fixture_dir/$task_unrelated_path"
+env "${task_fixture_env[@]}" git -C "$task_fixture_dir" add -- deliverables/result.txt
+task_current_before="$(env "${task_fixture_env[@]}" git -C "$task_fixture_dir" rev-parse HEAD)"
+set +e
+task_current_output="$(env "${task_fixture_env[@]}" \
+  bash "$task_fixture_dir/tools/task.sh" finish --route meta --target deliverables \
+  --message 'fixture: reject unrelated work' --current-work 2>&1)"
+task_current_status=$?
+set -e
+if (( task_current_status == 0 )) || \
+  ! printf '%s\n' "$task_current_output" | grep -Fq 'FINALIZE_BLOCKED reason=unrelated-changes' || \
+  [[ "$(env "${task_fixture_env[@]}" git -C "$task_fixture_dir" rev-parse HEAD)" != \
+    "$task_current_before" ]] || \
+  [[ -e "$task_fixture_dir/validator-called" || -e "$task_fixture_dir/backup-called" ]]; then
+  fail "task facade fixture: explicit current work did not fail closed on unrelated changes: $task_current_output"
+fi
 
 # report-upstream-issue.sh anonymization derives block terms from the identity line of
 # AGENTS.md#自己定義 (any heading depth) and is fail-closed on the number of checks that

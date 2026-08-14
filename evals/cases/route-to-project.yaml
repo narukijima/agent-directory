@@ -4,6 +4,7 @@ fixture: active-project
 
 request: |
   projects/market-scan/ で、inputs/quarter.csv から四半期レポートを作成して保存して。
+  Private backup remoteは未設定。
 
 # 通常のProject実行の基準ケース。層状の読込順と読込予算に加え、
 # 通常時に常に成立する共通の負条件をこの1ケースへまとめる。
@@ -30,11 +31,16 @@ expect:
     - projects/market-scan/STATE.md
   must_run:
     - bash projects/market-scan/scripts/verify-report.sh
-  must_not_run:                           # 通常のProject作業はバックアップもGitHub往復も伴わない
+    - git add -- projects/market-scan
+    - tools/task.sh finish --route project --target projects/market-scan --message
+  must_not_run:
     - git fetch
     - git pull
     - git push
-    - bash tools/backup-to-github.sh
+    - bash tools/backup-to-github.sh       # raw Toolは通常入口ではない
+  must_report:
+    - local-task-and-commit-complete
+    - backup-not-configured
   must_set:
     - projects/market-scan/STATE.md#現在の目標=2026年第3四半期レポートを作成する
   may_write:
