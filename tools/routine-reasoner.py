@@ -285,12 +285,16 @@ def run_request(argv) -> int:
     data = json.dumps(body).encode("utf-8")
     payload = None
     attempts = 0
+    if "://127.0.0.1" in url or "://localhost" in url:
+        opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+    else:
+        opener = urllib.request.build_opener()
     while attempts < max_calls:
         attempts += 1
         request = urllib.request.Request(url, data=data, headers=headers,
                                          method="POST")
         try:
-            with urllib.request.urlopen(request, timeout=timeout) as response:
+            with opener.open(request, timeout=timeout) as response:
                 body_bytes = response.read(MAX_RESPONSE_BYTES + 1)
                 if len(body_bytes) > MAX_RESPONSE_BYTES:
                     fail("response-too-large")

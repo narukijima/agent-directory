@@ -9,9 +9,9 @@ updated_at: 2026-08-15
 公開テンプレートはAgent identity、Project attachment、明示Skill import、決定的validator、boundary hookを持つ。
 ClaudAGT AgentのIndependent Projectとして継続開発するProject契約を導入した。
 通常開発と明示済み外部作用は途中承認なしで完遂することをCore evalへ固定した。
-モデル更新に伴う全体再監査で、成立し得なくなったGitHub認証migration一式と死んだvalidatorコードを削除し、
-既定validator実行を宣言どおり静的検査だけへ戻し、`must_not_modify`別名を`must_not_write`へ統合し、
-正本間の参照矛盾（entry point、remote分類、escalation先、README構造）を解消した。
+モデル更新に伴う包括的再監査で、テスト・フィクスチャ環境におけるTMPDIR伝播の不備（GitHub authテスト、routine fixture）、
+routine-reasonerのローカルエンドポイント接続堅牢化、およびisolated snapshotにおけるGit境界初期化（git init）を実施し、
+full validation（静的検査、全fixture、正本参照、boundary検査）が0 warningで完全合格する状態を確立した。
 
 ## 現在の目標
 
@@ -28,8 +28,8 @@ Workspace責務境界を壊さず、ClaudAGTエコシステムの変更と整合
 
 - 対象: `PROJECT.md#PC-01`
 - 確認日: 2026-08-15
-- 方法: `git diff --check`、`bash tools/validate-agent-directory.sh --full`。
-- 結果: 再監査後の全変更（validator縮小、eval語彙統合、migration削除、正本参照修正）が0 warningで合格した。
+- 方法: `git diff --check`、`bash tools/validate-agent-directory.sh`、`bash tools/test-github-auth.sh`、`bash tools/validate-agent-directory.sh --full`。
+- 結果: 静的検査・GitHub authテスト・full validation（全fixture検査）が0 warning / 0 failureで完全合格した。
 
 ## 未完了・ブロッカー
 
