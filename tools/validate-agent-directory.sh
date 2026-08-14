@@ -5458,6 +5458,26 @@ if [[ "$full" == true && -z "${AGENT_VALIDATOR_NESTED_FIXTURE:-}" ]]; then
   fi
   env "${control_env[@]}" git -C "$control_work" reset -q --hard "$control_service_base" >/dev/null
 
+  # Credential-free scp-style GitHub SSH URLs contain a fixed `git` username that
+  # looks like a direct email to the shared metadata/content scanner. Accept exactly
+  # that transport identity while the direct-email fixture above keeps arbitrary
+  # github.com addresses blocked.
+  control_ssh_base="$(git -C "$control_work" rev-parse HEAD)"
+  printf '%s\n' 'ssh_url=git''@''github.com:owner/repository.git' >> "$control_work/README.md"
+  env "${control_env[@]}" git -C "$control_work" add README.md
+  control_commit 'fixture: GitHub SSH transport identity'
+  (( control_status == 0 )) || \
+    fail "control fixture: GitHub SSH transport identity was refused: $control_output"
+  set +e
+  control_output="$(cd "$control_work" && env "${control_env[@]}" \
+    /bin/bash tools/check-boundary.sh --range "$control_ssh_base" HEAD 2>&1)"
+  control_status=$?
+  set -e
+  if (( control_status != 0 )); then
+    fail "control fixture: GitHub SSH transport identity range was refused: $control_output"
+  fi
+  env "${control_env[@]}" git -C "$control_work" reset -q --hard "$control_ssh_base" >/dev/null
+
   # Rewritten history is refused as non-fast-forward, and remote ref deletion is refused.
   env "${control_env[@]}" git -C "$control_work" reset -q --hard HEAD~1 >/dev/null
   printf 'diverged\n' >> "$control_work/projects/demo/note.md"

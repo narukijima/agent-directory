@@ -201,15 +201,18 @@ record_violation() {
 
 # Public Git identity and tracked-content privacy checks share one local allowlist.
 # Values are compared but never printed. GitHub user noreply addresses, GitHub's
-# fixed service noreply committer for server-generated merge commits, and reserved
-# example.invalid fixtures are safe by construction; an intentionally public direct
-# address must be explicitly approved in repository-local Git config:
+# fixed service noreply committer for server-generated merge commits, Git's fixed
+# SSH username at github.com, and reserved example.invalid fixtures are safe by
+# construction; an intentionally public direct address must be explicitly approved
+# in repository-local Git config:
 #   git config --local --add agent-directory.allowed-public-email <address>
 email_is_public_safe() {
-  local candidate="$1" allowed github_service_noreply
+  local candidate="$1" allowed github_service_noreply github_git_ssh_user
   [[ -n "$candidate" ]] || return 1
   github_service_noreply='noreply''@''github.com'
+  github_git_ssh_user='git''@''github.com'
   [[ "$candidate" != "$github_service_noreply" ]] || return 0
+  [[ "$candidate" != "$github_git_ssh_user" ]] || return 0
   case "$candidate" in
     *@users.noreply.github.com|*@example.invalid) return 0 ;;
   esac
