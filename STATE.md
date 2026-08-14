@@ -1,5 +1,5 @@
 ---
-updated_at: 2026-08-14
+updated_at: 2026-08-15
 ---
 
 # Current State
@@ -8,6 +8,7 @@ updated_at: 2026-08-14
 
 公開テンプレートはAgent identity、Project attachment、明示Skill import、決定的validator、boundary hookを持つ。
 ClaudAGT AgentのIndependent Projectとして継続開発するProject契約を導入した。
+通常開発と明示済み外部作用は途中承認なしで完遂することをCore evalへ固定した。
 
 ## 現在の目標
 
@@ -23,9 +24,9 @@ Workspace責務境界を壊さず、ClaudAGTエコシステムの変更と整合
 ## 検証結果
 
 - 対象: `PROJECT.md#PC-01`
-- 確認日: 2026-08-14
+- 確認日: 2026-08-15
 - 方法: `git diff --check`、`bash tools/validate-agent-directory.sh --full`。
-- 結果: Project契約とself-hosting fixture修正を含む変更が0 warningで合格した。
+- 結果: 無確認完遂evalのCore昇格と`max_escalations: 0`を含む変更が0 warningで合格した。
 
 ## 未完了・ブロッカー
 
@@ -35,6 +36,7 @@ Workspace責務境界を壊さず、ClaudAGTエコシステムの変更と整合
 
 - `agent-directory`はClaudAGT rootではなく、その配下のIndependent Projectである。
 - 現在判断ではactiveなKnowledgeとSkillを優先し、非activeな参照は履歴確認時だけ使う。
+- 明示依頼は通常完了経路全体のStanding Authorizationであり、工程ごとの再承認を要求しない。
 
 ## 失敗・却下済み
 
