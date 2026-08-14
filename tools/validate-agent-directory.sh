@@ -1280,7 +1280,7 @@ required_files=(
   'tools/append-knowledge-log.sh' 'tools/backup-to-github.sh' 'tools/validate-agent-directory.sh'
   'tools/setup-local-environment.sh'
   'tools/materialize-project-repositories.sh' 'tools/finalize-task.sh' 'tools/run-evals.py'
-  'tools/lib/project-registry.sh' '.gitignore'
+  'tools/lib/project-registry.sh' 'tools/validator/check-claude-settings.py' '.gitignore'
   'tools/UPSTREAM.md' 'tools/report-upstream-issue.sh' 'tools/REFERENCE.md'
   'routines/ROUTINES.md' 'routines/maintenance/ROUTINE.md'
   'tools/run-routine.sh' 'tools/manage-routine-schedule.sh' 'tools/routine-reasoner.py'
@@ -1307,33 +1307,34 @@ if grep -Fq -- '--expected-login' "$codex_environment"; then
   fail 'Codex Local Environment must not pin a user-specific GitHub login'
 fi
 
-python3 - "$repo_root/.claude/settings.json" <<'PY' || fail 'Claude Code settings must be valid JSON with the pinned SessionStart setup hook'
-import json
-import sys
-
-with open(sys.argv[1], encoding="utf-8") as handle:
-    settings = json.load(handle)
-
-expected = {
-    "hooks": {
-        "SessionStart": [
-            {
-                "matcher": "startup",
-                "hooks": [
-                    {
-                        "type": "command",
-                        "command": 'bash "$CLAUDE_PROJECT_DIR/tools/setup-local-environment.sh"',
-                    }
-                ],
-            }
-        ]
-    }
+claude_settings_checker="$repo_root/tools/validator/check-claude-settings.py"
+validate_claude_settings_file() {
+  local settings_path="$1"
+  python3 "$claude_settings_checker" "$settings_path" || return 1
+  ! grep -Eq '\.env|GH_TOKEN|GITHUB_TOKEN|API_KEY' "$settings_path"
 }
-if settings != expected:
-    raise SystemExit(1)
-PY
 
-if grep -Eq '\.env|GH_TOKEN|GITHUB_TOKEN|API_KEY' "$codex_environment" "$repo_root/.claude/settings.json"; then
+validate_claude_settings_file "$repo_root/.claude/settings.json" || \
+  fail 'Claude Code settings must keep the exact pinned SessionStart setup hook without secret-bearing settings'
+
+claude_settings_fixture_dir="$repo_root/evals/fixtures/claude-settings"
+for accepted_settings in \
+  pass-permissions.json pass-permissions-allow.json pass-unrelated-top-level.json \
+  pass-other-hook-event.json; do
+  require_file "$claude_settings_fixture_dir/$accepted_settings"
+  validate_claude_settings_file "$claude_settings_fixture_dir/$accepted_settings" || \
+    fail "Claude settings fixture must accept Runtime-owned settings: $accepted_settings"
+done
+for rejected_settings in \
+  fail-missing-session-start.json fail-command-changed.json fail-matcher-changed.json \
+  fail-extra-session-hook.json fail-secret-setting.json; do
+  require_file "$claude_settings_fixture_dir/$rejected_settings"
+  if validate_claude_settings_file "$claude_settings_fixture_dir/$rejected_settings"; then
+    fail "Claude settings fixture must reject a changed pinned hook or secret setting: $rejected_settings"
+  fi
+done
+
+if grep -Eq '\.env|GH_TOKEN|GITHUB_TOKEN|API_KEY' "$codex_environment"; then
   fail 'local environment adapters must not copy or name secret-bearing files and variables'
 fi
 
