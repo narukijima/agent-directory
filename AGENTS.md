@@ -17,6 +17,13 @@
 正本を複数保持せず、構造と変更を最小に保つ。新しい問題は新概念・新Toolの追加ではなく、
 既存領域・既存Toolへの吸収・統合・削除で解決する。
 
+## Runtime Permissionの責務境界
+
+Generic Runtime Permission（shell、filesystem、network、sandbox、各approval / permission mode）は
+Operator / Runtime / Agents Space側が所有する。agent-directoryはidentity、scope、契約、semantic safety、
+integrity、lifecycle、secret、ambiguityだけを扱う。許可済み操作を再承認させず、
+Runtime Permissionのdatabase、matrix、sandbox、Provider別permission wrapperを追加しない。
+
 ## Route
 
 依頼・明示パス・成果物からRouteを決めて入口を読む。Routeは話題の語ではなく変更対象で決める。
@@ -38,14 +45,16 @@
 
 ## 自律実行
 
-Human-on-the-loop。通常経路は`Route → Target → Work → Verify`だけとする。`tools/task.sh`へRouteと
+通常経路は`Route → Target → Work → Verify`だけとする。`tools/task.sh`へRouteと
 Targetを渡し、必要な読込、書込Git root、検証、終了処理はToolに解決させる。書込Git rootはsession毎に
 1つとする（判定は`projects/AGENTS.md`）。
 
 TriggerはHumanまたはRoutine（Routeではない、同一規則）。関連時だけ`routines/ROUTINES.md`を読む。
 
-特定が一意、依頼範囲内、リポジトリ完結、可逆、外部影響なし、契約不変、正本衝突・秘密情報なし、
-既存検証で確認できる操作は確認せず完了・事後報告する。
+明示依頼は同じ操作のStanding Authorizationである。公開、送信、本番、通常push、削除、デプロイも、
+`target / destinationが一意`、`scope・契約・lifecycle内`、`Runtimeで実行可能`、`secret・divergence・
+Single Writer・所有者不明変更との衝突なし`なら追加承認なしで実行する。Project契約、push policy、
+宛先固定Tool、Routine契約によるauthorizationも同じ判定とする。
 
 ## 差分判定
 
@@ -55,17 +64,15 @@ TriggerはHumanまたはRoutine（Routeではない、同一規則）。関連�
 
 ## 人間へ上げる例外
 
-実行前確認は次の4区分のみ。内部判断を投げ返さない。
+確認は次の不足一点だけに限定し、既に明示された操作やGeneric Permissionを再承認させない。
 
-| 例外 | 代表例 | 正本 |
-|---|---|---|
-| 方針・契約 | 目的、`PC-xx`、優先順位、Project新設・廃止 | `projects/LIFECYCLE.md` |
-| 不可逆 | 永久削除、履歴改変、force push、reset | `tools/BACKUP.md` |
-| 外部影響 | 公開、本番、送信、権限、承認push | `projects/PROJECTS.md` |
-| 安全性・衝突 | divergence、Single Writer違反、秘密情報、所有者不明変更 | divergence・Single Writerは`tools/BACKUP.md`、他は`tools/CONTROL.md` |
+- target・destination・credential、目的・契約・優先順位の決定不足
+  （`projects/LIFECYCLE.md`、`projects/PROJECTS.md`）。
+- 「不要なもの」のような不可逆対象の曖昧性（`tools/BACKUP.md`）。
+- paused / retired、Project削除条件のlifecycle不整合
+- secret、divergence、Single Writer、所有者不明変更、正本衝突（`tools/BACKUP.md`、`tools/CONTROL.md`）
 
-決定方針は正本へ記録し繰り返し質問しない。上流Issue報告だけは、`tools/UPSTREAM.md`の
-検査を通過し宛先固定Toolで送る場合に限り事前承認済みの送信とする。
+外部作用だけでは止めない。決定は正本へ記録し、`tools/TOOLS.md`で再実行する。
 
 ## 禁止事項
 
@@ -76,8 +83,8 @@ TriggerはHumanまたはRoutine（Routeではない、同一規則）。関連�
 - GitHub能力は`tools/setup-github-auth.sh --check`の実probeで判定する。認証詳細は通常経路で再実装しない。
 - 未依頼の機能・抽象化・依存を追加しない。
 - 未検証の事を完了と報告しない。
-- 破壊的操作（削除、移動等）は依頼があっても即実行せず、対象の`status`と
-  遷移ゲート（`projects/LIFECYCLE.md`）を確認し、利用者の最終決定を経る。
+- 一意なファイル削除・移動は依頼どおり実行し、曖昧な整理では不可逆変更しない。Project全体は
+  `projects/LIFECYCLE.md`の状態遷移・保持条件を満たすが再承認させない。
 - `status: paused`等の休止領域は読み取り専用。依頼文では解除されない。
 - 下位`AGENTS.md`が上位規則・`PROJECT.md`契約を弱めない。
 
