@@ -24,9 +24,10 @@ route=''
 target=''
 task_class=''
 message=''
+current_work=false
 
 usage() {
-  printf 'Usage: %s --route knowledge|skill|project|meta --class work|state [--target <repo-relative-path>] --message <commit message>\n' \
+  printf 'Usage: %s --route knowledge|skill|project|meta --class work|state [--target <repo-relative-path>] --message <commit message> [--current-work]\n' \
     "${0##*/}" >&2
 }
 
@@ -63,6 +64,10 @@ while (( $# > 0 )); do
       [[ $# -ge 2 ]] || { usage; exit 2; }
       message="$2"
       shift 2
+      ;;
+    --current-work)
+      current_work=true
+      shift
       ;;
     *) usage; exit 2 ;;
   esac
@@ -124,6 +129,43 @@ if [[ "$repository_owner" == 'independent' ]]; then
   backup_profile='push-policy'
 fi
 git_root_abs="$(cd "$repo_root/$git_root_rel" && pwd -P)"
+
+# An explicit request to preserve current work uses the same finish path as ordinary
+# work, but adds a fail-closed scope check before validation or commit. The agent still
+# owns the semantic checks (Project contract, writer/ownership, required verification,
+# and secret review) and stages only the approved target. This mechanical guard proves
+# that no unstaged or unrelated work can be hidden behind the explicit request.
+if [[ "$current_work" == true ]]; then
+  [[ -n "$target" ]] || blocked 'usage' '--current-work requires an explicit target'
+  current_scope="$target"
+  [[ "$repository_owner" != 'independent' ]] || current_scope='.'
+
+  current_change_count=0
+  outside_change_count=0
+  while IFS= read -r current_path; do
+    [[ -n "$current_path" ]] || continue
+    current_change_count=$((current_change_count + 1))
+    if [[ "$current_scope" != '.' && "$current_path" != "$current_scope" && \
+      "$current_path" != "$current_scope/"* ]]; then
+      outside_change_count=$((outside_change_count + 1))
+    fi
+  done < <(
+    {
+      git -C "$git_root_abs" diff --name-only --
+      git -C "$git_root_abs" diff --cached --name-only --
+      git -C "$git_root_abs" ls-files --others --exclude-standard
+    } | LC_ALL=C sort -u
+  )
+  (( current_change_count > 0 )) || blocked 'current-work-empty' 'the explicit target has no current work to preserve'
+  (( outside_change_count == 0 )) || blocked 'unrelated-changes' \
+    "found $outside_change_count changed path(s) outside the explicit target"
+
+  if ! git -C "$git_root_abs" diff --quiet -- "$current_scope" || \
+    [[ -n "$(git -C "$git_root_abs" ls-files --others --exclude-standard -- "$current_scope")" ]]; then
+    blocked 'current-work-unstaged' \
+      'verify ownership and secrets, then stage only the explicit target before finish'
+  fi
+fi
 
 # 1. Staged diff must exist: the agent stages exactly this task's changes first.
 if git -C "$git_root_abs" diff --cached --quiet 2>/dev/null; then

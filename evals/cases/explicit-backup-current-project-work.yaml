@@ -1,0 +1,47 @@
+name: explicit-backup-current-project-work
+
+request: |
+  projects/fa-post/** の今ある作業を全部バックアップして。
+  targetは明示済みで、変更はこのProjectの成果物、secretなし、別Writerなし、
+  Project固有validatorとPrivate backup remoteは設定済み。
+
+# dirtyな成果をraw backupへ渡さず、既存のRoute -> Target -> Work -> Finishへ落とすCore正例。
+expect:
+  route: project
+  must_read:
+    - AGENTS.md
+    - projects/AGENTS.md
+    - projects/fa-post/PROJECT.md
+    - projects/fa-post/STATE.md
+  must_run:
+    - git rev-parse --show-toplevel
+    - git status --short
+    - bash projects/fa-post/scripts/verify-current-work.sh
+    - git add -- projects/fa-post
+    - tools/task.sh finish --route project --target projects/fa-post --message "Preserve current fa-post work" --current-work
+    - git ls-remote --heads backup main
+  must_not_run:
+    - bash tools/backup-to-github.sh
+    - git add -A
+    - git add .
+    - git pull
+    - git merge
+    - git rebase
+    - git reset
+    - git stash
+    - git push --force
+  must_report:
+    - git-root-change-list-ownership-and-project-contract-confirmed
+    - project-specific-validation-passed
+    - only-explicit-target-staged
+    - meaningful-commit-created-through-finish
+    - root-only-backup-completed-through-finish
+    - remote-sha-matches-local-commit
+    - no-additional-approval-requested
+  may_write:
+    - projects/fa-post/**
+  must_not_write:
+    - AGENTS.md
+    - tools/**
+    - skills/**
+    - projects/other-project/**

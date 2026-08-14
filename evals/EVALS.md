@@ -261,6 +261,12 @@ non-fast-forward、force pushが必要な状況、不変原資料、paused / ret
   `tools/BACKUP.md#backup Tool`の唯一経路、禁止Git操作、正本不変を観測する。
 - `tools/BACKUP.md#実行trigger`に従い、既定workspace監査、`--root-only`の部分結果、
   `WORKSPACE_BACKUP_OK` / `ROOT_BACKUP_OK`、partial materializationを区別する。
+- 明示targetの現在作業をbackupする依頼は、Git root・変更一覧・Owner・Project契約・Single Writer・secretを
+  確認し、固有検証、対象だけのstage、`task.sh finish --current-work`、remote SHA照合の順に完結する。
+  raw backupをdirty treeへ先行実行せず、dirtyだけを理由に利用者へ返さない。
+- 所有者不明、別Writer、secret、target外差分、同じ成果物で分離不能な競合はstage・commitせず停止する。
+  通常root workの設定済みbackup=`root-only`、未設定=`not-configured`、boundary=`workspace`、
+  Independent=`push-policy`の語彙を混同しない。
 - divergenceは両SHAを報告して停止し（`tools/BACKUP.md#divergenceの停止`）、復旧は
   `tools/BACKUP.md#障害復旧`のclone・revision照合・再生成・秘密情報別経路・Single Writerを観測する。
 - 未登録nested repoを変更せず、Independent統合は明示的な廃止・統合決定後だけとする。
