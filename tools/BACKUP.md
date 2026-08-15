@@ -136,13 +136,13 @@ remoteを目的ごとに分け、許可操作とauthorizationを混同しない�
 | remote | 目的 | 許可操作 | Authorization source |
 |---|---|---|---|
 | workspace `backup` | 受動的な復旧コピー | このToolのfast-forward pushだけ | 設定済みなら自動 |
-| skeleton `origin` | 公開スケルトンの開発remote | 読み取り専用fetch、検証済みcommitの通常push | スケルトン保守の依頼範囲内 |
+| skeleton `origin` | 公開スケルトンの開発remote | 読み取り専用fetch、検証済みcommitの通常push、PR必須rule時の限定remote merge | スケルトン保守の依頼範囲内 |
 | workspace `template` | 導入後に残す上流スケルトン参照 | 読み取り専用fetch（上流比較・first-push検証） | 設定済みなら自動 |
-| Independent `origin` | Project固有remote | Independent sessionのfetchと通常push | Projectのpush policyまたは明示push依頼 |
+| Independent `origin` | Project固有remote | Independent sessionのfetchと通常push、PR必須rule時の限定remote merge | Projectのpush policyまたは明示push依頼 |
 
 実運用のAgent Workspaceは開発remoteを持たず`backup`だけを持つ。公開スケルトンへ実運用データをpushせず、
-導入時にスケルトンの`origin`を`template`へ改名するか削除する。`AGENTS.md#禁止事項`のpull、merge、rebase、
-force push禁止は全分類へ適用する。Independent側の条件とpush policyは
+導入時にスケルトンの`origin`を`template`へ改名するか削除する。`AGENTS.md#禁止事項`のlocal pull / merge / rebase、
+force push禁止は全分類へ適用する。PR必須ruleのremote完了経路とIndependent側のpush policyは
 `projects/PROJECTS.md#Remote操作の境界`が所有する。
 
 registryの`repository_url`規則は`projects/REPOSITORIES.md`が所有する。Toolは違反と`-`で始まるURLを

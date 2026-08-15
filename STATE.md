@@ -19,6 +19,9 @@ capability-firstのRecommended Multi-AI Operating Profileを独立正本とし�
 optional ChatGPT、決定的Toolの推奨分担、単一runtime fallback、Single Owner、repository state、
 business-level orchestrationとMaintenance Routineの境界、交換可能な現行モデル推奨をCore compatibilityと
 分離した。README入口、委譲境界、Routine参照、validator、Core evalを同じ責任モデルへ追従させた。
+公開remoteがPR必須ruleを持つ場合に通常push拒否で停止する運用欠陥を修正し、head branch、PR、expected head、
+remote merge、default branch確認を一つの完了経路にした。local merge禁止とremote rule準拠を分離し、
+同じ失敗をCore evalとvalidatorで再発防止した。
 
 ## 現在の目標
 
@@ -37,8 +40,8 @@ Workspace責務境界を壊さず、ClaudAGTエコシステムの変更と整合
 - 確認日: 2026-08-16
 - 方法: `git diff --check`、`bash -n tools/check-boundary.sh tools/validate-agent-directory.sh`、
   `bash tools/validate-agent-directory.sh --changed`、`bash tools/validate-agent-directory.sh --full`。
-- 結果: Recommended Profileの正本構造、参照、provider-neutral fallback、Routine境界、Core eval schemaを含む
-  full validationが0 warning / 0 failureで完全合格した。
+- 結果: Recommended Profileの正本構造、provider-neutral fallback、Routine境界、PR必須remote完了経路、
+  Core eval schemaを含むfull validationが0 warning / 0 failureで完全合格した。
 
 ## 未完了・ブロッカー
 

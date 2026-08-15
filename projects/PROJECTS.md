@@ -216,17 +216,23 @@ Projectごとに一度決め、以後push可否を質問しない。値は`auto`
   それで充足し、追加承認なしで通常pushとremote SHA確認まで行う。authorizationがなければpushだけを止め、
   検証済みローカルcommitを取り消さない。
 
+通常pushがrepository ruleによって「Pull Request必須」という理由だけで拒否された場合は失敗終端にしない。
+検証済みcommitをhead branchへ通常pushし、同じauthorizationの範囲でPR作成、expected head SHA確認、
+remote platform上のmerge、default branchがそのSHAを含むことの確認まで完了する。PR作成だけをmerge完了として
+報告せず、別理由の拒否、check失敗、head移動、divergenceは既存の停止条件として扱う。local checkoutへ
+pull / merge / rebaseせず、remote ruleを迂回しない。
+
 三段で一意にならない場合だけ一度確認し、決まった値を`## Push Policy`へ記録する。判定のための
 新しいregistry fieldやfrontmatterを追加しない。
 
-policyによらず、force push、force-with-lease、mirror push、pull・merge・rebaseによる自動統合、検証前の
+policyによらず、force push、force-with-lease、mirror push、local pull・merge・rebaseによる自動統合、検証前の
 push、root sessionからのIndependent remote操作、remote divergenceの自動解消を行わない。
 
 通常のIndependent更新は次の順で進み、安全条件を満たす限り確認を挟まない。
 
 1. `projects/<name>/`のsessionで`projects/AGENTS.md`の手順どおり読込、変更、検証、commitする。
-2. push policyに従って`origin`へpushする。
-3. SHA、検証結果、未完了をhandoffする。
+2. push policyに従って`origin`へpushする。PR必須ruleなら上記限定経路でdefault branchまで反映する。
+3. branch SHA、default branch反映、検証結果、未完了をhandoffする。
 4. 別のroot sessionが`projects/REPOSITORIES.md`の`revision`だけを更新する。
 5. root validatorとcacheを実行してroot Gitへcommitし、設定済みならworkspace backupを実行する。
 
