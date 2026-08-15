@@ -80,7 +80,8 @@ Single Writer・所有者不明変更との衝突なし`なら追加承認なし
 - APIキー・パスワード等を保存・コミットしない（実値は`.env*`のみ）。
 - GitHubを正本・実行基盤にしない。GitHubへの書込はbackup Tool（backup remote）、上流報告Tool、
   および`tools/BACKUP.md`のremote分類が認める`origin`への通常push（`projects/PROJECTS.md`のpush policy準拠）
-  のみとし、pull/merge/rebase/force push不可。
+  のみとし、pull/merge/force push不可。rebaseを含む履歴書換えも原則不可だが、privacy検査が未公開履歴だけを
+  拒否した場合は`tools/BACKUP.md#未公開履歴のprivacy訂正`の限定復旧だけを例外とする。
 - GitHub能力は`tools/setup-github-auth.sh --check`の実probeで判定する。認証詳細は通常経路で再実装しない。
 - 未依頼の機能・抽象化・依存を追加しない。
 - 未検証の事を完了と報告しない。

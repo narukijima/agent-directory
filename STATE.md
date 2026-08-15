@@ -12,6 +12,9 @@ ClaudAGT AgentのIndependent Projectとして継続開発するProject契約を�
 モデル更新に伴う包括的再監査で、テスト・フィクスチャ環境におけるTMPDIR伝播の不備（GitHub authテスト、routine fixture）、
 routine-reasonerのローカルエンドポイント接続堅牢化、およびisolated snapshotにおけるGit境界初期化（git init）を実施し、
 full validation（静的検査、全fixture、正本参照、boundary検査）が0 warningで完全合格する状態を確立した。
+公開Issue #87〜#90に対し、未公開privacy履歴の限定訂正契約、説明文付きSTATE契約anchorの抽出、raw CRを持たない
+router判定、blob一回読込による決定的なrange privacy検査と回帰fixtureを導入し、通常・full validationを
+0 warningで合格させた。
 
 ## 現在の目標
 
@@ -28,8 +31,9 @@ Workspace責務境界を壊さず、ClaudAGTエコシステムの変更と整合
 
 - 対象: `PROJECT.md#PC-01`
 - 確認日: 2026-08-15
-- 方法: `git diff --check`、`bash tools/validate-agent-directory.sh`、`bash tools/test-github-auth.sh`、`bash tools/validate-agent-directory.sh --full`。
-- 結果: 静的検査・GitHub authテスト・full validation（全fixture検査）が0 warning / 0 failureで完全合格した。
+- 方法: `git diff --check`、`bash -n tools/check-boundary.sh tools/validate-agent-directory.sh`、
+  `bash tools/validate-agent-directory.sh`、`bash tools/validate-agent-directory.sh --full`。
+- 結果: 静的検査、構文検査、privacy range反復検査を含むfull validationが0 warning / 0 failureで完全合格した。
 
 ## 未完了・ブロッカー
 

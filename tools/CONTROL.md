@@ -40,6 +40,10 @@ stage済み・送信予定の不変Git blobに含まれる実メール、個人h
 authorization・cookie・secret代入と、commitのauthor / committerメールを検査する。実値は出力しない。
 GitHub noreplyと`example.invalid`は安全な既定とし、意図的に公開する直接メールだけは
 repository-localな`agent-directory.allowed-public-email`へ明示登録する。
+hostname由来メールや個人home pathを偶発的に含めた履歴へallowlistを使ってはならない。検査導入前の
+未公開commitが原因でrange検査を前進commitでは解除できない場合も、verifierは過去blobを省略せず、
+履歴を自動変更しない。復旧は`tools/BACKUP.md#未公開履歴のprivacy訂正`だけが所有し、訂正後の履歴を
+同じrange検査へ再投入する。
 合格は`BOUNDARY_OK checked=<n> guarded=<n> contract=<n>`、拒否は`BOUNDARY_BLOCKED reason=<reason>`を
 stdoutへ1行で出して非0で終了する（詳細はstderrの`DETAIL:`）。renameは旧pathの削除と新pathの追加へ
 分解し、`--range`（push再検査）はforbidden / frozenだけを執行する。環境変数rootと実Git rootの
