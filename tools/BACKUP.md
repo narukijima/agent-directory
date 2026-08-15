@@ -185,9 +185,8 @@ migrationの実行中は対象repositoryのWriterを停止する。
 ファイル1件ごとにpushせず、意味のあるcommit境界で実行する。フルvalidatorの合否はbackupの
 必須条件ではない。壊れた状態の保全にもbackupを使う。
 
-cron/launchdのScheduled Maintenance Routine（`routines/ROUTINES.md`）でも、schedule到達自体は
-backup triggerではない。Routineが検証済みcommitを作った場合だけ上記triggerが成立する。
-backup-only Routineは作らない。
+外部scheduled triggerの到達自体はbackup triggerではない。通常taskが検証済みcommitを作った場合だけ
+上記triggerが成立し、定期実行専用のbackup経路は作らない。
 
 「今ある作業をバックアップして」はdirty treeへ本Toolを直接実行するtriggerではない。明示targetの
 現在作業は`tools/TOOLS.md#自律実行の標準完了`に従い、対象だけを検証・stage・commitしてから

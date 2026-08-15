@@ -9,16 +9,17 @@ updated_at: 2026-08-16
 公開テンプレートはAgent identity、Project attachment、明示Skill import、決定的validator、boundary hookを持つ。
 ClaudAGT AgentのIndependent Projectとして継続開発するProject契約を導入した。
 通常開発と明示済み外部作用は途中承認なしで完遂することをCore evalへ固定した。
-モデル更新に伴う包括的再監査で、テスト・フィクスチャ環境におけるTMPDIR伝播の不備（GitHub authテスト、routine fixture）、
-routine-reasonerのローカルエンドポイント接続堅牢化、およびisolated snapshotにおけるGit境界初期化（git init）を実施し、
-full validation（静的検査、全fixture、正本参照、boundary検査）が0 warningで完全合格する状態を確立した。
 公開Issue #87〜#90に対し、未公開privacy履歴の限定訂正契約、説明文付きSTATE契約anchorの抽出、raw CRを持たない
 router判定、blob一回読込による決定的なrange privacy検査と回帰fixtureを導入し、通常・full validationを
 0 warningで合格させた。
 capability-firstのRecommended Multi-AI Operating Profileを独立正本として追加し、Codex、Claude Code、
 optional ChatGPT、決定的Toolの推奨分担、単一runtime fallback、Single Owner、repository state、
-business-level orchestrationとMaintenance Routineの境界、交換可能な現行モデル推奨をCore compatibilityと
-分離した。README入口、委譲境界、Routine参照、validator、Core evalを同じ責任モデルへ追従させた。
+Scheduled Executionの交換可能な現行mappingをCore compatibilityと分離した。
+定期実行はOperator / Runtime / OS側の外部triggerとし、Agent内部では通常の
+`Route → Target → Work → Verify → Finish`だけを使う。独自executor、schedule管理、provider adapter、
+専用lock / state / log、専用evalを廃止し、変更時validationと必要時のcache再生成へ集約した。
+Issue #92に対しroot `AGENTS.md`のOwner側詳細を縮約し、routerを4,925B、soft budget残余を1,219Bにした。
+導入先が小さな固有契約を追加してもwarning 0となる回帰fixtureをfull validatorへ固定した。
 公開remoteがPR必須ruleを持つ場合に通常push拒否で停止する運用欠陥を修正し、head branch、PR、expected head、
 remote merge、default branch確認を一つの完了経路にした。local merge禁止とremote rule準拠を分離し、
 同じ失敗をCore evalとvalidatorで再発防止した。
@@ -43,8 +44,8 @@ Workspace責務境界を壊さず、ClaudAGTエコシステムの変更と整合
 - 確認日: 2026-08-16
 - 方法: `git diff --check`、`bash -n tools/check-boundary.sh tools/validate-agent-directory.sh`、
   `bash tools/validate-agent-directory.sh --changed`、`bash tools/validate-agent-directory.sh --full`。
-- 結果: Recommended Profileの正本構造、provider-neutral fallback、Routine境界、PR必須remote完了経路、
-  merge後branch cleanup、Core eval schemaを含むfull validationが0 warning / 0 failureで完全合格した。
+- 結果: Scheduled Execution責務境界、Issue #92の導入先追記fixture、Markdown参照、cache再生成、
+  boundary、backup、materializer、Core eval schemaを含むfull validationが0 warning / 0 failureで完全合格した。
 
 ## 未完了・ブロッカー
 

@@ -194,7 +194,7 @@ agent-directory内で将来検討できるのはsemantic safetyとrepository int
 導入は場当たりに判断せず、利用者の方針決定に基づいて設計する。
 
 - **Capability State永続化と復権プロトコル** — 外部作用（公開、送信、本番反映、課金）を持つ
-  Routineが稼働し、人間が全commitを目視しなくなったとき。
+  unattended taskが稼働し、人間が全commitを目視しなくなったとき。
 - **資格情報のsemantic boundary** — 本番・金銭・公開のcredentialについて、秘密保護とdestination固定を
   強化する必要が生じたとき。credentialの利用可否そのものはRuntime側が所有する。
 - **Repository hook adapter** — 利用ハーネスが固定され、commit差分の追加防壁が設定保守コストを

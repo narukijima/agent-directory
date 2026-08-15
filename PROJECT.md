@@ -37,6 +37,7 @@ AI Agentが長期間にわたり正本、責務境界、状態、安全契約を
 
 - 複数製品を一つのmonorepoへ統合すること。
 - Runtime独自のsandbox、approval database、Provider別permission wrapperを実装すること。
+- Scheduler Engine、daemon、schedule registryを所有すること。
 
 ## 制約・固定決定
 
@@ -75,7 +76,7 @@ AI Agentが長期間にわたり正本、責務境界、状態、安全契約を
 
 ## 成果物
 
-- `AGENTS.md`、`knowledge/`、`skills/`、`projects/`、`routines/`、`evals/`、`tools/`からなる公開Workspace仕様。
+- `AGENTS.md`、`knowledge/`、`skills/`、`projects/`、`evals/`、`tools/`からなる公開Workspace仕様。
 
 ## 検証方法
 
