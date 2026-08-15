@@ -308,7 +308,7 @@ state_section_targets() {
     in_section && index($0, prefix) == 1 {
       target = $0
       sub(/^.*PROJECT\.md#/, "", target)
-      sub(/`$/, "", target)
+      sub(/`.*$/, "", target)
       if (target ~ /^(PC-(0[1-9]|[1-9][0-9])|status)$/) print target
     }
   ' "$1"
@@ -412,7 +412,7 @@ root_agents_router_bytes() {
   # or EOF from the router metric. Stripping a trailing CR only for heading matching
   # preserves CRLF bytes in every emitted router line. awk + wc are available on the
   # macOS bash 3.2 / BSD toolchain and avoid GNU-only section flags.
-  if ! LC_ALL=C grep -Eq '^## 自己定義?$' "$file"; then
+  if ! LC_ALL=C grep -Eq $'^## 自己定義\r?$' "$file"; then
     wc -c < "$file" | tr -d ' '
     return 0
   fi
@@ -1276,7 +1276,8 @@ required_files=(
   'projects/_template/PROJECT.md' 'projects/_template/STATE.md' 'evals/EVALS.md'
   'evals/profiles/core.txt' 'evals/profiles/decay.txt' 'tools/TOOLS.md'
   'tools/SAFETY.md' 'tools/task.sh'
-  'tools/BACKUP.md' 'tools/build-context-cache.sh' 'tools/find-context.sh' 'tools/prepare-context.sh'
+  'tools/BACKUP.md' 'tools/BACKUP-RECOVERY.md'
+  'tools/build-context-cache.sh' 'tools/find-context.sh' 'tools/prepare-context.sh'
   'tools/append-knowledge-log.sh' 'tools/backup-to-github.sh' 'tools/validate-agent-directory.sh'
   'tools/setup-local-environment.sh'
   'tools/materialize-project-repositories.sh' 'tools/finalize-task.sh' 'tools/run-evals.py'
@@ -1287,6 +1288,16 @@ required_files=(
   "$knowledge_source_template_path" "$knowledge_topic_template_path"
 )
 for path in "${required_files[@]}"; do require_file "$repo_root/$path"; done
+
+# Guard the source representation of portability-sensitive checks. Raw CR bytes can
+# be normalized silently by text-mode tooling, and `cat-file | grep -q` is timing-
+# dependent under pipefail because the early reader exit can SIGPIPE the writer.
+if LC_ALL=C grep -q $'\r' "$repo_root/tools/validate-agent-directory.sh"; then
+  fail 'tools/validate-agent-directory.sh must not contain raw CR bytes; use ANSI-C quoting for CRLF-aware patterns'
+fi
+if grep -Fq 'cat-file blob "$blob" |' "$repo_root/tools/check-boundary.sh"; then
+  fail 'tools/check-boundary.sh must materialize a blob before quiet grep checks; cat-file pipelines race under pipefail'
+fi
 
 # AIクライアント固有設定は共通Toolを呼ぶ薄いadapterに固定し、ロジックや秘密情報を複製しない。
 codex_environment="$repo_root/.codex/environments/agent-directory.toml"
@@ -1412,6 +1423,7 @@ check_size "$repo_root/evals/EVALS.md" 24576 'evals EVALS.md'
 check_size "$repo_root/tools/TOOLS.md" 20480 'tools TOOLS.md'
 check_size "$repo_root/tools/SAFETY.md" 8192 'tools SAFETY.md'
 check_size "$repo_root/tools/BACKUP.md" 20480 'tools BACKUP.md'
+check_size "$repo_root/tools/BACKUP-RECOVERY.md" 20480 'tools BACKUP-RECOVERY.md'
 check_size "$repo_root/tools/CONTROL.md" 20480 'tools CONTROL.md'
 check_size "$repo_root/tools/UPSTREAM.md" 20480 'tools UPSTREAM.md'
 check_size "$repo_root/tools/REFERENCE.md" 20480 'tools REFERENCE.md'
@@ -1533,6 +1545,19 @@ DEPLOYED_IDENTITY
   printf '## 自己定義\n\nidentity at EOF without a following H2' >> "$eof_identity"
   [[ "$(root_agents_router_bytes "$eof_identity")" == "$(wc -c < "$eof_prefix" | tr -d ' ')" ]] || \
     fail 'router budget fixture: a self-definition ending at EOF leaked into the router metric'
+
+  state_anchor_fixture="$router_budget_fixture_dir/state-anchor-suffix.md"
+  printf '%s\n' \
+    '## 現在の目標' \
+    '対象契約: `PROJECT.md#PC-01`（週次の公開を継続する）' \
+    '' \
+    '## 検証結果' \
+    '- 対象: `PROJECT.md#PC-01` — 検証済み' \
+    > "$state_anchor_fixture"
+  [[ "$(state_section_targets "$state_anchor_fixture" '## 現在の目標' '対象契約: `PROJECT.md#')" == 'PC-01' ]] || \
+    fail 'STATE anchor fixture: a current-target explanation after the closing backtick hid the contract anchor'
+  [[ "$(state_section_targets "$state_anchor_fixture" '## 検証結果' '- 対象: `PROJECT.md#')" == 'PC-01' ]] || \
+    fail 'STATE anchor fixture: a verification explanation after the closing backtick hid the contract anchor'
 fi
 
 if [[ "$strict" == true ]]; then
@@ -3205,7 +3230,8 @@ if (( upstream_probe_status == 0 )) || \
   ! printf '%s\n' "$upstream_probe_output" | grep -Fq 'violated-rule: email-address'; then
   fail 'report-upstream-issue.sh must block an unrelated email address without echoing it'
 fi
-printf 'Cookie: session=%s\n' 'fixture-cookie-value-123456' > "$upstream_fixture_dir/body-cookie.md"
+printf '%s: session=%s\n' 'Cookie' 'fixture-cookie-value-123456' > \
+  "$upstream_fixture_dir/body-cookie.md"
 upstream_probe "$upstream_fixture_dir/body-cookie.md"
 if (( upstream_probe_status == 0 )) || \
   ! printf '%s\n' "$upstream_probe_output" | grep -Fq 'violated-rule: cookie-material'; then
@@ -5473,6 +5499,30 @@ if [[ "$full" == true && -z "${AGENT_VALIDATOR_NESTED_FIXTURE:-}" ]]; then
     fail "control fixture: pre-push missed private content committed with --no-verify: $control_output"
   fi
   env "${control_env[@]}" git -C "$control_work" reset -q --hard HEAD~1 >/dev/null
+
+  # The same immutable range must never alternate between accepted and rejected.
+  # A large blob makes early-exit/SIGPIPE races observable on implementations where
+  # `cat-file | grep -q` does not finish writing before grep returns.
+  control_repeat_base="$(env "${control_env[@]}" git -C "$control_work" rev-parse HEAD)"
+  {
+    printf '/Users/%s/private\n' 'repeat-owner'
+    awk 'BEGIN { for (i = 0; i < 20000; i++) print "deterministic-padding" }'
+  } > "$control_work/repeat-sensitive.md"
+  env "${control_env[@]}" git -C "$control_work" add repeat-sensitive.md
+  env "${control_env[@]}" git -C "$control_work" commit -q --no-verify -m \
+    'fixture: deterministic privacy range'
+  for control_repeat_run in 1 2 3 4 5 6 7 8 9 10 11 12; do
+    set +e
+    control_output="$(cd "$control_work" && env "${control_env[@]}" \
+      /bin/bash tools/check-boundary.sh --range "$control_repeat_base" HEAD 2>&1)"
+    control_status=$?
+    set -e
+    if (( control_status == 0 )) || \
+      ! printf '%s\n' "$control_output" | grep -Fq 'reason=sensitive-content'; then
+      fail "control fixture: privacy range run $control_repeat_run was non-deterministic: $control_output"
+    fi
+  done
+  env "${control_env[@]}" git -C "$control_work" reset -q --hard "$control_repeat_base" >/dev/null
 
   # Outgoing commit headers are checked even when the commit hook was bypassed.
   printf 'metadata probe\n' >> "$control_work/README.md"

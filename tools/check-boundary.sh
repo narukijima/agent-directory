@@ -231,43 +231,54 @@ check_git_email() {
   fi
 }
 
-blob_has_sensitive_content() {
+blob_has_sensitive_content() (
   # Return 0 only when the immutable Git blob contains a blocked value.
   # Never print blob contents or matches.
-  local blob="$1" candidate
+  local blob="$1" candidate content_file
   git -C "$repo_root" cat-file -e "$blob^{blob}" 2>/dev/null || return 1
+  # Read the immutable blob exactly once. With pipefail, `cat-file | grep -q`
+  # races: grep may exit after its first match, SIGPIPE the writer, and turn a
+  # positive match into a failed pipeline. A private temporary file removes that
+  # timing dependency and gives every detector the same bytes.
+  umask 077
+  content_file="$(mktemp "${TMPDIR:-/tmp}/agent-boundary-blob.XXXXXX")" || return 1
+  trap 'rm -f -- "$content_file"' EXIT
+  git -C "$repo_root" cat-file blob "$blob" > "$content_file" || return 1
   # Empty and binary blobs are outside this text scanner. Known binary/document assets
   # remain subject to repository structure checks and review.
-  git -C "$repo_root" cat-file blob "$blob" | LC_ALL=C grep -Iq . || return 1
+  LC_ALL=C grep -Iq . "$content_file" || return 1
 
   while IFS= read -r candidate; do
     [[ -n "$candidate" ]] || continue
     email_is_public_safe "$candidate" || return 0
-  done < <(git -C "$repo_root" cat-file blob "$blob" | LC_ALL=C \
-    grep -Eo '[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}' | LC_ALL=C sort -u || true)
+  done < <(LC_ALL=C grep -Eo '[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}' \
+    "$content_file" | LC_ALL=C sort -u || true)
 
   while IFS= read -r candidate; do
     case "$candidate" in
       /Users/example-user|/home/example-user) ;;
       *) return 0 ;;
     esac
-  done < <(git -C "$repo_root" cat-file blob "$blob" | LC_ALL=C \
-    grep -Eo '/(Users|home)/[A-Za-z0-9._-]+' | LC_ALL=C sort -u || true)
+  done < <(LC_ALL=C grep -Eo '/(Users|home)/[A-Za-z0-9._-]+' \
+    "$content_file" | LC_ALL=C sort -u || true)
 
-  if git -C "$repo_root" cat-file blob "$blob" | LC_ALL=C grep -Eq \
-    'github_pat_[A-Za-z0-9_]{20,}|gh[pousr]_[A-Za-z0-9]{20,}|AKIA[0-9A-Z]{16}|AIza[0-9A-Za-z_-]{30,}|xox[baprs]-[A-Za-z0-9-]{20,}|sk-(proj-)?[A-Za-z0-9_-]{20,}'; then
+  if LC_ALL=C grep -Eq \
+    'github_pat_[A-Za-z0-9_]{20,}|gh[pousr]_[A-Za-z0-9]{20,}|AKIA[0-9A-Z]{16}|AIza[0-9A-Za-z_-]{30,}|xox[baprs]-[A-Za-z0-9-]{20,}|sk-(proj-)?[A-Za-z0-9_-]{20,}' \
+    "$content_file"; then
     return 0
   fi
-  if git -C "$repo_root" cat-file blob "$blob" | LC_ALL=C grep -Eiq -- \
-    '-----BEGIN [A-Z ]*PRIVATE KEY-----|Authorization:[[:space:]]*Bearer[[:space:]]+[A-Za-z0-9._~+/-]{10,}|([Cc]ookie|[Ss]et-[Cc]ookie):[[:space:]]*[^[:space:]]+=[^[:space:];]+'; then
+  if LC_ALL=C grep -Eiq -- \
+    '-----BEGIN [A-Z ]*PRIVATE KEY-----|Authorization:[[:space:]]*Bearer[[:space:]]+[A-Za-z0-9._~+/-]{10,}|([Cc]ookie|[Ss]et-[Cc]ookie):[[:space:]]*[^[:space:]]+=[^[:space:];]+' \
+    "$content_file"; then
     return 0
   fi
-  if git -C "$repo_root" cat-file blob "$blob" | LC_ALL=C grep -Eiq -- \
-    '(^|[^A-Za-z0-9_])(api[_-]?key|access[_-]?token|auth[_-]?token|provider[_-]?token|secret|password|cookie)[A-Za-z0-9_-]*[[:space:]]*[:=][[:space:]]*[A-Za-z0-9._/+:-]{16,}'; then
+  if LC_ALL=C grep -Eiq -- \
+    '(^|[^A-Za-z0-9_])(api[_-]?key|access[_-]?token|auth[_-]?token|provider[_-]?token|secret|password|cookie)[A-Za-z0-9_-]*[[:space:]]*[:=][[:space:]]*[A-Za-z0-9._/+:-]{16,}' \
+    "$content_file"; then
     return 0
   fi
   return 1
-}
+)
 
 scan_blob() {
   # $1=blob oid $2=path
