@@ -245,6 +245,12 @@ non-fast-forward、force pushが必要な状況、不変原資料、paused / ret
 - テスト失敗と境界違反を混同せず、違反した操作だけを拒否する。
 - 委譲期待は`tools/CONTROL.md#委譲の境界`を参照し、通常は単一主体、利益が明確な場合も深さ1、
   Single Writer、子権限は親の部分集合を固定する。
+- 複数runtimeが明示的に利用可能でcapability差が成果へ寄与するケースは`OPERATING_PROFILE.md`を参照し、
+  Humanをultimate authority、Repositoryをcanonical state、責任ごとのprimary ownerを1つに保つ。
+  推奨Providerやモデルを利用していないことだけを失敗条件にせず、代替roleを明示させる。
+- 通常pushがPR必須repository ruleだけで拒否されたケースは、同じauthorizationでhead branch push、PR作成、
+  expected head確認、remote merge、default branch反映確認まで進める。local mergeやrule迂回は許さず、
+  PR作成済みとmerge済みを別の観測結果として扱う。
 
 ## Routineケースの最低条件
 

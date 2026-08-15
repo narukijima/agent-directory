@@ -174,15 +174,18 @@ hookの拒否で実害なく止まった通常の誤操作は、やり直すだ�
 
 ## 委譲の境界
 
-通常タスクは単一の推論主体で完結し、既定でサブエージェントへ委譲しない。委譲は次のすべてが
-成立する場合だけ行う。
+通常の小さなタスクは単一の推論主体で完結し、利益のないサブエージェント分割を既定にしない。
+一方、`OPERATING_PROFILE.md`のCreative / Production WorkerやVisual Workerのようにcapability差が
+成果へ明確に寄与する場合は、Control Planeが抱え込まず構造化handoffを使うことを推奨する。
+いずれの委譲も次のすべてが成立する場合だけ行う。
 
 - 作業が独立して並列実行でき、対象が読み取り専用か、書込先が衝突しない。
 - 出力を既存の検証方法で確認できる。
 - 並列化・隔離・独立評価の利益が、contextの受け渡しと統合のコストを上回る。
 
 委譲の深さは1段まで（子の再委譲を禁止）。同一Git rootのWriterは常に1つであり
-（`tools/BACKUP.md#Single Writer`）、子には親が持つ権限の部分集合だけを渡す。
+（`tools/BACKUP.md#Single Writer`）、final gateと責任ごとのprimary ownerも1つにする。子には親が持つ
+権限の部分集合だけを渡し、objective、constraints、target、required output、evaluation criteriaを明示する。
 
 ## 導入基準（将来拡張の凍結）
 

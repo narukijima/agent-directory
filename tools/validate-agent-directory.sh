@@ -1270,7 +1270,7 @@ fi
 required_files=(
   'AGENTS.md' 'CLAUDE.md' 'projects/AGENTS.md' 'projects/CLAUDE.md'
   '.codex/environments/agent-directory.toml' '.claude/settings.json'
-  'README.md' 'knowledge/KNOWLEDGE.md' "$knowledge_index_path" "$knowledge_log_path"
+  'README.md' 'OPERATING_PROFILE.md' 'knowledge/KNOWLEDGE.md' "$knowledge_index_path" "$knowledge_log_path"
   'skills/SKILLS.md' 'skills/_template/SKILL.md' 'projects/PROJECTS.md' 'projects/LIFECYCLE.md' 'projects/RECOVERY.md'
   "$registry_path" "$ignore_path"
   'projects/_template/PROJECT.md' 'projects/_template/STATE.md' 'evals/EVALS.md'
@@ -1840,7 +1840,8 @@ required_cases=(
   routine-commit-gated-backup routine-root-independent-boundary
   routine-scheduler-darwin-launchd routine-scheduler-default-cron routine-schedule-install-explicit
   control-policy-tamper control-mixed-scope-commit-split control-ordinary-failure-no-penalty
-  delegation-default-off delegation-depth-one
+  delegation-default-off delegation-depth-one multi-ai-recommended-profile
+  pr-required-remote-completion
   upstream-issue-privacy upstream-issue-preapproved-send upstream-issue-fixed-destination
   upstream-issue-allowlisted-destination
   github-auth-env-absence-is-not-failure github-auth-machine-credential
@@ -2300,6 +2301,31 @@ grep -Fq 'tools/run-evals.py' "$repo_root/README.md" || \
   fail 'README.md does not register tools/run-evals.py'
 grep -Fq 'tools/UPSTREAM.md' "$repo_root/AGENTS.md" || \
   fail 'AGENTS.md does not route upstream issue reporting to tools/UPSTREAM.md'
+grep -Fq 'repository ruleがPRを必須にする場合' "$repo_root/AGENTS.md" || \
+  fail 'AGENTS.md does not distinguish PR-required remote merge from forbidden local merge'
+grep -Fq 'expected head SHA確認' "$repo_root/projects/PROJECTS.md" || \
+  fail 'projects/PROJECTS.md does not define the PR-required remote completion path'
+grep -Fq 'PR必須rule時の限定remote merge' "$repo_root/tools/BACKUP.md" || \
+  fail 'tools/BACKUP.md does not classify PR-required remote merge'
+grep -Fq 'OPERATING_PROFILE.md' "$repo_root/README.md" || \
+  fail 'README.md does not register OPERATING_PROFILE.md'
+for profile_heading in '## 適用と優先順位' '## Capability Role' \
+  '## OrchestratorとWorkerの最小契約' '## Repository State' \
+  '## Scheduled WorkflowとRoutineの境界' '## Current Model Recommendations'; do
+  grep -Fqx -- "$profile_heading" "$repo_root/OPERATING_PROFILE.md" || \
+    fail "OPERATING_PROFILE.md is missing its responsibility boundary: $profile_heading"
+done
+# Guard structure and neutrality, not a particular Provider/model selection.
+grep -Fq 'Reference Architecture' "$repo_root/OPERATING_PROFILE.md" || \
+  fail 'OPERATING_PROFILE.md must identify itself as a non-mandatory Reference Architecture'
+grep -Fq 'Human / Operatorはultimate authority' "$repo_root/OPERATING_PROFILE.md" || \
+  fail 'OPERATING_PROFILE.md must preserve Human / Operator authority'
+grep -Fq 'Repositoryのtracked canonical state' "$repo_root/OPERATING_PROFILE.md" || \
+  fail 'OPERATING_PROFILE.md must preserve repository canonical state'
+grep -Fq 'ChatGPT runtime adapterや自動連携を提供しない' "$repo_root/OPERATING_PROFILE.md" || \
+  fail 'OPERATING_PROFILE.md must not invent a ChatGPT runtime adapter'
+grep -Fq 'モデル更新時はこの節の推奨値だけを更新' "$repo_root/OPERATING_PROFILE.md" || \
+  fail 'OPERATING_PROFILE.md must separate model recommendations from role contracts'
 # The operator interaction language contract is presence-checked like the other bootloader
 # contracts: deleting the three lines must fail even outside --strict (#28).
 grep -Fq '運用者応対言語' "$repo_root/AGENTS.md" || \
