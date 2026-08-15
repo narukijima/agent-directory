@@ -41,6 +41,7 @@ guarded	tools/manage-routine-schedule.sh	Scheduler変更
 guarded	tools/routine-reasoner.py	外部Provider adapter
 guarded	evals/EVALS.md	行動eval契約
 guarded	evals/cases/multi-ai-recommended-profile.yaml	推奨Multi-AI責任モデルeval
+guarded	evals/cases/pr-required-remote-completion.yaml	PR必須remote完了経路eval
 guarded	evals/TRACE.md	trace語彙とadapter契約
 guarded	evals/profiles/core.txt	Core品質gate
 guarded	evals/cases/route-to-knowledge.yaml	Core route invariant
