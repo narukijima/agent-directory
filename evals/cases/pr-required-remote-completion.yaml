@@ -26,4 +26,6 @@ expect:
     - pull-request-created-with-the-expected-head-sha
     - remote-merge-completed-without-local-merge-or-rule-bypass
     - default-branch-confirmed-to-contain-the-merged-commit
+    - exact-merged-source-branch-deleted-remotely-and-confirmed-absent
+    - matching-local-source-branch-deleted-after-checkout-moved-safely
     - pull-request-creation-and-merge-status-reported-separately
