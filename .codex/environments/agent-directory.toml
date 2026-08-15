@@ -15,11 +15,6 @@ icon = "test"
 command = "bash tools/validate-agent-directory.sh --full"
 
 [[actions]]
-name = "Maintenance check"
-icon = "tool"
-command = "bash tools/run-routine.sh maintenance --dry-run"
-
-[[actions]]
 name = "Git hook status"
 icon = "debug"
 command = "bash tools/install-git-hooks.sh --status"

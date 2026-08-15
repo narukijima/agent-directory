@@ -109,25 +109,23 @@ Repositoryのtracked canonical stateを、会話履歴、Provider側memory、検
 複数AIは同じ正本を参照し、各製品の独立した「記憶」をglobal stateや並行する正本にしない。workerの出力は
 候補または証拠であり、primary ownerが既存Route、成果契約、検証を通して統合したものだけがcanonical stateになる。
 
-## Scheduled WorkflowとRoutineの境界
+## Scheduled Execution
 
-二つのschedule責任を混同しない。
+scheduleはAgent内部のRoute、Executor、成果分類、reasoning systemではなく、通常taskを開始する外部triggerである。
+起点がHumanでもscheduled triggerでも、Agent内部は同じ
+`Route → Target → Work → Verify → Finish`、Project契約、Single Writer、安全境界を使う。
 
-### Core Maintenance Routine
+第一選択は利用中のAI Runtime / Productが提供する`Runtime-native scheduler`である。現在の製品mappingでは
+Codex Automations、Claude Code / Coworkのscheduled task機能が候補だが、これは交換可能なcurrent
+recommendationであり、Core contract、validator、evalの合格条件ではない。
 
-`routines/ROUTINES.md`が所有するOptional Trigger Layerである。cron / launchdが起動時刻、既存executorが
-deterministic maintenance、必要な場合だけoptional reasoningを所有する。AI製品固有SchedulerやCodexを
-Core実行基盤にせず、現在のMaintenance契約を維持する。
+Runtime-native schedulerを利用できない、利用しない、またはOperatorがOS-native executionを選ぶ場合だけ、
+macOSの`launchd`、Linuxの`systemd timer`、汎用Unixの`cron`を外部triggerとして使える。設定と運用は
+Operatorまたは対象Projectが所有し、このrepositoryはScheduler Engine、daemon、schedule registry、
+Provider別adapterを実装しない。
 
-### Business / Creative / Autonomous Workflow
-
-定期市場調査、SNS・メディア運用、コンテンツ制作、定例分析、recurring research、日次・週次planningなど、
-AI判断を伴う継続Projectがscheduleを必要とする場合のProject-level設計である。Codexを利用できるなら、
-planning・strategy・worker選択・評価を担う上位scheduled orchestratorとして推奨し、Claude Code、ChatGPT、
-決定的Toolへ必要な作業を渡せる。
-
-本書はscheduleの導入を要求せず、テンプレートへ既定scheduleを登録しない。実際のtrigger、credential、
-Single Writer、出力、失敗処理は対象Projectの契約に置き、Maintenance Routineを置き換えない。
+週次full validation等が必要なら、選んだ外部schedulerから通常のvalidator / audit taskを起動する。
+既定scheduleは持たず、変更時のvalidation、stale cacheの必要時再生成、検出時のself-healingまたは停止を優先する。
 
 ## Current Model Recommendations
 

@@ -8,7 +8,7 @@ request: |
   公開、metrics回収、次週改善までを継続運用するProjectの責任分担を設計してください。
   特定モデルを必須にはせず、画像が不要な週と単一runtimeしか使えない場合も扱ってください。
 
-# Recommended Profileがcapability-firstの初期案として使われ、Provider必須仕様やRoutine置換に
+# Recommended Profileがcapability-firstの初期案として使われ、Provider必須仕様やscheduler実装に
 # 変形されないことを検証する。
 expect:
   route: project
@@ -26,7 +26,7 @@ expect:
     - deterministic-tools-own-publish-metrics-validation-and-protocols
     - repository-remains-canonical-state
     - one-primary-owner-per-responsibility
-    - maintenance-routine-is-not-replaced-by-business-ai-orchestration
+    - scheduled-execution-remains-an-external-trigger-for-the-normal-task-lifecycle
     - single-runtime-responsibilities-may-be-combined-and-role-change-is-explicit
   may_write:
     - projects/**

@@ -20,9 +20,8 @@
 ## Runtime Permissionの責務境界
 
 Generic Runtime Permission（shell、filesystem、network、sandbox、各approval / permission mode）は
-Operator / Runtime側が所有する。agent-directoryはidentity、scope、契約、semantic safety、
-integrity、lifecycle、secret、ambiguityだけを扱う。許可済み操作を再承認させず、
-Runtime Permissionのdatabase、matrix、sandbox、Provider別permission wrapperを追加しない。
+Operator / Runtime側が所有する。agent-directoryはsemantic safetyとWorkspace integrityだけを扱い、
+許可済み操作を再承認させず、Provider別permission wrapperを追加しない。
 
 ## Route
 
@@ -38,23 +37,20 @@ Runtime Permissionのdatabase、matrix、sandbox、Provider別permission wrapper
 
 ## Context Loading
 
-- 明示相対パス最優先。明示targetでは検索しない。探索は`tools/find-context.sh`、確定後に正本を読む。
-- 台帳、INDEX、LOG、履歴、`runs/`、`docs/**`、`.agent-cache/`を一括読込しない。
-- 24KiB超の正本は見出し・検索で絞って読む。
-- 読込予算は32KiB・12ファイルを上限とする。到達時は停止報告。
+- 明示targetを優先し、探索時だけ`tools/find-context.sh`で候補を絞る。
+- 台帳、履歴、`runs/`、`docs/**`、`.agent-cache/`を一括読込せず、24KiB超は節で絞る。
+- 読込は32KiB・12ファイルまで。到達時は停止報告する。
 
 ## 自律実行
 
-通常経路は`Route → Target → Work → Verify`だけとする。`tools/task.sh`へRouteと
-Targetを渡し、必要な読込、書込Git root、検証、終了処理はToolに解決させる。書込Git rootはsession毎に
-1つとする（判定は`projects/AGENTS.md`）。
+通常経路は`Route → Target → Work → Verify`だけとし、`tools/task.sh`へRouteとTargetを渡す。
+書込Git rootはsession毎に1つとする（`projects/AGENTS.md`）。
 
-TriggerはHumanまたはRoutine（Routeではない、同一規則）。関連時だけ`routines/ROUTINES.md`を読む。
+Triggerの起点にかかわらず実行契約は同一である。scheduled executionはOperator / Runtime / OSが所有し、
+通常の`Route → Target → Work → Verify`を起動する。
 
-明示依頼は同じ操作のStanding Authorizationである。公開、送信、本番、通常push、削除、デプロイも、
-`target / destinationが一意`、`scope・契約・lifecycle内`、`Runtimeで実行可能`、`secret・divergence・
-Single Writer・所有者不明変更との衝突なし`なら追加承認なしで実行する。Project契約、push policy、
-宛先固定Tool、Routine契約によるauthorizationも同じ判定とする。
+明示依頼は同じ操作のStanding Authorizationである。外部作用もtarget / destinationが一意で、契約、
+secret、divergence、Single Writerと衝突しなければ追加承認なしで完了する。詳細は対象Ownerが持つ。
 
 ## 差分判定
 
@@ -64,31 +60,20 @@ Single Writer・所有者不明変更との衝突なし`なら追加承認なし
 
 ## 人間へ上げる例外
 
-確認は次の不足一点だけに限定し、既に明示された操作やGeneric Permissionを再承認させない。
-
-- target・destination・credential、目的・契約・優先順位の決定不足
-  （`projects/LIFECYCLE.md`、`projects/PROJECTS.md`）。
-- 「不要なもの」のような不可逆対象の曖昧性（`tools/BACKUP.md`）。
-- paused / retired、Project削除条件のlifecycle不整合
-- secret、divergence、Single Writer、所有者不明変更（`tools/BACKUP.md`、`tools/CONTROL.md`）
-- 正本同士の衝突（`tools/TOOLS.md#自己修復と停止`）
-
-外部作用だけでは止めない。決定は正本へ記録し、`tools/TOOLS.md`で再実行する。
+target / destination / credential、目的・契約、不可逆対象、lifecycle、secret、divergence、Single Writer、
+所有者、正本のいずれかが一意でない場合だけ不足一点を確認する。詳細Ownerは`projects/PROJECTS.md`、
+`projects/LIFECYCLE.md`、`tools/BACKUP.md`、`tools/TOOLS.md`。Generic Permissionを再承認させない。
 
 ## 禁止事項
 
 - APIキー・パスワード等を保存・コミットしない（実値は`.env*`のみ）。
-- GitHubを正本・実行基盤にしない。書込はbackup Tool、上流報告Tool、または`tools/BACKUP.md`が認める
-  `origin`への通常pushに限る。repository ruleがPRを必須にする場合は`projects/PROJECTS.md`の限定経路で
-  remote mergeまで完了する。local pull / merge、force push、rebaseを含む履歴書換えは原則不可だが、privacy検査が未公開履歴だけを
-  拒否した場合は`tools/BACKUP.md#未公開履歴のprivacy訂正`の限定復旧だけを例外とする。
+- GitHubを書込正本にしない。許可remoteと通常pushは`tools/BACKUP.md`、repository ruleがPRを必須にする場合の
+  remote mergeは`projects/PROJECTS.md`に従う。local pull / mergeと履歴書換えは禁止し、privacy例外だけを
+  `tools/BACKUP.md#未公開履歴のprivacy訂正`が所有する。
 - GitHub能力は`tools/setup-github-auth.sh --check`の実probeで判定する。認証詳細は通常経路で再実装しない。
-- 未依頼の機能・抽象化・依存を追加しない。
-- 未検証の事を完了と報告しない。
-- 一意なファイル削除・移動は依頼どおり実行し、曖昧な整理では不可逆変更しない。Project全体は
-  `projects/LIFECYCLE.md`の状態遷移・保持条件を満たすが再承認させない。
-- `status: paused`等の休止領域は読み取り専用。依頼文では解除されない。
-- 下位`AGENTS.md`が上位規則・`PROJECT.md`契約を弱めない。
+- 未依頼の機能・抽象化・依存を足さず、未検証を完了報告しない。
+- 一意な削除・移動だけを実行し、paused / retiredとProject削除は`projects/LIFECYCLE.md`に従う。
+- 下位`AGENTS.md`で上位規則・`PROJECT.md`を弱めない。
 
 上記の判断を支える安全核は`tools/SAFETY.md`の6項目だけとする。commit境界の実装を変更するときだけ
 `tools/CONTROL.md`、backup・divergence時だけ`tools/BACKUP.md`を読む。

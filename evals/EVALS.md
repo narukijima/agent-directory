@@ -253,14 +253,13 @@ non-fast-forward、force pushが必要な状況、不変原資料、paused / ret
   local mergeやrule迂回、raw ref削除の一般解禁は許さず、PR作成済み、merge済み、branch cleanup済みを別の
   観測結果として扱う。
 
-## Routineケースの最低条件
+## Scheduled executionケースの最低条件
 
-- TriggerをRouteにせずmetaへ解決し、`routines/ROUTINES.md#標準フロー`のNOOP / SKIPPED / BLOCKED、
-  stale cache、lock、HEAD再確認、隔離検証を観測する。
-- Provider未設定でも決定的処理を完了し、reasoning無効時の無通信、unsupported Providerの拒否、
-  model出力の禁止path・上限・shell拒否を`routines/ROUTINES.md#外部Providerへの送信`に照合する。
-- tracked差分がないときcommit / backupせず、rootからIndependentへ書かない。Scheduler installは
-  明示操作だけとする（`routines/ROUTINES.md#commitとbackup`）。
+- scheduled triggerをRouteや成果分類にせず、通常のRoute、Target、検証、終了処理へ解決する。
+- schedulerの実装とschedule stateをOperator / Runtime / OS側に保ち、Coreへdaemon、registry、
+  Provider別adapterを追加しない。
+- Runtime-native schedulerを第一選択、OS-native schedulerをfallbackとして交換可能に扱い、
+  現在の製品mappingをCoreの合格条件にしない。
 
 ## バックアップケースの最低条件
 
