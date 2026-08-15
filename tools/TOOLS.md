@@ -170,7 +170,6 @@ Private backup設定済みのroot所有workは`--root-only`、未設定は`not-c
 | upstream report | `report-upstream-issue.sh` | `tools/UPSTREAM.md` |
 | GitHub auth | `lib/github-auth.sh`、`setup-github-auth.sh`、`test-github-auth.sh` | `tools/REFERENCE.md` |
 | Independent repository | `materialize-project-repositories.sh` | `tools/REFERENCE.md` |
-| Routine | `run-routine.sh`、`manage-routine-schedule.sh`、`routine-reasoner.py` | `routines/ROUTINES.md` |
 
 ## サイズ予算
 
@@ -190,8 +189,7 @@ Private backup設定済みのroot所有workは`--root-only`、未設定は`not-c
 | `knowledge/KNOWLEDGE.md`・`tools/*.md`・`PROJECT.md` / `SKILL.md` | 20KiB |
 | `projects/PROJECTS.md`・`evals/EVALS.md`・`ARCHITECTURE.md`・`docs/<DOMAIN>.md` | 24KiB |
 | `skills/SKILLS.md` | 12KiB |
-| `routines/ROUTINES.md` | 16KiB |
-| `STATE.md`・`routines/<id>/ROUTINE.md` | 8KiB |
+| `STATE.md` | 8KiB |
 | `knowledge/wiki/INDEX.md` | 8KiB・50項目 |
 | active Wiki | 64KiB。24KiB超はRetrieval Map必須 |
 | `knowledge/wiki/LOG.md` | 128KiB・1,000記録 |

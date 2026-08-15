@@ -37,7 +37,7 @@ bash tools/build-context-cache.sh [--check|--check-routing|--routing-only]
 生成物:
 
 - `catalog.tsv` — routeable正本の最小metadata。通常検索のFast Path
-- `manifest.tsv` — 全正本のinventory。Maintenance・full検証・boundary専用のSlow Path監査物
+- `manifest.tsv` — 全正本のinventory。full検証・boundary専用のSlow Path監査物
 - `cache.meta` — schema、generator hash、fingerprint、件数、検索backend
 - `stat.meta` — warm fast path用stat指紋。`--check`の比較対象にしない
 - `search.sqlite` — routeable Knowledge 1,000件またはcatalog 5,000行で自動生成するFTS5 trigram派生索引
@@ -208,33 +208,6 @@ registryの登録と採用revisionから`projects/<name>/`へ通常cloneを再�
   変形しない。認証情報を保存せず、絶対pathを正本へ書かない。
   `AGENT_ALLOW_LOCAL_REPOSITORY_URL=true`は隔離fixture専用。
 
-## run-routine.sh
-
-```bash
-bash tools/run-routine.sh maintenance [--dry-run|--full]
-```
-
-Scheduler起点のRoutine Executor。lock、preflight、cache鮮度、検証、任意推論、scoped commit、
-policy準拠backupの規則は`routines/ROUTINES.md`と各`ROUTINE.md`が所有する。出力はstdout最終1行の
-`ROUTINE_NOOP|OK|SKIPPED|BLOCKED|FAILED`、詳細はstderrと`.agent-cache/routines/logs/`。
-
-## manage-routine-schedule.sh
-
-```bash
-bash tools/manage-routine-schedule.sh --routine maintenance --scheduler auto --at 03:00 --print
-```
-
-user crontabとuser LaunchAgentだけを扱うSchedule管理。`--scheduler auto|cron|launchd`と
-`--print|--dry-run|--install|--status|--remove`を持ち、冪等で無関係entryを保持する。installは利用者の明示操作であり、Routine実行やclone直後に
-OS scheduleを変更しない。出力は`SCHEDULE_*`の1行。
-
-## routine-reasoner.py
-
-Python 3標準ライブラリだけの任意推論アダプター（`--request` / `--inspect-patch`）。
-Provider（`deepseek | openai | anthropic`）、model ID、APIキーは`.env`が所有し、
-未設定でも決定的Maintenanceは動作する。送信境界とpatch上限は`routines/ROUTINES.md`が
-所有し、モデル出力のshell commandは実行しない。
-
 ## validate-agent-directory.sh
 
 ```bash
@@ -244,17 +217,16 @@ bash tools/validate-agent-directory.sh [--strict] [--full] [--changed] [--base <
 - 通常: 必須構造、`AGENTS.md`/`CLAUDE.md`階層、metadata、Project契約とdocs境界、STATE、
   attachmentとroot ownership、サイズ、INDEX/LOG、eval schemaの静的検査
 - `--changed`: Git差分で変更されたProject・Knowledge・Skillだけを検査するFast Path。meta正本
-  （tools、evals、routines、領域正本、registry、template）へ及ぶ変更は全体静的検査へ自動fallbackする
+  （tools、evals、領域正本、registry、template）へ及ぶ変更は全体静的検査へ自動fallbackする
 - `--strict`: 導入後に残してはいけない自己定義・Skillプレースホルダーも失敗にする
   （full静的経路専用。`--changed`とは併用不可で、組合せはusageエラーになる）
 - `--bootstrap-status`: 検査せず配布状態（`template|partial|deployed`）だけを1行で返す照会mode。
-  `run-routine.sh`の配布判定が使う
 - `--full`: 全参照、全Knowledge/Skill/Projectに加え、cache再生成、実Git・backup・materializer・
   context Toolの隔離fixtureを検査。Tool、eval、正本規約を変更した作業では必須とする
 - `--base <ref>`: Git差分から`knowledge/raw/`、閉鎖済みlog、Project物理移動の禁止を検査
 - 終了コード0と`PASS: agent-directory structure is valid`が合格条件。
 
-`AGENT_VALIDATOR_METRICS=true`を明示した計測runだけ、`static`、`full-core`、`routine`、`scheduler`、
+`AGENT_VALIDATOR_METRICS=true`を明示した計測runだけ、`static`、`full-core`、
 `control`、`epilogue`の所要時間と全体wall timeを`.agent-cache/metrics/*.jsonl`へ記録する。通常runは
 時刻取得processもmetrics書込も行わず、計測結果は削除・再生成可能な派生物として扱う。
 

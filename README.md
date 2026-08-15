@@ -84,9 +84,6 @@ agent-directory/
 │   ├── RECOVERY.md               # 目的不一致の復旧時だけ読む
 │   ├── _template/                # PROJECT.mdとSTATE.mdだけ
 │   └── <project-name>/           # PROJECT.md、STATE.md、任意のAGENTS.md・docs/・inputs/・outputs/
-├── routines/
-│   ├── ROUTINES.md               # Routine Trigger層の正本
-│   └── maintenance/ROUTINE.md    # Maintenance Routineの契約
 ├── evals/                        # EVALS.md、TRACE.md、cases/、fixtures/、profiles/
 └── tools/                        # task.sh、SAFETY.mdほかTool正本、固定ToolとOptional capability
 ```
@@ -107,7 +104,7 @@ repo-local `user.name`を保持する。local値も未設定のときだけ`AGEN
 既定値にする。emailと既存履歴は変更しない。既存cacheが新鮮なら本文を再読しないfast pathを使う。
 `.env*`のコピー、package追加、
 Git hook・remote・scheduleの変更、ネットワーク接続は行わない。Git hookの導入は利用開始手順の
-明示コマンドとして分離する。CodexのActionsは限定検証、full検証、Maintenance dry-run、hook状態確認を
+明示コマンドとして分離する。CodexのActionsは限定検証、full検証、hook状態確認を
 既存Toolへ直接つなぎ、GitHub認証状態は既存の`tools/setup-github-auth.sh --check`へ明示的に接続する。
 GitHub認証Actionは実APIと実remoteを検査するが、Setupからは呼ばない。判定ロジックをadapterへ複製しない。
 Claude Codeの`.worktreeinclude`も既定では置かず、
@@ -119,7 +116,7 @@ Codex DesktopとClaude Codeは引き続き単独でも利用できる。複数�
 Control Plane、Claude CodeをCreative / Production Worker、ChatGPTをoptional Visual Worker、Python・API・
 既存の決定的ToolをExecution Layerとする役割分担を初期案として推奨する。これは強制仕様ではなく、利用者、
 Project契約、task、利用可能capabilityに応じて責務を統合・変更できる。ChatGPTの直接adapterは提供しない。
-詳細、fallback、handoff、Single Owner、scheduled AI workflowとRoutineの境界、交換可能な現行モデル推奨は
+詳細、fallback、handoff、Single Owner、Scheduled Execution境界、交換可能な現行モデル推奨は
 [OPERATING_PROFILE.md](OPERATING_PROFILE.md)が所有する。
 
 ## Attachment境界
@@ -176,7 +173,7 @@ tools/task.sh context --route meta --target tools/TOOLS.md
 
 明示パスと正本の明示参照を最優先とし、検索結果は候補として扱う。選択後に正本を読む。
 `.agent-cache/`は正本から再生成され、検索のstale回復はrouting catalogだけを一度作り直す。
-manifest（全体inventory）はMaintenanceとfull検証だけが再生成する。
+manifest（全体inventory）はfull検証とboundary作業だけが再生成する。
 探索順位は[tools/TOOLS.md](tools/TOOLS.md)、実行時の読込予算は[AGENTS.md](AGENTS.md)、
 固定Toolの呼び出し形・入出力・fallbackは[tools/REFERENCE.md](tools/REFERENCE.md)が所有する。
 
@@ -207,25 +204,20 @@ protected変更の分離、検証、Independent repositoryへの適用は
 ## CoreとOptional
 
 Coreは`AGENTS.md`、Route正本、`tools/task.sh`、validator、[tools/SAFETY.md](tools/SAFETY.md)である。
-通常タスクはこの範囲だけで開始できる。backup、GitHub認証repair、Independent repository、Routine、
+通常タスクはこの範囲だけで開始できる。backup、GitHub認証repair、Independent repository、
 behavioral eval、上流Issue報告はOptional capabilityであり、該当機能を使うときだけ正本とToolを読む。
 
 既存consumerとの互換性のため`tools/prepare-context.sh`と`tools/finalize-task.sh`は残すが、新しい通常入口を
 増やさない。分類と所有先は[tools/TOOLS.md](tools/TOOLS.md)、個別CLIは
 [tools/REFERENCE.md](tools/REFERENCE.md)が所有する。
 
-## Routine（自律定期保守）
+## Scheduled Execution
 
-RoutineはOptionalであり、通常タスクでは読まない。利用時の安全境界、Provider、lock、schedule、結果語彙は
-[routines/ROUTINES.md](routines/ROUTINES.md)が所有する。初期版はMaintenanceだけである。
-
-```bash
-bash tools/run-routine.sh maintenance --dry-run
-bash tools/manage-routine-schedule.sh --routine maintenance --scheduler auto --status
-```
-
-推論とschedule導入は明示設定時だけ有効になる。未設定では外部通信せず、clone時にscheduleを
-自動installしない。
+定期実行が必要なら、第一選択として利用中Productの`Runtime-native scheduler`、fallbackとして
+`launchd` / `systemd timer` / `cron`をOperatorまたは対象Projectが設定する。scheduled triggerは通常taskを
+起動するだけで、別Route、別Executor、別commit lifecycleを作らない。このrepositoryは既定scheduleや
+Scheduler Engineを持たない。詳細と交換可能なcurrent mappingは
+[OPERATING_PROFILE.md](OPERATING_PROFILE.md#scheduled-execution)が所有する。
 
 ## ローカル正本とGitHubバックアップ
 
@@ -246,7 +238,7 @@ Toolは前提違反ならremoteを変更せず停止する。backup失敗は検�
 | 正本 | 所有する内容 |
 |---|---|
 | [AGENTS.md](AGENTS.md) | 自己定義、共通判断原則、Route判定、Context Loading、自律実行と例外、禁止事項、目次 |
-| [OPERATING_PROFILE.md](OPERATING_PROFILE.md) | capability-firstの推奨Multi-AI責任モデル、handoff、Single Owner、AI-level schedule、現行モデル推奨 |
+| [OPERATING_PROFILE.md](OPERATING_PROFILE.md) | capability-firstの推奨Multi-AI責任モデル、handoff、Single Owner、Scheduled Execution、現行モデル推奨 |
 | [knowledge/KNOWLEDGE.md](knowledge/KNOWLEDGE.md) | 四層構造、保存先、不変規則、命名、限定取得、INDEX、LOG |
 | [skills/SKILLS.md](skills/SKILLS.md) | Skillの選択、frontmatter、Knowledge参照、構造 |
 | [projects/AGENTS.md](projects/AGENTS.md) | Project作業共通の着手・実行・完了手順 |
@@ -254,7 +246,6 @@ Toolは前提違反ならremoteを変更せず停止する。backup失敗は検�
 | [projects/DOCS.md](projects/DOCS.md) | 任意のProject docs、Domain Canon、Docs Route、Research昇格 |
 | [projects/REPOSITORIES.md](projects/REPOSITORIES.md) | Independent Projectのattachment registryとentry形式 |
 | [projects/LIFECYCLE.md](projects/LIFECYCLE.md) / [projects/RECOVERY.md](projects/RECOVERY.md) | 状態遷移と削除条件 / 目的不一致からの復旧 |
-| [routines/ROUTINES.md](routines/ROUTINES.md) | Routine Trigger層、Scheduler分離、送信境界、commit/backup条件 |
 | [evals/EVALS.md](evals/EVALS.md) | 振る舞いevalの契約、ケースschema、fixture、最低条件 |
 | [evals/TRACE.md](evals/TRACE.md) | trace event語彙、採点根拠、adapter呼び出し契約 |
 | [tools/UPSTREAM.md](tools/UPSTREAM.md) | 上流Issue報告の契約、匿名化検査、送信条件 |
