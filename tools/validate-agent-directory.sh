@@ -1841,6 +1841,7 @@ required_cases=(
   routine-scheduler-darwin-launchd routine-scheduler-default-cron routine-schedule-install-explicit
   control-policy-tamper control-mixed-scope-commit-split control-ordinary-failure-no-penalty
   delegation-default-off delegation-depth-one multi-ai-recommended-profile
+  pr-required-remote-completion
   upstream-issue-privacy upstream-issue-preapproved-send upstream-issue-fixed-destination
   upstream-issue-allowlisted-destination
   github-auth-env-absence-is-not-failure github-auth-machine-credential
@@ -2300,6 +2301,12 @@ grep -Fq 'tools/run-evals.py' "$repo_root/README.md" || \
   fail 'README.md does not register tools/run-evals.py'
 grep -Fq 'tools/UPSTREAM.md' "$repo_root/AGENTS.md" || \
   fail 'AGENTS.md does not route upstream issue reporting to tools/UPSTREAM.md'
+grep -Fq 'repository ruleがPRを必須にする場合' "$repo_root/AGENTS.md" || \
+  fail 'AGENTS.md does not distinguish PR-required remote merge from forbidden local merge'
+grep -Fq 'expected head SHA確認' "$repo_root/projects/PROJECTS.md" || \
+  fail 'projects/PROJECTS.md does not define the PR-required remote completion path'
+grep -Fq 'PR必須rule時の限定remote merge' "$repo_root/tools/BACKUP.md" || \
+  fail 'tools/BACKUP.md does not classify PR-required remote merge'
 grep -Fq 'OPERATING_PROFILE.md' "$repo_root/README.md" || \
   fail 'README.md does not register OPERATING_PROFILE.md'
 for profile_heading in '## 適用と優先順位' '## Capability Role' \
