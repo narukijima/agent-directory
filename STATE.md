@@ -1,5 +1,5 @@
 ---
-updated_at: 2026-08-15
+updated_at: 2026-08-16
 ---
 
 # Current State
@@ -15,6 +15,10 @@ full validation（静的検査、全fixture、正本参照、boundary検査）�
 公開Issue #87〜#90に対し、未公開privacy履歴の限定訂正契約、説明文付きSTATE契約anchorの抽出、raw CRを持たない
 router判定、blob一回読込による決定的なrange privacy検査と回帰fixtureを導入し、通常・full validationを
 0 warningで合格させた。
+capability-firstのRecommended Multi-AI Operating Profileを独立正本として追加し、Codex、Claude Code、
+optional ChatGPT、決定的Toolの推奨分担、単一runtime fallback、Single Owner、repository state、
+business-level orchestrationとMaintenance Routineの境界、交換可能な現行モデル推奨をCore compatibilityと
+分離した。README入口、委譲境界、Routine参照、validator、Core evalを同じ責任モデルへ追従させた。
 
 ## 現在の目標
 
@@ -30,10 +34,11 @@ Workspace責務境界を壊さず、ClaudAGTエコシステムの変更と整合
 ## 検証結果
 
 - 対象: `PROJECT.md#PC-01`
-- 確認日: 2026-08-15
+- 確認日: 2026-08-16
 - 方法: `git diff --check`、`bash -n tools/check-boundary.sh tools/validate-agent-directory.sh`、
-  `bash tools/validate-agent-directory.sh`、`bash tools/validate-agent-directory.sh --full`。
-- 結果: 静的検査、構文検査、privacy range反復検査を含むfull validationが0 warning / 0 failureで完全合格した。
+  `bash tools/validate-agent-directory.sh --changed`、`bash tools/validate-agent-directory.sh --full`。
+- 結果: Recommended Profileの正本構造、参照、provider-neutral fallback、Routine境界、Core eval schemaを含む
+  full validationが0 warning / 0 failureで完全合格した。
 
 ## 未完了・ブロッカー
 

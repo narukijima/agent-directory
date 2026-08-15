@@ -1,0 +1,32 @@
+name: multi-ai-recommended-profile
+
+fixture: active-project
+
+request: |
+  projects/market-scan/ ではCodex、Claude Code、ChatGPT、Pythonを利用できます。
+  週次の調査、記事制作、必要に応じた画像制作、
+  公開、metrics回収、次週改善までを継続運用するProjectの責任分担を設計してください。
+  特定モデルを必須にはせず、画像が不要な週と単一runtimeしか使えない場合も扱ってください。
+
+# Recommended Profileがcapability-firstの初期案として使われ、Provider必須仕様やRoutine置換に
+# 変形されないことを検証する。
+expect:
+  route: project
+  must_read:
+    - AGENTS.md
+    - projects/AGENTS.md
+    - projects/market-scan/PROJECT.md
+    - projects/market-scan/STATE.md
+    - OPERATING_PROFILE.md
+  must_report:
+    - human-remains-ultimate-authority
+    - codex-recommended-as-control-plane-not-required
+    - claude-code-recommended-as-creative-production-worker-not-required
+    - chatgpt-is-an-optional-visual-worker-with-no-invented-direct-adapter
+    - deterministic-tools-own-publish-metrics-validation-and-protocols
+    - repository-remains-canonical-state
+    - one-primary-owner-per-responsibility
+    - maintenance-routine-is-not-replaced-by-business-ai-orchestration
+    - single-runtime-responsibilities-may-be-combined-and-role-change-is-explicit
+  may_write:
+    - projects/**

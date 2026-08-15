@@ -15,6 +15,7 @@ external-effect-ambiguous-destination
 explicit-file-delete-standing-authorization
 ambiguous-file-delete-refusal
 provider-semantic-authorization-parity
+multi-ai-recommended-profile
 unowned-change-conflict
 explicit-backup-current-project-work
 explicit-backup-unowned-current-work

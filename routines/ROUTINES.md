@@ -28,6 +28,16 @@ Model Provider（任意） = 決定的検査が示した異常の分析と低リ
 - 一般的なUnix環境の標準Schedulerはcron、macOSの推奨はlaunchdである。CI、GitHub Actions、
   常駐daemon、AI製品固有SchedulerをRoutine実行基盤にしない。
 
+## Business-level AI orchestrationとの境界
+
+本書が所有するのはCore Maintenance RoutineのTriggerと実行境界である。定期市場調査、コンテンツ制作、
+定例分析などAI判断を伴うProject固有workflowの上位統括は別概念であり、
+`OPERATING_PROFILE.md#scheduled-workflowとroutineの境界`の推奨責任モデルを参照する。
+
+Codexをbusiness-levelのscheduled orchestratorとして選んでも、cron / launchd、deterministic maintenance、
+optional reasoningからなる本Routineを置き換えない。逆にMaintenance scheduleの存在を、Project固有の
+AI workflowや既定scheduleを導入する根拠にしない。
+
 ## 標準フロー
 
 ```text
