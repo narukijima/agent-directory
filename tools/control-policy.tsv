@@ -77,6 +77,7 @@ guarded	routines/ROUTINES.md	無人実行契約
 guarded	routines/*/ROUTINE.md	Routine instance契約
 guarded	projects/AGENTS.md	Route正本
 guarded	projects/CLAUDE.md	bridge
+guarded	projects/DOCS.md	Project文書の任意拡張正本
 guarded	projects/LIFECYCLE.md	状態遷移正本
 guarded	projects/RECOVERY.md	復旧正本
 guarded	projects/REPOSITORIES.md	attachment registry
