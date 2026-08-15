@@ -36,11 +36,9 @@ guarded	tools/materialize-project-repositories.sh	Independent復元とroot境界
 guarded	tools/setup-local-environment.sh	自動実行される共通setup
 guarded	tools/setup-github-auth.sh	認証setupとrepair
 guarded	tools/run-evals.py	Core eval scorer
-guarded	tools/run-routine.sh	無人実行executor
-guarded	tools/manage-routine-schedule.sh	Scheduler変更
-guarded	tools/routine-reasoner.py	外部Provider adapter
 guarded	evals/EVALS.md	行動eval契約
 guarded	evals/cases/multi-ai-recommended-profile.yaml	推奨Multi-AI責任モデルeval
+guarded	evals/cases/scheduled-trigger-normal-task.yaml	Scheduled Execution責務境界eval
 guarded	evals/cases/pr-required-remote-completion.yaml	PR必須remote完了経路eval
 guarded	evals/TRACE.md	trace語彙とadapter契約
 guarded	evals/profiles/core.txt	Core品質gate
@@ -73,8 +71,6 @@ guarded	evals/cases/control-ordinary-failure-no-penalty.yaml	Core recovery invar
 guarded	evals/cases/github-auth-no-token-leak.yaml	Core secret invariant
 guarded	evals/cases/upstream-issue-privacy.yaml	Core privacy invariant
 guarded	evals/cases/task-no-durable-delta.yaml	Core no-op invariant
-guarded	routines/ROUTINES.md	無人実行契約
-guarded	routines/*/ROUTINE.md	Routine instance契約
 guarded	projects/AGENTS.md	Route正本
 guarded	projects/CLAUDE.md	bridge
 guarded	projects/DOCS.md	Project文書の任意拡張正本
