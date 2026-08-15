@@ -9,6 +9,6 @@
 
 ## 昇格の扱い
 
-- 昇格条件は`projects/PROJECTS.md#研究文書とKnowledge昇格`が所有する。
+- 昇格条件は`projects/DOCS.md#研究文書とKnowledge昇格`が所有する。
 - 昇格した結論のactive正本はKnowledge側だけとし、ここには昇格先へのリンクだけを残す。
 - 条件を満たさない結論はこのProject内に留め、Root Knowledgeとして扱わない。

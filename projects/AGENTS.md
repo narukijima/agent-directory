@@ -1,32 +1,29 @@
 # projects/AGENTS.md — Project作業の入口
 
-詳細は`projects/PROJECTS.md`が所有する。
+成果契約・Git境界は`projects/PROJECTS.md`、文書拡張は`projects/DOCS.md`が所有する。
 
 ## 着手
 
-1. 対象を一つに確定する（明示パスがなければ
-   `tools/find-context.sh --route project --limit 5 -- "<query>"`）。明示依頼なく新設しない。
-2. `tools/task.sh context --route project --target projects/<name>`で、読む正本とGit所有境界を得る。
-3. `AGENTS.md`（あれば）→`PROJECT.md`全文→`STATE.md`の順に読み、対象契約
-   （`#PC-xx`か`#status`）と合格条件を特定。
+1. 対象を一つに確定する。明示パスがなければ
+   `tools/find-context.sh --route project --limit 5 -- "<query>"`を使い、明示依頼なく新設しない。
+2. `tools/task.sh context --route project --target projects/<name>`で正本とGit境界を得る。
+3. `AGENTS.md`（あれば）→`PROJECT.md`→`STATE.md`の順に読み、対象契約（`#PC-xx`か`#status`）と合格条件を特定。
 4. 成立したDocs Route条件の正本とRequired参照だけを読む。
 
 ## Git所有境界
 
-- toplevel=Workspace rootならEmbedded（root Gitへcommit）、`projects/<name>/`自身なら
-  Independent（Project固有Gitへcommit）。
+- toplevel=Workspace rootならEmbedded、`projects/<name>/`ならIndependentとして各Gitへcommitする。
 - 解決不能時だけ`projects/REPOSITORIES.md`を読みmaterializeへ進む。
 - 書込は常に`projects/<name>/**`。本体sessionはregistryを、root sessionは本体を書かない。
 
 ## 実行と完了
 
-- 成果契約の範囲で最小かつ完全に変更。契約自体の変更は`projects/LIFECYCLE.md#人間が決める遷移`。
-- `PROJECT.md`の検証を実行。未実行を合格扱いしない。
+- 成果契約内で最小かつ完全に変更する。契約変更は`projects/LIFECYCLE.md#人間が決める遷移`。
+- `PROJECT.md`の検証を実行し、未実行を合格扱いしない。
 - 状態変化と同じ作業内で`STATE.md`を更新。
-- `tools/task.sh verify`で対象差分を検証する。検証合格後はscoped commitまで確認なしで完結し、
-  結果、証拠、commit、未完了を区別して事後報告（`tools/TOOLS.md#自律実行の標準完了`）。
+- `tools/task.sh verify`後、scoped commitまで完結し、結果、証拠、commit、未完了を区別して報告する。
 
-## PROJECTS.mdを読む条件
+## 詳細正本を読む条件
 
-新設、状態遷移、契約種別変更、Independent昇格・移行、remote操作、docs構造、
-個別`AGENTS.md`、復旧、規約保守、明示参照。
+- `PROJECTS.md`: 新設、状態・契約変更、Independent昇格・移行、remote、復旧、規約保守、明示参照。
+- `DOCS.md`: `ARCHITECTURE.md`、`docs/`、個別`AGENTS.md`、研究文書の追加・変更。

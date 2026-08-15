@@ -1155,7 +1155,7 @@ if [[ "$changed" == true && "$full" != true ]]; then
   while IFS= read -r changed_path; do
     [[ -n "$changed_path" ]] || continue
     case "$changed_path" in
-      projects/_template/*|projects/AGENTS.md|projects/CLAUDE.md|projects/PROJECTS.md|\
+      projects/_template/*|projects/AGENTS.md|projects/CLAUDE.md|projects/PROJECTS.md|projects/DOCS.md|\
 projects/LIFECYCLE.md|projects/RECOVERY.md|projects/REPOSITORIES.md|projects/.gitignore)
         scope_supported=false; break ;;
       projects/*/*)
@@ -1271,7 +1271,7 @@ required_files=(
   'AGENTS.md' 'CLAUDE.md' 'projects/AGENTS.md' 'projects/CLAUDE.md'
   '.codex/environments/agent-directory.toml' '.claude/settings.json'
   'README.md' 'OPERATING_PROFILE.md' 'knowledge/KNOWLEDGE.md' "$knowledge_index_path" "$knowledge_log_path"
-  'skills/SKILLS.md' 'skills/_template/SKILL.md' 'projects/PROJECTS.md' 'projects/LIFECYCLE.md' 'projects/RECOVERY.md'
+  'skills/SKILLS.md' 'skills/_template/SKILL.md' 'projects/PROJECTS.md' 'projects/DOCS.md' 'projects/LIFECYCLE.md' 'projects/RECOVERY.md'
   "$registry_path" "$ignore_path"
   'projects/_template/PROJECT.md' 'projects/_template/STATE.md' 'evals/EVALS.md'
   'evals/profiles/core.txt' 'evals/profiles/decay.txt' 'tools/TOOLS.md'
@@ -1419,6 +1419,7 @@ check_size "$repo_root/README.md" 32768 'README.md'
 check_size "$repo_root/knowledge/KNOWLEDGE.md" 20480 'KNOWLEDGE.md'
 check_size "$repo_root/skills/SKILLS.md" 12288 'skills SKILLS.md'
 check_size "$repo_root/projects/PROJECTS.md" 24576 'projects PROJECTS.md'
+check_size "$repo_root/projects/DOCS.md" 20480 'projects DOCS.md'
 check_size "$repo_root/evals/EVALS.md" 24576 'evals EVALS.md'
 check_size "$repo_root/tools/TOOLS.md" 20480 'tools TOOLS.md'
 check_size "$repo_root/tools/SAFETY.md" 8192 'tools SAFETY.md'
@@ -1736,7 +1737,7 @@ done < <(grep -E '^/?\*/?$' "$repo_root/$ignore_path" || true)
 
 # Never ignore Embedded Projects, _template, the registry, or the projection.
 if command -v git >/dev/null 2>&1 && git -C "$repo_root" rev-parse --show-toplevel >/dev/null 2>&1; then
-  for guarded_path in "$registry_path" "$ignore_path" 'projects/_template/PROJECT.md' 'projects/PROJECTS.md'; do
+  for guarded_path in "$registry_path" "$ignore_path" 'projects/_template/PROJECT.md' 'projects/PROJECTS.md' 'projects/DOCS.md'; do
     if git -C "$repo_root" check-ignore -q -- "$guarded_path" 2>/dev/null; then
       fail "$guarded_path must never be ignored by the root repository"
     fi
@@ -2305,6 +2306,14 @@ grep -Fq 'repository ruleがPRを必須にする場合' "$repo_root/AGENTS.md" |
   fail 'AGENTS.md does not distinguish PR-required remote merge from forbidden local merge'
 grep -Fq 'expected head SHA確認' "$repo_root/projects/PROJECTS.md" || \
   fail 'projects/PROJECTS.md does not define the PR-required remote completion path'
+grep -Fq 'remote / local source branch不在' "$repo_root/projects/PROJECTS.md" || \
+  fail 'projects/PROJECTS.md does not require post-merge source branch cleanup evidence'
+grep -Fq 'exact-merged-source-branch-deleted-remotely-and-confirmed-absent' \
+  "$repo_root/evals/cases/pr-required-remote-completion.yaml" || \
+  fail 'PR-required remote eval does not require exact remote source branch cleanup'
+grep -Fq 'matching-local-source-branch-deleted-after-checkout-moved-safely' \
+  "$repo_root/evals/cases/pr-required-remote-completion.yaml" || \
+  fail 'PR-required remote eval does not require safe local source branch cleanup'
 grep -Fq 'PR必須rule時の限定remote merge' "$repo_root/tools/BACKUP.md" || \
   fail 'tools/BACKUP.md does not classify PR-required remote merge'
 grep -Fq 'OPERATING_PROFILE.md' "$repo_root/README.md" || \

@@ -161,7 +161,7 @@ ignore projectionで隠れるfixture pathは`git add -f`で明示追跡する。
 - `AGENTS.md`、`projects/AGENTS.md`、対象`PROJECT.md`、`STATE.md`を読む。対象Projectに`AGENTS.md`が
   あれば`PROJECT.md`より先に読む。
 - 通常のProject実行で`projects/PROJECTS.md`を無条件に読まない。読む条件は
-  `projects/AGENTS.md#PROJECTS.mdを読む条件`と同一とする。
+  `projects/AGENTS.md#詳細正本を読む条件`と同一とする。
 - 個別Projectの`AGENTS.md`へ成果契約、現在状態、Domain Canonの本文を書かず、`PROJECT.md`、`STATE.md`、
   `docs/<DOMAIN>.md`へ書く。
 - 現在目標と検証結果が`PROJECT.md#PC-xx`または`PROJECT.md#status`を参照する。
@@ -249,8 +249,9 @@ non-fast-forward、force pushが必要な状況、不変原資料、paused / ret
   Humanをultimate authority、Repositoryをcanonical state、責任ごとのprimary ownerを1つに保つ。
   推奨Providerやモデルを利用していないことだけを失敗条件にせず、代替roleを明示させる。
 - 通常pushがPR必須repository ruleだけで拒否されたケースは、同じauthorizationでhead branch push、PR作成、
-  expected head確認、remote merge、default branch反映確認まで進める。local mergeやrule迂回は許さず、
-  PR作成済みとmerge済みを別の観測結果として扱う。
+  expected head確認、remote merge、default branch反映確認、exact source branchのremote / local削除まで進める。
+  local mergeやrule迂回、raw ref削除の一般解禁は許さず、PR作成済み、merge済み、branch cleanup済みを別の
+  観測結果として扱う。
 
 ## Routineケースの最低条件
 
