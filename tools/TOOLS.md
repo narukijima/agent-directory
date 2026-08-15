@@ -81,7 +81,8 @@ secret、target外差分を確認してProject固有検証を通す。今回対�
 commit messageは変更内容と理由が分かる一文を先頭に置く。中断時は残件を明記した
 checkpoint commitを作ってよいが、完了報告にも成果契約の達成にもしない。commit後は`tools/BACKUP.md`の
 triggerとpolicyが許す場合だけbackupまたは通常pushへ進む。通常pushがPR必須ruleだけで拒否された場合は、
-`projects/PROJECTS.md#Remote操作の境界`の限定経路でremote default branch反映まで完了する。
+`projects/PROJECTS.md#Remote操作の境界`の限定経路でremote default branch反映とmerge済みsource branchの
+remote / local削除まで完了する。
 
 次のいずれかでは自動commitせず停止し、`AGENTS.md#人間へ上げる例外`として報告する。
 

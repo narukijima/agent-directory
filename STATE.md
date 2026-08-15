@@ -22,6 +22,9 @@ business-level orchestrationとMaintenance Routineの境界、交換可能な現
 公開remoteがPR必須ruleを持つ場合に通常push拒否で停止する運用欠陥を修正し、head branch、PR、expected head、
 remote merge、default branch確認を一つの完了経路にした。local merge禁止とremote rule準拠を分離し、
 同じ失敗をCore evalとvalidatorで再発防止した。
+さらにmerge済みsource branchの残存を未完了として扱い、PR metadata、expected head、default branch反映を
+確認した後にexact remote branchと一致するlocal branchを削除・不在確認するところまで同じ完了経路へ含めた。
+raw ref削除の一般解禁はせず、PR cleanupだけを限定例外としてCore evalとvalidatorで固定した。
 
 ## 現在の目標
 
@@ -41,7 +44,7 @@ Workspace責務境界を壊さず、ClaudAGTエコシステムの変更と整合
 - 方法: `git diff --check`、`bash -n tools/check-boundary.sh tools/validate-agent-directory.sh`、
   `bash tools/validate-agent-directory.sh --changed`、`bash tools/validate-agent-directory.sh --full`。
 - 結果: Recommended Profileの正本構造、provider-neutral fallback、Routine境界、PR必須remote完了経路、
-  Core eval schemaを含むfull validationが0 warning / 0 failureで完全合格した。
+  merge後branch cleanup、Core eval schemaを含むfull validationが0 warning / 0 failureで完全合格した。
 
 ## 未完了・ブロッカー
 

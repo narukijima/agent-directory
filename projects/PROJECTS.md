@@ -60,95 +60,10 @@ projects/<project-name>/
 新規作成は利用者の明示依頼後に`_template/`をコピーし、すべてのプレースホルダーを書き換える。
 `_template/`は`PROJECT.md`と`STATE.md`だけを持ち、他を常設しない。
 
-## Project文書の三層（任意拡張）
+## Project文書の任意拡張
 
-Scope Canon（`AGENTS.md`/`PROJECT.md`/`STATE.md`/`ARCHITECTURE.md`）、Domain Canon
-（`docs/<DOMAIN>.md`と`docs/<DOMAIN>_SENSE.md`）、Detail Documents（`docs/`下の小文字ケバブケースの
-詳細設計、仕様、研究、計画、証拠）の三層は、大規模化したProjectの段階的開示に使える任意拡張である。
-標準概念として先に生成せず、`docs/`も`ARCHITECTURE.md`も存在しないProjectはこの節を読まない。
-
-### Domain Canon
-
-`docs/`直下に置く、意味を持つ大文字のMarkdownである（例: `DESIGN.md`、`PLANS.md`、`RESEARCH.md`）。
-必須一覧はなく、実際に存在する分野だけを作る。
-
-- 命名は原則として`^[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)*\.md$`を満たす。
-- 内容を持つ`docs/`は最低1件のDomain Canonを直下に持つ。詳細文書だけを置いて入口を欠かない。
-- `docs/README.md`、`docs/NOTES.md`、`docs/MISC.md`のような汎用的・無責任な正本を作らない。
-- 単なるリンク一覧にしない。現在有効な原則、境界、決定を短く保持し、詳細文書へ案内する正本兼入口とする。
-- 24KiBを超えない。超える詳細はDetail Documentsへ委譲する。見出し構成は分野ごとに決めてよい。
-
-### Detail Documents
-
-詳細フォルダと詳細文書はProjectごとに設計してよく、agent-directory全体で名前を固定しない
-（例: `docs/design-docs/core-beliefs.md`）。
-
-- フォルダと詳細文書は原則として小文字ケバブケースとする。
-- `misc/`、`other/`、`notes/`のような総受けフォルダを作らない。
-- `docs/`直下の各フォルダは少なくとも一つのDomain Canonから参照し、`references/`と`generated/`も
-  どのDomain Canonが管理するかを明示する。
-- 下位コレクションの局所地図として`index.md`を使ってよい。下位`README.md`を正本や入口として多用しない。
-- 空フォルダをテンプレート生成しない。
-- `docs/references/`は繰り返し参照するProject固有資料に限定し、Root Knowledgeと二重正本にしない。
-  `docs/generated/`は生成元、生成コマンド、鮮度確認方法がある場合だけ使い、生成物を手編集しない。
-
-## ARCHITECTURE.md
-
-Project rootに置く任意の全体地図である。所有するのは、Projectが解く問題の俯瞰、主要コンポーネント、
-コード・パッケージ・データの配置、依存方向とシステム境界、アーキテクチャ不変条件、横断的関心事。
-所有しないのは、現在目標・TODO・進捗、詳細な試行履歴、頻繁に変わる実装詳細、`PROJECT.md`と
-`STATE.md`の再掲。短く安定した地図とし、詳細設計は詳細文書が持つ。
-
-## `<DOMAIN>_SENSE.md`
-
-分野固有の定性的な品質判断を所有する任意パターンである。裸の`SENSE.md`を使わず、必ず対象Domainを
-名前に含める。例: `PRODUCT_SENSE.md`、`DESIGN_SENSE.md`。
-
-- 所有する: What good looks like、Core beliefs、判断ヒューリスティクス、トレードオフ、
-  Anti-patterns、良い例と悪い例、レビュー時の問い、見直し条件。
-- 所有しない: 必須仕様、数値合格条件、コマンド、現在状態、単なる好み、根拠のない抽象語。
-
-測定可能な評価軸は`QUALITY_SCORE.md`または`<DOMAIN>_SCORE.md`が持つ。
-
-## 個別ProjectのAGENTS.md
-
-Project固有の作業差分だけを持ち、差分があるときだけ置く（全Projectへ一律生成しない）。
-ただし`ARCHITECTURE.md`または`docs/`が存在する場合は、同Projectの`AGENTS.md`と`CLAUDE.md`を必須とし、
-段階的開示の入口にする。
-
-置いてよい内容:
-
-- 条件付きのProject Docs Route（本文を複製せず、条件と読む正本だけを列挙する）
-- Project固有のbuild、test、lintコマンドと検証順序
-- 特定パスの編集禁止、既存成果物の上書き禁止、使用するランタイム
-- 本番送信、公開、課金、権限変更のauthorization条件、`## Push Policy`、Project固有の生成物配置
-
-置いてはいけない内容:
-
-- 目的、最終ゴール、継続的使命、完了条件、成功指標、Project Criterion
-- 現在目標、現在状態、検証結果、現在有効な決定
-- KnowledgeとSkillの参照一覧
-- `projects/PROJECTS.md#作らない重複`が禁じる本文の複製と一括読込指示
-
-見出しは`## Project Docs Route`と正確に一致させ、存在する`ARCHITECTURE.md`と`docs/`直下の各Domain
-Canonを条件付き項目として列挙する。項目は「条件」と「読む正本」を持つ表の行、または`条件:`と
-`参照:`の対とする。本文中の言及、単なるファイル一覧、禁止文への
-登場は条件付き参照として数えない。`PROJECT.md`と`STATE.md`を正本として参照し、同階層に`@AGENTS.md`
-だけを持つ`CLAUDE.md`を必ず置く（`CLAUDE.md`単独は不可）。サイズ予算（2KiB）を拡大せず、
-短いRoute表として収める。
-
-## 研究文書とKnowledge昇格
-
-具体的な研究活動はProjectが所有し、再利用可能な研究方法はSkillが所有する。仮説、調査、実験は規模に応じて
-`docs/RESEARCH.md`か`docs/research/<study-name>.md`へ、成果物は`outputs/`へ置く。推奨要素は、
-問い、目的、仮説、方法、使用した証拠、観測・結果、反対証拠・限界、現在の結論、Knowledgeへの昇格先。
-
-Root Knowledgeへ昇格するのは、Project外でも再利用でき、根拠へ遡れ、適用範囲と不確実性が明記され、
-一時的な作業メモでない場合だけとする。
-
-昇格時はProject Researchを研究履歴として残し、Knowledge側と元研究・原資料を双方向にリンクする。
-現在有効な再利用可能結論の正本はKnowledge側とし、同じ結論を二つのactive正本として保守しない。
-Project固有の結論を無理に昇格させない。
+`ARCHITECTURE.md`、`docs/`、個別`AGENTS.md`、研究文書は、実在する複雑さを段階的に読む必要がある場合だけ
+追加する。三層構造、命名、責務、Docs Route、Knowledge昇格は[projects/DOCS.md](DOCS.md)が所有する。
 
 ## Attachment
 
@@ -222,6 +137,13 @@ remote platform上のmerge、default branchがそのSHAを含むことの確認�
 報告せず、別理由の拒否、check失敗、head移動、divergenceは既存の停止条件として扱う。local checkoutへ
 pull / merge / rebaseせず、remote ruleを迂回しない。
 
+default branch反映を確認した後は、PR metadataのhead branch名とexpected head SHAが一致し、対象がdefault branchで
+ないことを再確認して、そのsource branchだけをremote platform上で削除し、remote不在を確認する。raw
+`git push --delete`の一般解禁やwildcard / pruneは行わない。working treeがcleanなlocal checkoutでは、先に
+検証済みremote default branch tipへcheckoutを退避し、local source branch tipがexpected head SHAと一致する場合だけ
+そのbranchも削除する。local pull / merge / rebaseでmainを更新せず、branch名・SHA・merge状態の不一致では削除を止める。
+PR merge済みでもremoteまたはlocal source branchが残っていれば、この限定経路の完了とは報告しない。
+
 三段で一意にならない場合だけ一度確認し、決まった値を`## Push Policy`へ記録する。判定のための
 新しいregistry fieldやfrontmatterを追加しない。
 
@@ -231,8 +153,8 @@ push、root sessionからのIndependent remote操作、remote divergenceの自�
 通常のIndependent更新は次の順で進み、安全条件を満たす限り確認を挟まない。
 
 1. `projects/<name>/`のsessionで`projects/AGENTS.md`の手順どおり読込、変更、検証、commitする。
-2. push policyに従って`origin`へpushする。PR必須ruleなら上記限定経路でdefault branchまで反映する。
-3. branch SHA、default branch反映、検証結果、未完了をhandoffする。
+2. push policyに従って`origin`へpushする。PR必須ruleなら上記限定経路でdefault branch反映とsource branch削除まで完了する。
+3. branch SHA、default branch反映、remote / local source branch不在、検証結果、未完了をhandoffする。
 4. 別のroot sessionが`projects/REPOSITORIES.md`の`revision`だけを更新する。
 5. root validatorとcacheを実行してroot Gitへcommitし、設定済みならworkspace backupを実行する。
 

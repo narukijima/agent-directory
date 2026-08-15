@@ -77,7 +77,7 @@ Researchは独立したRouteでも独立したルートディレクトリでも�
 Knowledge Routeが扱うのは、原資料の取り込み、記憶、照会、統合、Knowledgeの更新である。
 「新しい問いへの答えを調査・実験によって見つける」依頼はProject Routeであり、研究方法そのものを
 再利用可能な手順として作る依頼はSkill Routeである。Project内の研究文書を、昇格条件を満たさないまま
-Root Knowledgeとして扱わない。昇格条件と昇格時の責務は`projects/PROJECTS.md#研究文書とKnowledge昇格`が
+Root Knowledgeとして扱わない。昇格条件と昇格時の責務は`projects/DOCS.md#研究文書とKnowledge昇格`が
 所有する。
 
 ## 候補探索と読込

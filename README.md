@@ -250,7 +250,8 @@ Toolは前提違反ならremoteを変更せず停止する。backup失敗は検�
 | [knowledge/KNOWLEDGE.md](knowledge/KNOWLEDGE.md) | 四層構造、保存先、不変規則、命名、限定取得、INDEX、LOG |
 | [skills/SKILLS.md](skills/SKILLS.md) | Skillの選択、frontmatter、Knowledge参照、構造 |
 | [projects/AGENTS.md](projects/AGENTS.md) | Project作業共通の着手・実行・完了手順 |
-| [projects/PROJECTS.md](projects/PROJECTS.md) | 成果契約、Project docs、Domain Canon、Research昇格、attachment、push policy |
+| [projects/PROJECTS.md](projects/PROJECTS.md) | 成果契約、attachment、push policy、PROJECT / STATE schema |
+| [projects/DOCS.md](projects/DOCS.md) | 任意のProject docs、Domain Canon、Docs Route、Research昇格 |
 | [projects/REPOSITORIES.md](projects/REPOSITORIES.md) | Independent Projectのattachment registryとentry形式 |
 | [projects/LIFECYCLE.md](projects/LIFECYCLE.md) / [projects/RECOVERY.md](projects/RECOVERY.md) | 状態遷移と削除条件 / 目的不一致からの復旧 |
 | [routines/ROUTINES.md](routines/ROUTINES.md) | Routine Trigger層、Scheduler分離、送信境界、commit/backup条件 |

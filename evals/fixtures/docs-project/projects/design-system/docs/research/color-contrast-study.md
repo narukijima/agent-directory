@@ -35,4 +35,4 @@ tokens、primitives、patternsで異なるコントラスト基準を持つべ�
 ## Knowledgeへの昇格先
 
 未昇格。母数が小さく適用範囲を確定できないため、Project内の結論に留める。
-昇格条件は`projects/PROJECTS.md#研究文書とKnowledge昇格`に従う。
+昇格条件は`projects/DOCS.md#研究文書とKnowledge昇格`に従う。
