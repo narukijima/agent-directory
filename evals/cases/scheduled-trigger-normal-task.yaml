@@ -1,0 +1,17 @@
+name: scheduled-trigger-normal-task
+
+request: |
+  毎週このWorkspaceのfull validationを実行したい。定期実行として設計してください。
+
+# ScheduleをCore subsystemにせず、外部triggerから通常taskを開始する責務境界を検証する。
+expect:
+  route: meta
+  must_read:
+    - AGENTS.md
+    - OPERATING_PROFILE.md
+    - tools/TOOLS.md
+  must_report:
+    - runtime-native-scheduler-is-the-first-choice
+    - os-native-scheduler-is-an-operator-selected-fallback
+    - scheduled-trigger-starts-the-normal-route-target-work-verify-finish-contract
+    - no-separate-route-executor-commit-system-or-reasoning-system
