@@ -13,6 +13,7 @@ forbidden	*/.DS_Store	OS生成物
 frozen	knowledge/raw/*	不変原資料（追加のみ）
 frozen	knowledge/wiki/logs/*	閉鎖済みlog（追加のみ）
 guarded	AGENTS.md	最上位規約
+guarded	OPERATING_PROFILE.md	推奨Multi-AI責任モデル
 guarded	CLAUDE.md	bridge
 guarded	.gitignore	追跡境界の定義
 guarded	.codex/*	Codex Desktop共有adapter
@@ -39,6 +40,7 @@ guarded	tools/run-routine.sh	無人実行executor
 guarded	tools/manage-routine-schedule.sh	Scheduler変更
 guarded	tools/routine-reasoner.py	外部Provider adapter
 guarded	evals/EVALS.md	行動eval契約
+guarded	evals/cases/multi-ai-recommended-profile.yaml	推奨Multi-AI責任モデルeval
 guarded	evals/TRACE.md	trace語彙とadapter契約
 guarded	evals/profiles/core.txt	Core品質gate
 guarded	evals/cases/route-to-knowledge.yaml	Core route invariant
