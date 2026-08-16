@@ -65,19 +65,29 @@ machine_is_healthy() {
 }
 
 install_from_gh() {
-  local candidate='' login_output='' auth_dir temp_file=''
+  local candidate='' login_output='' failure_reason='' auth_dir temp_file=''
   if machine_is_healthy; then
     return 0
   fi
-  command -v gh >/dev/null 2>&1 || blocked github-auth-unavailable
-  candidate="$(gh auth token --hostname github.com 2>/dev/null)" || blocked github-auth-unavailable
-  github_auth_value_valid "$candidate" || blocked github-auth-unavailable
+  command -v gh >/dev/null 2>&1 || blocked interactive-setup-required
+  candidate="$(gh auth token --hostname github.com 2>/dev/null)" || blocked interactive-setup-required
+  github_auth_value_valid "$candidate" || blocked interactive-setup-required
   if ! login_output="$(GH_TOKEN="$candidate" GH_HOST=github.com GH_PROMPT_DISABLED=1 \
-    GH_NO_UPDATE_NOTIFIER=1 gh api user --jq .login 2>/dev/null)"; then
+    GH_NO_UPDATE_NOTIFIER=1 gh api user --jq .login 2>&1)"; then
+    failure_reason="$(github_auth_classify_api_error "$login_output")"
     candidate=''
-    blocked github-auth-unavailable
+    [[ "$failure_reason" == github-auth-unavailable ]] && blocked interactive-setup-required
+    blocked "$failure_reason"
   fi
-  [[ "$login_output" == "$expected_login" ]] || { candidate=''; blocked account-mismatch; }
+  login_output="$(printf '%s\n' "$login_output" | tail -n 1 | tr -d '\r')"
+  [[ -n "$login_output" && "$login_output" != *[[:space:]]* ]] || {
+    candidate=''
+    blocked interactive-setup-required
+  }
+  if [[ -n "$expected_login" && "$login_output" != "$expected_login" ]]; then
+    candidate=''
+    blocked account-mismatch
+  fi
   auth_dir="$(dirname "$machine_file")"
   umask 077
   mkdir -p "$auth_dir" || blocked auth-store-permissions

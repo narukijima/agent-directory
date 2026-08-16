@@ -98,24 +98,31 @@ gh_ready() {
 }
 
 ensure_github_ready() {
+  local repair_output='' repair_reason=''
+  local repair_args=(--repair-from-gh)
   if gh_ready; then
     return 0
   fi
   if [[ "$github_repair_attempted" == false ]]; then
     github_repair_attempted=true
     if [[ "${AGENT_GITHUB_AUTH_DISABLE_REPAIR:-false}" != true ]]; then
-      bash "$tool_root/setup-github-auth.sh" --repair-from-gh \
-        --expected-login "$expected_login" >/dev/null 2>&1 || true
+      [[ -z "$expected_login" ]] || repair_args+=(--expected-login "$expected_login")
+      repair_output="$(bash "$tool_root/setup-github-auth.sh" "${repair_args[@]}" 2>&1)" || true
+      repair_reason="$(printf '%s\n' "$repair_output" | \
+        sed -n 's/^GITHUB_AUTH_BLOCKED reason=\([a-z0-9-]*\)$/\1/p' | tail -n 1)"
     fi
     if gh_ready; then
       return 0
     fi
+    [[ -z "$repair_reason" ]] || github_unready_reason="$repair_reason"
   fi
   return 1
 }
 
 github_unready_hint() {
   case "$github_unready_reason" in
+    interactive-setup-required)
+      printf 'finish GitHub CLI authentication as an Operator machine-setup step, then rerun tools/setup-github-auth.sh --install-from-gh; do not start interactive login from a normal task' ;;
     auth-store-missing|github-auth-unavailable)
       printf 'run tools/setup-github-auth.sh --install-from-gh once on this machine (tools/UPSTREAM.md#認証)' ;;
     auth-store-permissions)
