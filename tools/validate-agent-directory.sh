@@ -2201,7 +2201,7 @@ if [[ -f "$backup_tool" ]]; then
   [[ -x "$backup_tool" ]] || fail 'tools/backup-to-github.sh is not executable'
   "$syntax_bash" -n "$backup_tool" 2>/dev/null || fail 'tools/backup-to-github.sh fails bash -n'
 
-  allowed_git_subcommands='cat-file check-ref-format config diff fetch for-each-ref init ls-files ls-remote merge-base push rev-list rev-parse symbolic-ref'
+  allowed_git_subcommands='archive cat-file check-ref-format config diff fetch for-each-ref init ls-files ls-remote merge-base push read-tree rev-list rev-parse symbolic-ref'
   while IFS= read -r subcommand; do
     [[ -n "$subcommand" ]] || continue
     case " $allowed_git_subcommands " in
@@ -3072,6 +3072,7 @@ cp "$repo_root/tools/lib/project-registry.sh" "$task_fixture_dir/tools/lib/"
 {
   printf '#!/bin/bash\n'
   printf 'touch "$AGENT_DIRECTORY_ROOT/backup-called"\n'
+  printf 'printf "%%s\\n" "$*" > "$AGENT_DIRECTORY_ROOT/backup-args"\n'
   printf 'printf "ROOT_BACKUP_OK remote=backup branch=main sha=%%s scope=root-only\\n" "$(git -C "$AGENT_DIRECTORY_ROOT" rev-parse HEAD)"\n'
   printf 'exit 0\n'
 } > "$task_fixture_dir/tools/backup-to-github.sh"
@@ -3156,10 +3157,12 @@ if (( task_current_status != 0 )) || \
   [[ "$task_current_head" == "$task_fixture_head" ]] || \
   ! printf '%s\n' "$task_current_output" | grep -Fqx 'TASK_OK action=finish' || \
   ! printf '%s\n' "$task_current_output" | grep -Fq \
-    "ROOT_BACKUP_OK remote=backup branch=main sha=$task_current_head scope=root-only"; then
+    "ROOT_BACKUP_OK remote=backup branch=main sha=$task_current_head scope=root-only" || \
+  ! grep -Fqx -- "--root-only --fixed-commit $task_current_head" "$task_fixture_dir/backup-args"; then
   fail "task facade fixture: explicit current work did not commit before backup: $task_current_output"
 fi
-rm -f "$task_fixture_dir/validator-called" "$task_fixture_dir/backup-called"
+rm -f "$task_fixture_dir/validator-called" "$task_fixture_dir/backup-called" \
+  "$task_fixture_dir/backup-args"
 
 printf 'next target work\n' >> "$task_fixture_dir/deliverables/result.txt"
 task_unrelated_path=$'unrelated\nwork.txt'
@@ -3605,11 +3608,14 @@ if [[ -f "$backup_tool" ]] && command -v git >/dev/null 2>&1; then
 
   env "${backup_env[@]}" git init -q "$backup_work"
   backup_git symbolic-ref HEAD refs/heads/main
-  mkdir -p "$backup_work/tools" "$backup_work/projects"
+  mkdir -p "$backup_work/tools/lib" "$backup_work/projects"
   printf 'fixture agent directory\n' > "$backup_work/AGENTS.md"
   printf '.tmp/\n.agent-cache/\n.env*\n!.env.example\n.DS_Store\nignored-dir/\n' \
     > "$backup_work/.gitignore"
   printf '#!/usr/bin/env bash\nexit 0\n' > "$backup_work/tools/validate-agent-directory.sh"
+  cp "$backup_tool" "$backup_work/tools/backup-to-github.sh"
+  cp "$repo_root/tools/lib/project-registry.sh" "$repo_root/tools/lib/github-auth.sh" \
+    "$backup_work/tools/lib/"
   # An Embedded Project is tracked wholesale by the root Git and never enters the ignore projection.
   mkdir -p "$backup_work/projects/embedded-project"
   {
@@ -3755,6 +3761,44 @@ if [[ -f "$backup_tool" ]] && command -v git >/dev/null 2>&1; then
     'root-only backup'
   [[ "$(independent_remote_sha)" == "$independent_remote_before" ]] || \
     fail 'backup fixture: the root-only backup pushed to the Independent remote'
+
+  # The finish-only fixed mode audits the exact committed tree even when another target
+  # leaves staged, unstaged, untracked, and stashed state behind. Every caller-side state
+  # surface must remain byte-for-byte unchanged, and a SHA other than current HEAD must stop.
+  printf 'fixed backup baseline\n' > "$backup_work/fixed-backup.txt"
+  printf 'stash baseline\n' > "$backup_work/stash-source.txt"
+  backup_git add fixed-backup.txt stash-source.txt
+  backup_git commit -q -m 'fixture: verified commit for fixed backup'
+  fixed_backup_head="$(backup_git rev-parse HEAD)"
+  printf 'stashed caller work\n' >> "$backup_work/stash-source.txt"
+  backup_git stash push -q
+  printf 'unstaged caller work\n' >> "$backup_work/AGENTS.md"
+  printf 'staged caller work\n' >> "$backup_work/fixed-backup.txt"
+  backup_git add fixed-backup.txt
+  printf 'untracked caller work\n' > "$backup_work/fixed-untracked.txt"
+  fixed_status_before="$(backup_git status --porcelain=v1)"
+  fixed_index_before="$(backup_git write-tree)"
+  fixed_stash_before="$(backup_git rev-parse refs/stash)"
+
+  backup_run --root-only --fixed-commit "$fixed_backup_head"
+  backup_expect_line \
+    "ROOT_BACKUP_OK remote=backup branch=main sha=$fixed_backup_head scope=root-only" \
+    'finish-bound fixed commit with unrelated caller work'
+  [[ "$(backup_remote_sha)" == "$fixed_backup_head" ]] || \
+    fail 'backup fixture: fixed commit mode did not push the requested HEAD commit'
+  [[ "$(backup_git status --porcelain=v1)" == "$fixed_status_before" ]] || \
+    fail 'backup fixture: fixed commit mode changed caller index, worktree, or untracked state'
+  [[ "$(backup_git write-tree)" == "$fixed_index_before" ]] || \
+    fail 'backup fixture: fixed commit mode changed the caller index tree'
+  [[ "$(backup_git rev-parse refs/stash)" == "$fixed_stash_before" ]] || \
+    fail 'backup fixture: fixed commit mode changed the caller stash'
+
+  backup_run --root-only --fixed-commit "$(backup_git rev-parse HEAD~1)"
+  backup_expect_blocked 'fixed-commit-mismatch' 'a fixed commit other than current branch HEAD'
+  backup_git reset -q --hard "$fixed_backup_head"
+  rm -f "$backup_work/fixed-untracked.txt"
+  backup_git stash drop -q
+  backup_head="$fixed_backup_head"
 
   # Move root HEAD deterministically inside the git push invocation, after the pre-push
   # audit check. The immutable source ref must send only A; the newly committed B was not

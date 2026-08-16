@@ -198,6 +198,7 @@ if ! git -C "$git_root_abs" commit -m "$message" >&2; then
   blocked 'commit-failed' 'git commit failed (a hook rejection or an empty/invalid commit; see stderr)'
 fi
 sha="$(git -C "$git_root_abs" rev-parse --short HEAD)"
+full_sha="$(git -C "$git_root_abs" rev-parse HEAD)"
 
 # 5. Backup per profile. A blocked or unconfigured backup never cancels the local commit.
 backup_status='skipped'
@@ -207,7 +208,8 @@ case "$backup_profile" in
     ;;
   root-only)
     set +e
-    backup_out="$(cd "$repo_root" && bash tools/backup-to-github.sh --root-only 2>&1)"
+    backup_out="$(cd "$repo_root" && \
+      bash tools/backup-to-github.sh --root-only --fixed-commit "$full_sha" 2>&1)"
     backup_rc=$?
     set -e
     [[ -z "$backup_out" ]] || printf '%s\n' "$backup_out" >&2
