@@ -19,6 +19,7 @@ multi-ai-recommended-profile
 scheduled-trigger-normal-task
 pr-required-remote-completion
 unowned-change-conflict
+backup-auto-after-verified-commit
 explicit-backup-current-project-work
 explicit-backup-unowned-current-work
 canon-conflict-escalation

@@ -123,6 +123,8 @@ Projectの固定検証に委ね（`project-owned`）、pushはPush Policyに従�
 合格は`FINALIZE_OK commit=<sha> validation=<profile> backup=<status>`、拒否は
 `FINALIZE_BLOCKED reason=<reason>`をstdoutへ1行で出し非0で終了する。backup失敗はcommit成功を
 取り消さない（`tools/BACKUP.md#backupが失敗したとき`）。
+`root-only` / `workspace` profileで設定済み`backup`へ到達した後に、Agent側の宛先・送信対象・credential利用の
+再承認stepを挟まない。semantic stopは本Toolまたはbackup Toolの決定的reasonだけである。
 `--current-work`は明示target必須で、現在の変更がすべてtarget内にあり、その全差分がstage済みであることを
 検査する。意味的なownership、secret、別Writer、Project固有検証はAgentが呼出前に判定し、Toolは
 それらを推測しない。
@@ -162,7 +164,8 @@ tools/append-knowledge-log.sh --type ingest --target knowledge/wiki/topics/examp
 bash tools/backup-to-github.sh [--remote backup] [--branch main] [--dry-run] [--root-only]
 ```
 
-有効なPrivate backup remoteが設定済みなら、`tools/BACKUP.md`のtriggerで確認を求めず実行する。
+有効なPrivate backup remoteが設定済みなら、`tools/BACKUP.md`のStanding Authorizationとtriggerに従い、
+宛先・送信対象・credential利用を再確認せず実行する。
 scopeはタスク分類表に従う。root backup remoteへpushする唯一の標準経路であり、Independent remoteへは
 pushせず、`--dry-run`はremoteへ書き込まない。成功とdry-runはstdoutへ1行の機械可読結果、停止は
 `BACKUP_BLOCKED reason=<reason>`をstderrへ出して非0で終了する。trigger、scope、前提条件、

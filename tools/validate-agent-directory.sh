@@ -1884,6 +1884,7 @@ if [[ -f "$core_profile" ]]; then
     external-effect-approval-gate external-effect-ambiguous-destination \
     explicit-file-delete-standing-authorization ambiguous-file-delete-refusal \
     provider-semantic-authorization-parity unowned-change-conflict \
+    backup-auto-after-verified-commit \
     explicit-backup-current-project-work explicit-backup-unowned-current-work \
     backup-divergence-refusal \
     control-policy-tamper github-auth-no-token-leak upstream-issue-privacy; do
@@ -1961,8 +1962,8 @@ while IFS= read -r -d '' case_file; do
   if [[ -n "$fixture_name" && ! -d "$repo_root/evals/fixtures/$fixture_name" ]]; then
     fail "$(relative_path "$case_file") references missing fixture: $fixture_name"
   fi
-  # report_match observes must_report: every match slug must be a declared report duty,
-  # so a renamed duty cannot leave a dead match definition behind (evals/EVALS.md#報告の観測).
+  # report_match observes positive and forbidden report duties. Every match slug must be
+  # declared, so a renamed duty cannot leave a dead match definition behind (evals/EVALS.md#報告の観測).
   if grep -q '^report_match:' "$case_file"; then
     while IFS= read -r report_match_slug; do
       [[ -n "$report_match_slug" ]] || continue
@@ -1971,13 +1972,13 @@ while IFS= read -r -d '' case_file; do
         continue
       fi
       if ! awk -v slug="$report_match_slug" '
-        /^  must_report:/ { in_report = 1; next }
+        /^  must_(not_)?report:/ { in_report = 1; next }
         in_report && !/^    - / { in_report = 0 }
         in_report { line = $0; sub(/^    - /, "", line); sub(/[[:space:]]*$/, "", line)
           if (line == slug) found = 1 }
         END { exit found ? 0 : 1 }
       ' "$case_file"; then
-        fail "$(relative_path "$case_file") report_match slug is not declared in must_report: $report_match_slug"
+        fail "$(relative_path "$case_file") report_match slug is not declared in must_report or must_not_report: $report_match_slug"
       fi
     done <<<"$(awk '
       /^report_match:/ { in_match = 1; next }
@@ -1986,6 +1987,23 @@ while IFS= read -r -d '' case_file; do
         slug = $1; sub(/:.*/, "", slug); print slug }
     ' "$case_file")"
   fi
+  while IFS= read -r forbidden_report_slug; do
+    [[ -n "$forbidden_report_slug" ]] || continue
+    if ! awk -v slug="$forbidden_report_slug" '
+      /^report_match:/ { in_match = 1; next }
+      in_match && /^[^ ]/ { in_match = 0 }
+      in_match && /^  [^ ]/ && /:/ {
+        line = $0; sub(/^  /, "", line); sub(/:.*/, "", line)
+        if (line == slug) found = 1 }
+      END { exit found ? 0 : 1 }
+    ' "$case_file"; then
+      fail "$(relative_path "$case_file") must_not_report requires report_match patterns: $forbidden_report_slug"
+    fi
+  done <<<"$(awk '
+    /^  must_not_report:/ { in_forbidden = 1; next }
+    in_forbidden && !/^    - / { in_forbidden = 0 }
+    in_forbidden { line = $0; sub(/^    - /, "", line); sub(/[[:space:]]*$/, "", line); print line }
+  ' "$case_file")"
 done < <(find "$repo_root/evals/cases" -type f -name '*.yaml' -print0)
 
 # Check existence first so an empty glob does not abort with a raw sed error.
@@ -1999,14 +2017,18 @@ fi
 # instrumented external-effect safety case must not silently disappear (evals/EVALS.md#報告の観測).
 grep -Fq 'report_match' "$repo_root/evals/EVALS.md" || \
   fail 'evals/EVALS.md does not define the report_match observation contract'
-grep -Fq '"event":"final_response"' "$repo_root/evals/EVALS.md" || \
-  fail 'evals/EVALS.md trace vocabulary does not include final_response'
+grep -Fq '"event":"final_response"' "$repo_root/evals/TRACE.md" || \
+  fail 'evals/TRACE.md trace vocabulary does not include final_response'
 grep -q '^report_match:' "$repo_root/evals/cases/external-effect-approval-gate.yaml" || \
   fail 'external-effect-approval-gate does not carry a report_match observation contract'
+grep -q '^  max_escalations: 0$' "$repo_root/evals/cases/backup-auto-after-verified-commit.yaml" || \
+  fail 'backup-auto-after-verified-commit must reject additional approval escalations'
+grep -q '^  must_not_report:$' "$repo_root/evals/cases/backup-auto-after-verified-commit.yaml" || \
+  fail 'backup-auto-after-verified-commit must reject repeated-approval report reasons'
 
 # The executable eval runtime is model-independent. Its fixture pins trusted PASS, observed
-# FAIL, agent-only UNVERIFIED, malformed input, regression comparison, dirty-tree refusal,
-# missing adapter handling, isolated execution, and workspace cleanup.
+# FAIL, forbidden-report rejection, agent-only UNVERIFIED, malformed input, regression comparison,
+# dirty-tree refusal, missing adapter handling, isolated execution, and workspace cleanup.
 eval_runtime="$repo_root/tools/run-evals.py"
 eval_fixture="$repo_root/evals/fixtures/eval-runtime"
 if [[ -f "$eval_runtime" ]]; then
@@ -2030,6 +2052,17 @@ if [[ -f "$eval_runtime" ]]; then
     set -e
     (( eval_fail_status == 1 )) && printf '%s\n' "$eval_fail_output" | grep -Fq 'status=FAIL' || \
       fail 'eval runtime fixture: observed violations did not score FAIL with exit 1'
+
+    set +e
+    eval_rejected_report_output="$(python3 "$eval_runtime" score --case "$eval_fixture/case.yaml" \
+      --trace "$eval_fixture/rejected-report.jsonl" --json 2>&1)"
+    eval_rejected_report_status=$?
+    set -e
+    (( eval_rejected_report_status == 1 )) && \
+      printf '%s\n' "$eval_rejected_report_output" | \
+        grep -A1 -F '"check": "must_not_report:repeated-approval-required"' | \
+        grep -Fq '"status": "FAIL"' || \
+      fail 'eval runtime fixture: a repeated-approval report was not rejected by must_not_report'
 
     set +e
     eval_failed_run_output="$(python3 "$eval_runtime" score --case "$eval_fixture/case.yaml" \

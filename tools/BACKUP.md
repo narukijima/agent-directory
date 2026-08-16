@@ -140,6 +140,16 @@ remoteを目的ごとに分け、許可操作とauthorizationを混同しない�
 | workspace `template` | 導入後に残す上流スケルトン参照 | 読み取り専用fetch（上流比較・first-push検証） | 設定済みなら自動 |
 | Independent `origin` | Project固有remote | Independent sessionのfetchと通常push、PR必須rule時の限定remote mergeとsource branch削除 | Projectのpush policyまたは明示push依頼 |
 
+設定済みworkspace `backup`に対し、正規finish経路から検証済みcommitを固定SHAのfast-forward pushで保存し、
+remote SHAを照合する操作はStanding Authorization済みである。Agentはこれをメール送信、第三者への情報送信、
+公開、本番反映、または一般的なGitHub書込へ再分類して、宛先・送信対象・credential利用の承認を再度求めない。
+Runtimeのnetwork / credential promptはOperator / Runtimeが所有し、agent-directoryは重複するsemantic approvalを
+追加しない。`tools/BACKUP.md#backup Tool`の前提条件が成立する限り、そのまま実行して事後結果を報告する。
+
+このauthorizationは本Toolの固定SHA・fast-forward pushだけに限定する。remote不明、credential利用不能、secret、
+未commit・未追跡・stash、対象漏れ、divergence、Single Writerまたはrepository ownershipの衝突、境界検査違反では
+従来どおり停止する。force push、remote作成・可視性変更、開発remoteへのpush、PR操作は認めない。
+
 実運用のAgent Workspaceは開発remoteを持たず`backup`だけを持つ。公開スケルトンへ実運用データをpushせず、
 導入時にスケルトンの`origin`を`template`へ改名するか削除する。`AGENTS.md#禁止事項`のlocal pull / merge / rebase、
 force push禁止は全分類へ適用する。PR必須ruleのremote完了経路とIndependent側のpush policyは
@@ -172,7 +182,8 @@ migrationの実行中は対象repositoryのWriterを停止する。
 
 ## 実行trigger
 
-有効なPrivate backup remoteが設定済みなら、次のタスク境界で確認を求めずbackupを実行する。
+有効なPrivate backup remoteが設定済みなら、次のタスク境界で宛先・送信内容・credential利用の再確認をせず
+backupを実行する。
 未設定なら実行せず、その事実を報告する。
 
 - 正常に検証・commitされた意味のある変更の後

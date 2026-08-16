@@ -59,6 +59,7 @@ guarded	evals/cases/explicit-file-delete-standing-authorization.yaml	Core explic
 guarded	evals/cases/ambiguous-file-delete-refusal.yaml	Core destructive ambiguity invariant
 guarded	evals/cases/provider-semantic-authorization-parity.yaml	Core Provider parity invariant
 guarded	evals/cases/unowned-change-conflict.yaml	Core ownership invariant
+guarded	evals/cases/backup-auto-after-verified-commit.yaml	Core configured-backup authorization invariant
 guarded	evals/cases/explicit-backup-current-project-work.yaml	Core explicit backup completion invariant
 guarded	evals/cases/explicit-backup-unowned-current-work.yaml	Core explicit backup ownership invariant
 guarded	evals/cases/canon-conflict-escalation.yaml	Core canon invariant
