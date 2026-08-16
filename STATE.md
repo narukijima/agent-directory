@@ -30,6 +30,9 @@ Operator / machine setupを`SETUP.md`へ集約し、Claudeの長期OAuth認証�
 secret非表示のruntime preflight、scheduled executionの事前条件を正本化した。Multi-AI Profileには
 Claude CLIのavailability failure時にCodexがobjectiveとproduction responsibilityを引き取る宣言済みfallback、
 partial execution照合、Desktopのmanual alternative、Single Owner / Single Writer維持を追加した。
+Issue #98に対し、finishが直前の検証済みcommitのfull SHAをroot-only backupへ束縛し、別targetのdirty状態を
+保持・除外した隔離commit snapshotで監査・pushする経路を追加した。通常backupのcleanliness拒否は維持し、
+SHA不一致、到達不能local branch、処理中のHEAD移動は固定modeでも拒否する回帰fixtureを導入した。
 
 ## 現在の目標
 
@@ -46,11 +49,10 @@ Workspace責務境界を壊さず、ClaudAGTエコシステムの変更と整合
 
 - 対象: `PROJECT.md#PC-01`
 - 確認日: 2026-08-16
-- 方法: `git diff --check`、`bash -n tools/check-runtime-readiness.sh tools/validate-agent-directory.sh`、
-  `bash tools/check-runtime-readiness.sh`、`bash tools/validate-agent-directory.sh --changed`、
-  `bash tools/validate-agent-directory.sh --full`。
-- 結果: Codex / Claude availabilityとsecret非表示、誤cwd拒否、Multi-AI fallback、partial execution、Markdown参照、
-  adapter、boundary、Core eval schemaを含むfull validationが0 warning / 0 failureで完全合格した。
+- 方法: `git diff --check`、`bash -n tools/finalize-task.sh tools/backup-to-github.sh
+  tools/validate-agent-directory.sh`、`bash tools/validate-agent-directory.sh --full`。
+- 結果: finishからのfull SHA伝達、dirty caller状態を保持するfixed-commit backup、SHA不一致拒否、通常modeの
+  dirty拒否、既存のadapter、boundary、Core eval schemaを含むfull validationが0 warning / 0 failureで完全合格した。
 
 ## 未完了・ブロッカー
 

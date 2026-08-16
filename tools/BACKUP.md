@@ -5,13 +5,9 @@ backup trigger、remote分類、失敗、divergence、復旧、マシン移行�
 
 ## 目的と非ゴール
 
-目的は、ローカルの稼働正本が失われたとき、最後に確定したGitコミットから再構築できる
-遠隔コピーを1つ持つこと。非ゴール（実装しない）:
-
-- GitHubを正本、実行キュー、タスク管理、デプロイ経路、クラウド同期基盤にすること
-- 複数マシンの双方向同期と自動競合解決
-- GitHub Actions、CI、Git hook、常駐daemon、schedule到達だけを理由とする時刻駆動のバックアップ
-- バックアップ履歴の正本、`BACKUP_STATUS.md`のようなremote SHAをGit追跡で保存するファイル
+目的は、ローカル正本を最後の確定commitから再構築できる遠隔copyを1つ持つこと。GitHubを正本、queue、
+task / deploy / cloud同期基盤、双方向同期・競合解決、CI / hook / daemon / 時刻駆動backupにはしない。
+backup状態やremote SHAをGit追跡する正本も作らない。
 
 ## 用語
 
@@ -70,6 +66,11 @@ pushしない。全repositoryがremoteから復旧可能な場合だけ成功と
 workspace全体の成功として報告しない。タスク分類との対応は`tools/TOOLS.md#タスク分類と終端処理`が
 所有する。
 
+正規finishはcommit直後のfull SHAを内部option `--fixed-commit <full-sha>`で渡す。`--root-only`専用で、
+指定SHA=現在HEAD、到達不能local branchなし、処理中のHEAD不変を要求する。隔離commit snapshotへ通常の
+root検査を行うため、別targetに残るindex、worktree、untracked、stashを保持・除外できる。raw実行と
+workspace scopeのcleanlinessは緩めない。
+
 | scope | 成功（終了コード0） | dry-run成功 |
 |---|---|---|
 | workspace | `WORKSPACE_BACKUP_OK remote=<r> branch=<b> sha=<sha> independent=<n>` | `WORKSPACE_BACKUP_READY …` |
@@ -84,7 +85,8 @@ root前提条件は次である。ひとつでも満たさない場合、Toolは
 
 1. `AGENTS.md`と`tools/validate-agent-directory.sh`を持つGitリポジトリrootで、現在branchが
    指定branch（detached HEADでない）、指定remoteが設定済みである。
-2. index、tracked working tree、未追跡の非ignoreファイル、`git stash`がすべて空である。
+2. index、tracked working tree、未追跡の非ignoreファイル、`git stash`がすべて空である
+   （正規finishのroot-only fixed-commit modeだけは呼出元状態を隔離snapshotから除外・保持する）。
 3. 指定branchから到達できないローカルbranch commitがない。
 4. `.tmp/`、`.agent-cache/`、`.env`実値、`.DS_Store`がGit追跡されていない。
 5. 登録済みIndependent以外のnested Git、submodule、Git LFSがなく、100MiB以上の到達可能blobもない。
@@ -121,12 +123,9 @@ fallbackする。
 
 ## Toolが行わないこと
 
-`git add`、`git commit`、`git stash push`、`git pull`、`git merge`、`git rebase`、`git reset`、
-`git clean`、作業ツリーを変更する`git checkout`、force push、force-with-lease、mirror push、prune、
-remote branch削除、tagや全branchの一括push、remote側の競合自動解決、秘密情報の保存、
-GitHubリポジトリの作成・可視性変更、GitHub Actionsの実行、Independent remoteへの書込、
-子cloneのfetch・checkout・reset・merge・rebase・stashによる変形。対象を確定するのは
-検証済みのcommitである。
+対象を確定するのは検証済みcommitであり、Toolはadd / commit / stash、pull / merge / rebase / reset / clean、
+worktree変更、force系・mirror・全ref push、ref削除、競合解決、secret保存、remote作成・可視性変更、Actions、
+Independent remote書込、子cloneの変形を行わない。
 
 ## remoteの分類
 
@@ -140,23 +139,17 @@ remoteを目的ごとに分け、許可操作とauthorizationを混同しない�
 | workspace `template` | 導入後に残す上流スケルトン参照 | 読み取り専用fetch（上流比較・first-push検証） | 設定済みなら自動 |
 | Independent `origin` | Project固有remote | Independent sessionのfetchと通常push、PR必須rule時の限定remote mergeとsource branch削除 | Projectのpush policyまたは明示push依頼 |
 
-設定済みworkspace `backup`に対し、正規finish経路から検証済みcommitを固定SHAのfast-forward pushで保存し、
-remote SHAを照合する操作はStanding Authorization済みである。Agentはこれをメール送信、第三者への情報送信、
-公開、本番反映、または一般的なGitHub書込へ再分類して、宛先・送信対象・credential利用の承認を再度求めない。
-Runtimeのnetwork / credential promptはOperator / Runtimeが所有し、agent-directoryは重複するsemantic approvalを
-追加しない。`tools/BACKUP.md#backup Tool`の前提条件が成立する限り、そのまま実行して事後結果を報告する。
-
-このauthorizationは本Toolの固定SHA・fast-forward pushだけに限定する。remote不明、credential利用不能、secret、
-未commit・未追跡・stash、対象漏れ、divergence、Single Writerまたはrepository ownershipの衝突、境界検査違反では
-従来どおり停止する。force push、remote作成・可視性変更、開発remoteへのpush、PR操作は認めない。
+設定済みworkspace `backup`への正規finishは、検証済み固定SHAのfast-forward pushとremote SHA照合まで
+Standing Authorization済みで、Agentは宛先・内容・credential利用を再承認させない。Runtime promptはRuntimeが
+所有する。対象は本Toolの操作だけであり、remote / credential不明、secret、未確定状態、対象漏れ、divergence、
+Writer / ownership衝突、境界違反では停止する。force、remote変更、開発remote push、PR操作へは拡張しない。
 
 実運用のAgent Workspaceは開発remoteを持たず`backup`だけを持つ。公開スケルトンへ実運用データをpushせず、
 導入時にスケルトンの`origin`を`template`へ改名するか削除する。`AGENTS.md#禁止事項`のlocal pull / merge / rebase、
 force push禁止は全分類へ適用する。PR必須ruleのremote完了経路とIndependent側のpush policyは
 `projects/PROJECTS.md#Remote操作の境界`が所有する。
 
-本Tool自身はremote branchを削除しない。PR完了時の削除はbackupではなく、同節が定めるmerge確認後の
-限定cleanupであり、PRのsource branch以外へ拡張しない。
+本Toolはremote branchを削除しない。PR source branchの限定cleanupは同節のmerge確認後だけ行う。
 
 registryの`repository_url`規則は`projects/REPOSITORIES.md`が所有する。Toolは違反と`-`で始まるURLを
 `invalid-registry`で拒否し、報告経路でもuserinfoのpasswordを伏せる。
@@ -169,16 +162,9 @@ migrationの実行中は対象repositoryのWriterを停止する。
 
 ## root での `git clean`
 
-登録済みIndependent Projectの`projects/<name>/`はroot Gitからignoreされている。次はrootで実行しない。
-
-- `git clean -x`
-- `git clean -X`
-- `git clean`への二つ以上の`-f`（`-ff`、`-ffd`、`-ffdx`など）
-
-これらは未pushのIndependent commit、stash、未追跡の作業を不可逆に削除しうる。曖昧な掃除依頼では
-実行せず、削除対象の指定だけを確認する。対象pathが一意に明示され、未所有変更・未push履歴を巻き込まない
-最小操作なら、その依頼をStanding Authorizationとして追加承認なしで実行する。危険性の検証は
-破棄前提の一時fixtureだけで行う。
+rootからignoreされるIndependent Projectを消しうるため、rootで`git clean -x`、`-X`、二つ以上の`-f`を
+使わない。曖昧な掃除は停止し、一意なpathと未所有・未push状態を検査した最小操作だけを明示依頼に基づき行う。
+危険性の検証は破棄前提fixtureに限定する。
 
 ## 実行trigger
 
@@ -199,15 +185,12 @@ backupを実行する。
 外部scheduled triggerの到達自体はbackup triggerではない。通常taskが検証済みcommitを作った場合だけ
 上記triggerが成立し、定期実行専用のbackup経路は作らない。
 
-「今ある作業をバックアップして」はdirty treeへ本Toolを直接実行するtriggerではない。明示targetの
-現在作業は`tools/TOOLS.md#自律実行の標準完了`に従い、対象だけを検証・stage・commitしてから
-`task.sh finish --current-work`の内部で本Toolへ到達する。本Toolのdirty拒否はこの上位完了経路でも
-弱めず、target外差分、所有者不明変更、secret、別Writerとの競合を自動commitしない。
+明示された現在作業もraw Toolへ渡さず、`tools/TOOLS.md#自律実行の標準完了`どおり対象だけを検証・stageし、
+`task.sh finish --current-work`でcommitする。target外差分、所有者不明、secret、Writer競合はcommitしない。
 
 ## backupが失敗したとき
 
-backup先が未設定、到達不能、一時的に失敗しても、検証済みローカルcommitを取り消さず、
-ローカル作業も停止させない。次を区別して報告する。
+未設定、到達不能、一時失敗でも検証済みlocal commitを取り消さず、次を区別して報告する。
 
 ```text
 local task: complete
@@ -216,8 +199,7 @@ backup: failed / skipped / blocked
 recoverability: degraded
 ```
 
-そのタスクの成果契約が「remoteから復旧可能であること」を必須条件としている場合だけ、完了扱いにしない。
-backup失敗をタスクの失敗として、backup成功をタスクの検証成功として報告しない。
+remote復旧性が成果契約なら未完了、それ以外はbackup結果をtask / validation結果と混同しない。
 
 秘密情報、未コミット状態、remote divergence、対象漏れ、GitHubのhard limit、Single Writer違反、remoteの
 想定外変更は停止条件である。これらを自動解決せず、`AGENTS.md#人間へ上げる例外`として上げる。

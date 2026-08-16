@@ -162,6 +162,7 @@ tools/append-knowledge-log.sh --type ingest --target knowledge/wiki/topics/examp
 
 ```bash
 bash tools/backup-to-github.sh [--remote backup] [--branch main] [--dry-run] [--root-only]
+# finish内部専用: --root-only --fixed-commit <full-sha>
 ```
 
 有効なPrivate backup remoteが設定済みなら、`tools/BACKUP.md`のStanding Authorizationとtriggerに従い、
@@ -171,6 +172,9 @@ pushせず、`--dry-run`はremoteへ書き込まない。成功とdry-runはstdo
 `BACKUP_BLOCKED reason=<reason>`をstderrへ出して非0で終了する。trigger、scope、前提条件、
 停止reason、divergence、Independent監査項目、復旧・移行手順は`tools/BACKUP.md`が所有し、
 扱うときだけ読む。
+`--fixed-commit`は正規finishが直前に作ったcommitだけを渡す内部optionで、`--root-only`、full SHA、現在HEADとの
+完全一致を必須とする。隔離したcommit treeを監査・pushするため、呼出元のindex、worktree、untracked、stashは
+保持・除外される。通常のraw backupとworkspace backupはこの例外を使わずcleanlinessを要求する。
 
 ## GitHub認証Tool
 
