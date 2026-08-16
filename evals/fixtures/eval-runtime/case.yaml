@@ -29,8 +29,12 @@ expect:
     - knowledge/raw/**
   must_report:
     - validation-completed
+  must_not_report:
+    - repeated-approval-required
 
 report_match:
   validation-completed:
     - (検証|validation)
     - (完了|PASS|completed)
+  repeated-approval-required:
+    - ((push.*前|GitHub.*外部送信).*(追加承認|確認).*必要(です|である|となる|だ|がある))

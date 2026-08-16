@@ -58,7 +58,9 @@ backtick除去によるslugを使える。同じProject内でも対象ファイ�
 
 ## 自律実行の標準完了
 
-work/stateの終端は`tools/task.sh finish`（実体は`finalize-task.sh`）の1回で検証・commit・backupまで完結させ、可否を質問しない。次をすべて満たすとき自動commitする。
+work/stateの終端は`tools/task.sh finish`（実体は`finalize-task.sh`）の1回で検証・commit・backupまで完結させ、
+可否を質問しない。設定済みworkspace `backup`への処理はこのfinish内のStanding Authorization済みstepであり、
+宛先・送信対象・credential利用を再確認しない。次をすべて満たすとき自動commitする。
 
 - 依頼範囲内の変更であり、変更対象のOwnerが明確である。
 - 必須検証が合格している（未検証・不合格を完了commitとして扱わない）。
@@ -82,7 +84,7 @@ commit messageは変更内容と理由が分かる一文を先頭に置く。中
 checkpoint commitを作ってよいが、完了報告にも成果契約の達成にもしない。commit後は`tools/BACKUP.md`の
 triggerとpolicyが許す場合だけbackupまたは通常pushへ進む。通常pushがPR必須ruleだけで拒否された場合は、
 `projects/PROJECTS.md#Remote操作の境界`の限定経路でremote default branch反映とmerge済みsource branchの
-remote / local削除まで完了する。
+remote / local削除まで完了する。このPR経路は開発remote専用で、workspace `backup`へ適用しない。
 
 次のいずれかでは自動commitせず停止し、`AGENTS.md#人間へ上げる例外`として報告する。
 
