@@ -50,6 +50,8 @@ note() {
 
 ensure_github_remote_auth() {
   local workspace_root="$1" remote_name="$2" remote_url_value="$3" reason
+  local repair_output='' repair_reason=''
+  local repair_args=(--repair-from-gh --remote "$remote_name")
   [[ "$(github_auth_remote_kind "$remote_url_value")" == 'github-https' ]] || return 0
   if github_auth_resolve "$workspace_root" && \
     github_auth_probe_api "$expected_login" && \
@@ -60,8 +62,10 @@ ensure_github_remote_auth() {
   if [[ "$github_repair_attempted" == false ]]; then
     github_repair_attempted=true
     if [[ "${AGENT_GITHUB_AUTH_DISABLE_REPAIR:-false}" != true ]]; then
-      bash "$tool_root/setup-github-auth.sh" --repair-from-gh \
-        --expected-login "$expected_login" --remote "$remote" >/dev/null 2>&1 || true
+      [[ -z "$expected_login" ]] || repair_args+=(--expected-login "$expected_login")
+      repair_output="$(bash "$tool_root/setup-github-auth.sh" "${repair_args[@]}" 2>&1)" || true
+      repair_reason="$(printf '%s\n' "$repair_output" | \
+        sed -n 's/^GITHUB_AUTH_BLOCKED reason=\([a-z0-9-]*\)$/\1/p' | tail -n 1)"
     fi
     if github_auth_resolve "$workspace_root" && \
       github_auth_probe_api "$expected_login" && \
@@ -69,6 +73,7 @@ ensure_github_remote_auth() {
       return 0
     fi
     reason="${GITHUB_AUTH_REASON:-$reason}"
+    [[ -z "$repair_reason" ]] || reason="$repair_reason"
   fi
   blocked "$reason" 'GitHub authentication doctor and one safe repair attempt did not establish API and Git capability'
 }

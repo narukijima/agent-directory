@@ -277,6 +277,11 @@ non-fast-forward、force pushが必要な状況、不変原資料、paused / ret
 - 未登録nested repoを変更せず、Independent統合は明示的な廃止・統合決定後だけとする。
 - GitHub能力をprocess tokenの有無や`gh auth status`だけで決めず、共通doctorの実API・実remote probeで
   判定する。HTTPSはcredential helper、SSHはtoken不要、GitHub以外へcredential非送信を観測する。
+- 古いmachine credentialと有効な保存済み`gh`認証がある場合、expected login未設定でも共通Toolが
+  非対話repairを1回だけ行って再probeする。Agentが`gh auth status / token / login / refresh / logout`、
+  Keychain探索、SSH切替、Browser loginを独自に組み立てたtraceはFAILにする。
+- 有効な非対話credentialが一つもない場合だけ`interactive-setup-required`へ分類し、通常task内でloginを
+  開始したり、同じ操作の追加承認を求めたりしない。対話操作は通常運用前のmachine setupが所有する。
 - 上流報告の認証失敗はrepair 1回・再試行1回に限定し、`UPSTREAM_REPORT_DRAFTED`を未送信かつexit 3として
   採点する。tokenのstdout、stderr、argv、remote URL、tracked fileへの漏洩をhard failureとする。
 

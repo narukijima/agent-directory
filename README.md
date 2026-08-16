@@ -105,10 +105,11 @@ setup、認証、Workspace Trust、runtime preflightの詳細は[SETUP.md](SETUP
 repo-local `user.name`を保持する。local値も未設定のときだけ`AGENTS.md#自己定義`の推奨Agent名を
 既定値にする。emailと既存履歴は変更しない。既存cacheが新鮮なら本文を再読しないfast pathを使う。
 `.env*`のコピー、package追加、
-Git hook・remote・scheduleの変更、ネットワーク接続は行わない。Git hookの導入は利用開始手順の
-明示コマンドとして分離する。CodexのActionsは限定検証、full検証、hook状態確認を
+Git hook・remote・scheduleの変更、ネットワーク接続は行わない。Git hookと、設定済みGitHub backupを持つ
+Workspaceのmachine認証Gateは[SETUP.md](SETUP.md#initial-setup)の明示コマンドとして分離する。CodexのActionsは限定検証、full検証、hook状態確認を
 既存Toolへ直接つなぎ、GitHub認証状態は既存の`tools/setup-github-auth.sh --check`へ明示的に接続する。
-GitHub認証Actionは実APIと実remoteを検査するが、Setupからは呼ばない。判定ロジックをadapterへ複製しない。
+GitHub認証Actionは実APIと実remoteを検査するが、共通local Setupからは呼ばない。初回machine setupでは
+GitHub backup構成に限って正本手順から実行し、判定ロジックをadapterへ複製しない。
 Claude Codeの`.worktreeinclude`も既定では置かず、
 `.env*`などGit管理外ファイルをworktreeへ複製する必要が確認されたWorkspaceだけで個別に設計する。
 
