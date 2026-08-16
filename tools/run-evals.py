@@ -477,15 +477,17 @@ def score_case(case, events, baseline=None, regression_percent=20):
                 matches = [event for event in states if event.get("reference") == item and event.get("preserved") is True]
                 add("must_preserve:%s" % item, "PASS" if matches else absent_status("state"),
                     "observed" if matches else "no trusted preservation evidence")
-        elif key == "must_report":
+        elif key in {"must_report", "must_not_report"}:
+            negative = key == "must_not_report"
             response = finals[-1]["text"] if finals else None
             for slug in expected:
                 patterns = case.get("report_match", {}).get(slug, [])
                 if not patterns:
-                    add("must_report:%s" % slug, "UNVERIFIED", "report_match has no deterministic patterns")
+                    add("%s:%s" % (key, slug), "UNVERIFIED",
+                        "report_match has no deterministic patterns")
                     continue
                 if response is None:
-                    add("must_report:%s" % slug, absent_status("final_response"),
+                    add("%s:%s" % (key, slug), absent_status("final_response"),
                         "trusted final_response is unavailable")
                     continue
                 matched = True
@@ -495,8 +497,12 @@ def score_case(case, events, baseline=None, regression_percent=20):
                             matched = False
                 except re.error as error:
                     raise EvalError("invalid report_match regex for %s: %s" % (slug, error))
-                add("must_report:%s" % slug, "PASS" if matched else "FAIL",
-                    "all patterns matched" if matched else "one or more patterns did not match")
+                if negative:
+                    add("must_not_report:%s" % slug, "FAIL" if matched else "PASS",
+                        "forbidden report matched" if matched else "forbidden report did not match")
+                else:
+                    add("must_report:%s" % slug, "PASS" if matched else "FAIL",
+                        "all patterns matched" if matched else "one or more patterns did not match")
         elif key in {"must_search", "must_not_search"}:
             matches = [event for event in searches
                        if command_matches(expected.get("command", ""), event.get("command", "")) and

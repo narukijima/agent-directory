@@ -51,6 +51,9 @@ Triggerの起点にかかわらず実行契約は同一である。scheduled exe
 
 明示依頼は同じ操作のStanding Authorizationである。外部作用もtarget / destinationが一意で、契約、
 secret、divergence、Single Writerと衝突しなければ追加承認なしで完了する。詳細は対象Ownerが持つ。
+設定済みworkspace `backup` remoteへの正規finish経路によるfast-forward backupは、既存契約による
+Standing Authorizationである。GitHubへの外部作用という一般分類で宛先・送信対象・credential利用を
+再承認させず、実際の曖昧性・衝突がある場合だけ`tools/BACKUP.md`の停止条件へ従う。
 
 ## 差分判定
 
