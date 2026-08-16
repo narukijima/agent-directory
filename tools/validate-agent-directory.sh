@@ -1270,7 +1270,7 @@ fi
 required_files=(
   'AGENTS.md' 'CLAUDE.md' 'projects/AGENTS.md' 'projects/CLAUDE.md'
   '.codex/environments/agent-directory.toml' '.claude/settings.json'
-  'README.md' 'OPERATING_PROFILE.md' 'knowledge/KNOWLEDGE.md' "$knowledge_index_path" "$knowledge_log_path"
+  'README.md' 'SETUP.md' 'OPERATING_PROFILE.md' 'knowledge/KNOWLEDGE.md' "$knowledge_index_path" "$knowledge_log_path"
   'skills/SKILLS.md' 'skills/_template/SKILL.md' 'projects/PROJECTS.md' 'projects/DOCS.md' 'projects/LIFECYCLE.md' 'projects/RECOVERY.md'
   "$registry_path" "$ignore_path"
   'projects/_template/PROJECT.md' 'projects/_template/STATE.md' 'evals/EVALS.md'
@@ -1279,7 +1279,7 @@ required_files=(
   'tools/BACKUP.md' 'tools/BACKUP-RECOVERY.md'
   'tools/build-context-cache.sh' 'tools/find-context.sh' 'tools/prepare-context.sh'
   'tools/append-knowledge-log.sh' 'tools/backup-to-github.sh' 'tools/validate-agent-directory.sh'
-  'tools/setup-local-environment.sh'
+  'tools/setup-local-environment.sh' 'tools/check-runtime-readiness.sh'
   'tools/materialize-project-repositories.sh' 'tools/finalize-task.sh' 'tools/run-evals.py'
   'tools/lib/project-registry.sh' 'tools/validator/check-claude-settings.py' '.gitignore'
   'tools/UPSTREAM.md' 'tools/report-upstream-issue.sh' 'tools/REFERENCE.md'
@@ -1307,7 +1307,8 @@ for codex_action in \
   'command = "bash tools/validate-agent-directory.sh --changed"' \
   'command = "bash tools/validate-agent-directory.sh --full"' \
   'command = "bash tools/install-git-hooks.sh --status"' \
-  'command = "bash tools/setup-github-auth.sh --check"'; do
+  'command = "bash tools/setup-github-auth.sh --check"' \
+  'command = "bash tools/check-runtime-readiness.sh"'; do
   grep -Fqx "$codex_action" "$codex_environment" || \
     fail "Codex Local Environment lost its pinned action: $codex_action"
 done
@@ -2319,9 +2320,26 @@ grep -Fq 'PR必須rule時の限定remote merge' "$repo_root/tools/BACKUP.md" || 
   fail 'tools/BACKUP.md does not classify PR-required remote merge'
 grep -Fq 'OPERATING_PROFILE.md' "$repo_root/README.md" || \
   fail 'README.md does not register OPERATING_PROFILE.md'
+grep -Fq '[SETUP.md](SETUP.md)' "$repo_root/README.md" || \
+  fail 'README.md does not route initial setup to SETUP.md'
+for setup_heading in '## Supported runtimes' '## Initial setup' '## Workspace root' \
+  '## Claude authentication' '## Codex + Claude setup' '## Preflight checks' \
+  '## Scheduled / unattended execution' '## Runtime fallback' '## Machine-local secrets' \
+  '## Multi-machine notes' '## Troubleshooting' '## Verification'; do
+  grep -Fqx -- "$setup_heading" "$repo_root/SETUP.md" || \
+    fail "SETUP.md is missing its setup boundary: $setup_heading"
+done
+for setup_contract in 'claude setup-token' 'CLAUDE_CODE_OAUTH_TOKEN' 'claude auth status' \
+  'https://code.claude.com/docs/en/authentication' 'https://code.claude.com/docs/en/security' \
+  '実際に作業するAgent Workspace / Git rootをworking directoryとして起動' \
+  '内部fieldを直接patchする方法はCore recommendationにしない' \
+  'Codex → Claude CLI → Codex self-completion'; do
+  grep -Fq -- "$setup_contract" "$repo_root/SETUP.md" || \
+    fail "SETUP.md lost a required runtime setup contract: $setup_contract"
+done
 for profile_heading in '## 適用と優先順位' '## Capability Role' \
   '## OrchestratorとWorkerの最小契約' '## Repository State' \
-  '## Scheduled Execution' '## Current Model Recommendations'; do
+  '## Runtime Availability Fallback' '## Scheduled Execution' '## Current Model Recommendations'; do
   grep -Fqx -- "$profile_heading" "$repo_root/OPERATING_PROFILE.md" || \
     fail "OPERATING_PROFILE.md is missing its responsibility boundary: $profile_heading"
 done
@@ -2340,6 +2358,19 @@ grep -Fq 'Scheduler Engine、daemon、schedule registry' "$repo_root/OPERATING_P
   fail 'OPERATING_PROFILE.md must refuse an agent-owned scheduler subsystem'
 grep -Fq 'ChatGPT runtime adapterや自動連携を提供しない' "$repo_root/OPERATING_PROFILE.md" || \
   fail 'OPERATING_PROFILE.md must not invent a ChatGPT runtime adapter'
+grep -Fq '事前宣言済みのruntime-availability fallbackはsilent provider fallbackではない' \
+  "$repo_root/OPERATING_PROFILE.md" || \
+  fail 'OPERATING_PROFILE.md must distinguish declared availability fallback from silent fallback'
+grep -Fq 'Codex Control Plane → Claude Code CLI → Codex self-completion' \
+  "$repo_root/OPERATING_PROFILE.md" || \
+  fail 'OPERATING_PROFILE.md must preserve the automated runtime fallback chain'
+grep -Fq 'file changes、Git state、生成output、external' "$repo_root/OPERATING_PROFILE.md" || \
+  fail 'OPERATING_PROFILE.md must reconcile partial execution before fallback'
+grep -Fq 'requested owner / actual owner / fallback reason / completion state' \
+  "$repo_root/OPERATING_PROFILE.md" || \
+  fail 'OPERATING_PROFILE.md must make availability fallback observable'
+grep -Fq 'Claude必須と定めるtaskではfallbackせず' "$repo_root/OPERATING_PROFILE.md" || \
+  fail 'OPERATING_PROFILE.md must preserve Claude-required Project contracts'
 grep -Fq 'モデル更新時はこの節の推奨値だけを更新' "$repo_root/OPERATING_PROFILE.md" || \
   fail 'OPERATING_PROFILE.md must separate model recommendations from role contracts'
 grep -Fqx '## Scheduled executionケースの最低条件' "$repo_root/evals/EVALS.md" || \
@@ -2411,6 +2442,14 @@ if [[ -f "$repo_root/tools/setup-local-environment.sh" ]]; then
     fail 'tools/setup-local-environment.sh is not executable'
   "$syntax_bash" -n "$repo_root/tools/setup-local-environment.sh" 2>/dev/null || \
     fail 'tools/setup-local-environment.sh fails bash -n'
+fi
+grep -Fq 'check-runtime-readiness.sh' "$repo_root/tools/TOOLS.md" || \
+  fail 'tools/TOOLS.md does not register check-runtime-readiness.sh'
+if [[ -f "$repo_root/tools/check-runtime-readiness.sh" ]]; then
+  [[ -x "$repo_root/tools/check-runtime-readiness.sh" ]] || \
+    fail 'tools/check-runtime-readiness.sh is not executable'
+  "$syntax_bash" -n "$repo_root/tools/check-runtime-readiness.sh" 2>/dev/null || \
+    fail 'tools/check-runtime-readiness.sh fails bash -n'
 fi
 for github_auth_consumer in tools/backup-to-github.sh tools/report-upstream-issue.sh; do
   grep -Fq 'expected_login="${AGENT_DIRECTORY_GITHUB_EXPECTED_LOGIN:-}"' \
@@ -2499,6 +2538,62 @@ if [[ "$full" == true && -z "${AGENT_VALIDATOR_NESTED_FIXTURE:-}" ]]; then
   [[ -z "$(git -C "$local_environment_fixture/work" config --local --get user.name 2>/dev/null || true)" && \
     "$local_environment_output" == *'git-author=template-unset'* ]] || \
     fail 'local environment fixture: template placeholder was written as a Git author'
+
+  runtime_readiness_fixture="$(mktemp -d "${TMPDIR:-/tmp}/agent-validator-runtime-readiness.XXXXXX")"
+  cleanup_paths+=("$runtime_readiness_fixture")
+  mkdir -p "$runtime_readiness_fixture/work/tools" "$runtime_readiness_fixture/bin"
+  cp "$repo_root/tools/check-runtime-readiness.sh" \
+    "$runtime_readiness_fixture/work/tools/check-runtime-readiness.sh"
+  chmod 755 "$runtime_readiness_fixture/work/tools/check-runtime-readiness.sh"
+  git -C "$runtime_readiness_fixture/work" init -q
+  printf '%s\n' '#!/bin/bash' \
+    'if [[ "${1:-}" == "--version" ]]; then printf "codex-cli fixture\\n"; exit 0; fi' \
+    'if [[ "${1:-}" == "login" && "${2:-}" == "status" ]]; then exit 0; fi' \
+    'exit 1' > "$runtime_readiness_fixture/bin/codex"
+  printf '%s\n' '#!/bin/bash' \
+    'if [[ "${1:-}" == "--version" ]]; then printf "fixture (Claude Code)\\n"; exit 0; fi' \
+    'if [[ "${1:-}" == "auth" && "${2:-}" == "status" ]]; then [[ -z "${MOCK_CLAUDE_AUTH_FAIL:-}" ]]; exit; fi' \
+    'exit 1' > "$runtime_readiness_fixture/bin/claude"
+  chmod 755 "$runtime_readiness_fixture/bin/codex" "$runtime_readiness_fixture/bin/claude"
+
+  set +e
+  runtime_readiness_output="$(cd "$runtime_readiness_fixture/work" && \
+    env PATH="$runtime_readiness_fixture/bin:$PATH" \
+      CLAUDE_CODE_OAUTH_TOKEN='fixture-oauth-secret' \
+      bash tools/check-runtime-readiness.sh --require-codex --require-claude 2>&1)"
+  runtime_readiness_status=$?
+  set -e
+  if (( runtime_readiness_status != 0 )) || \
+    [[ "$runtime_readiness_output" != *'workspace=ready codex=ready'* || \
+      "$runtime_readiness_output" != *'claude=ready'* || \
+      "$runtime_readiness_output" != *'claude_oauth_env=present'* ]]; then
+    fail "runtime readiness fixture: ready runtimes were not reported: $runtime_readiness_output"
+  fi
+  [[ "$runtime_readiness_output" != *'fixture-oauth-secret'* ]] || \
+    fail 'runtime readiness fixture: OAuth token value was printed'
+
+  set +e
+  runtime_readiness_output="$(cd "$runtime_readiness_fixture/work/tools" && \
+    env PATH="$runtime_readiness_fixture/bin:$PATH" \
+      bash check-runtime-readiness.sh --require-claude 2>&1)"
+  runtime_readiness_status=$?
+  set -e
+  if (( runtime_readiness_status == 0 )) || \
+    [[ "$runtime_readiness_output" != *'reason=workspace-root-mismatch'* ]]; then
+    fail "runtime readiness fixture: incorrect cwd was accepted: $runtime_readiness_output"
+  fi
+
+  set +e
+  runtime_readiness_output="$(cd "$runtime_readiness_fixture/work" && \
+    env PATH="$runtime_readiness_fixture/bin:$PATH" MOCK_CLAUDE_AUTH_FAIL=1 \
+      bash tools/check-runtime-readiness.sh --require-claude 2>&1)"
+  runtime_readiness_status=$?
+  set -e
+  if (( runtime_readiness_status == 0 )) || \
+    [[ "$runtime_readiness_output" != *'claude=auth-unavailable'* || \
+      "$runtime_readiness_output" != *'reason=claude-auth-unavailable'* ]]; then
+    fail "runtime readiness fixture: missing Claude auth was accepted: $runtime_readiness_output"
+  fi
 fi
 grep -Fq 'finalize-task.sh' "$repo_root/tools/TOOLS.md" || \
   fail 'tools/TOOLS.md does not register finalize-task.sh'

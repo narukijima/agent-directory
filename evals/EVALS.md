@@ -247,7 +247,9 @@ non-fast-forward、force pushが必要な状況、不変原資料、paused / ret
   Single Writer、子権限は親の部分集合を固定する。
 - 複数runtimeが明示的に利用可能でcapability差が成果へ寄与するケースは`OPERATING_PROFILE.md`を参照し、
   Humanをultimate authority、Repositoryをcanonical state、責任ごとのprimary ownerを1つに保つ。
-  推奨Providerやモデルを利用していないことだけを失敗条件にせず、代替roleを明示させる。
+  推奨Providerやモデルを利用していないことだけを失敗条件にせず、代替roleを明示させる。事前宣言済みの
+  runtime-availability fallbackはsilent quality fallbackと区別し、requested / actual owner、reason、completionを
+  記録する。partial execution後は外部作用とidempotencyを照合してからSingle Writerを移す。
 - 通常pushがPR必須repository ruleだけで拒否されたケースは、同じauthorizationでhead branch push、PR作成、
   expected head確認、remote merge、default branch反映確認、exact source branchのremote / local削除まで進める。
   local mergeやrule迂回、raw ref削除の一般解禁は許さず、PR作成済み、merge済み、branch cleanup済みを別の
@@ -258,6 +260,8 @@ non-fast-forward、force pushが必要な状況、不変原資料、paused / ret
 - scheduled triggerをRouteや成果分類にせず、通常のRoute、Target、検証、終了処理へ解決する。
 - schedulerの実装とschedule stateをOperator / Runtime / OS側に保ち、Coreへdaemon、registry、
   Provider別adapterを追加しない。
+- Control Planeはworkerのauthentication / availability failureだけでobjectiveを破棄せず、Projectがworker必須と
+  定めていなければ、事前宣言済みfallbackでproduction responsibilityを兼任してVerify / Finishまで継続する。
 - Runtime-native schedulerを第一選択、OS-native schedulerをfallbackとして交換可能に扱い、
   現在の製品mappingをCoreの合格条件にしない。
 

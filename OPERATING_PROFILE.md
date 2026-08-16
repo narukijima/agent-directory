@@ -20,6 +20,10 @@
 利用するcapabilityを作業記録またはhandoffで明示する。Human / Operatorはultimate authorityであり、
 Project固有approval、安全境界、lifecycle、成果契約は本書より上位にある。
 
+ただし、後述する事前宣言済みのruntime-availability fallbackはsilent provider fallbackではない。利用不能な
+workerから、objectiveを保持しているControl Planeへproduction responsibilityを戻す責任継続であり、
+適用理由とactual ownerを記録する。品質評価を理由に無断でProviderを切り替えることとは区別する。
+
 ## Capability Role
 
 長期的な責任構造は製品名ではなくcapabilityで定義する。現在の推奨mappingは次のとおりである。
@@ -103,6 +107,37 @@ assets / recommended_choice / validation
 final ownerにせず、同じschedule、production job、state更新を重複所有させない。委譲は
 `tools/CONTROL.md#委譲の境界`に従い、同一Git rootのWriterとfinal gateを一つに保つ。
 
+## Runtime Availability Fallback
+
+runtime fallbackは、delegate先のruntimeが作業を開始・継続できないavailability failureだけを対象にする。
+対象例はexecutable unavailable、authentication unavailable / expired、startup failure、runtime unavailable、
+invocation failure、infrastructure-level timeout、delegation channel failureである。通常のtask failure、品質不足、
+成果物の検証失敗はfallback条件ではなく、既存のself-repair、verification、停止・報告契約に従う。
+
+CodexがControl Plane、Claude CodeがCreative / Production Workerである自動・無人実行の推奨chainは次である。
+
+```text
+Codex Control Plane → Claude Code CLI → Codex self-completion
+```
+
+Claude Code CLIがavailability failureなら、Control Planeはobjective、constraints、canonical state、完了責任を
+保持し、Codexをactual production ownerとして一時的に兼任させる。これはClaudeと同等の成果を保証するという
+意味ではなく、task自体を未実行のまま放棄しないための責任継続である。Project契約またはHuman overrideが
+Claude必須と定めるtaskではfallbackせず、その契約の停止・報告規則を優先する。
+
+Claude Desktop / Claude Code DesktopはOperatorが存在するinteractive環境でmanual alternativeとして選べるが、
+Coreの自動fallback chainには入れない。interactive時はClaude CLI、Desktop、Codex self-completionのいずれかを
+OperatorまたはProject契約に沿って選び、ownerを明示する。
+
+workerが一部を実行した後の停止では、Control Planeは引継ぎ前にfile changes、Git state、生成output、external
+side effects、publish / send / API mutation、receipt、idempotencyを確認する。未確認のまま最初から同じ外部作用を
+再実行しない。既存成果を採用・修復・再開する範囲を決め、同一Git rootのSingle Writerと各責任のSingle Ownerを
+維持する。
+
+fallback時の最小記録は`requested owner / actual owner / fallback reason / completion state`とし、既存の作業記録、
+STATE、handoffのうち対象Projectが所有する方法へ残す。このためのruntime registry、workflow engine、queue、
+daemon、独自orchestratorは追加しない。
+
 ## Repository State
 
 Repositoryのtracked canonical stateを、会話履歴、Provider側memory、検索cache、runtime stateより優先する。
@@ -126,6 +161,11 @@ Provider別adapterを実装しない。
 
 週次full validation等が必要なら、選んだ外部schedulerから通常のvalidator / audit taskを起動する。
 既定scheduleは持たず、変更時のvalidation、stale cacheの必要時再生成、検出時のself-healingまたは停止を優先する。
+
+CodexがControl Planeであるscheduled workflowは、`objectiveを保持 → Claude availabilityを確認 → 利用可能なら
+delegate → unavailableならCodexがproduction responsibilityを兼任 → Verify → Finish`とする。Claudeの
+authentication failureだけを理由にobjectiveを破棄しない。delegate後にavailability failureとなった場合は、
+`Runtime Availability Fallback`のpartial execution確認を完了してからownerを切り替える。
 
 ## Current Model Recommendations
 
