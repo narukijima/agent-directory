@@ -22,11 +22,18 @@ Operator / machine側setupの正本である。AI間の責任分担とfallback�
 3. shellでこのWorkspaceのGit rootへ移動する。
 4. `bash tools/setup-local-environment.sh`を実行する。
 5. `bash tools/install-git-hooks.sh --install`を実行する。
-6. 必要なruntimeを認証し、`bash tools/check-runtime-readiness.sh --require-codex --require-claude`を実行する。
-7. `bash tools/validate-agent-directory.sh --strict --full`を実行する。
+6. 設定済みGitHub HTTPS `backup` remoteがあるWorkspaceでは、通常taskを始める前に
+   `bash tools/setup-github-auth.sh --install-from-gh --remote backup`、続けて
+   `bash tools/setup-github-auth.sh --check --remote backup`を実行する。GitHub remoteを使わないWorkspaceでは省略する。
+7. 必要なruntimeを認証し、`bash tools/check-runtime-readiness.sh --require-codex --require-claude`を実行する。
+8. `bash tools/validate-agent-directory.sh --strict --full`を実行する。
 
 単一runtime構成では、preflightの`--require-codex`または`--require-claude`だけを指定してよい。引数なしの
 preflightは両runtimeをread-onlyで診断するが、runtime unavailableだけでは非0にしない。
+
+GitHub bootstrapは、有効な保存済み`gh`認証をmachine-local `github.env`へ安全に導入する非対話処理である。
+`interactive-setup-required`なら、有効な保存済み認証がないため通常taskを開始せず、Operatorが専用setupとして
+GitHub CLIの認証を完了してから同じ2コマンドを再実行する。Agentは通常task中にBrowser loginを開始しない。
 
 ## Workspace root
 
@@ -154,6 +161,7 @@ permission、scheduler environmentはmachine-localである。新しいmachine�
 
 ```bash
 bash tools/setup-local-environment.sh
+bash tools/setup-github-auth.sh --check --remote backup  # GitHub backup構成だけ
 bash tools/check-runtime-readiness.sh --require-codex --require-claude
 bash tools/validate-agent-directory.sh --strict --full
 ```

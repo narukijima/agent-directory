@@ -1,5 +1,5 @@
 ---
-updated_at: 2026-08-16
+updated_at: 2026-08-17
 ---
 
 # Current State
@@ -33,6 +33,10 @@ partial execution照合、Desktopのmanual alternative、Single Owner / Single W
 Issue #98に対し、finishが直前の検証済みcommitのfull SHAをroot-only backupへ束縛し、別targetのdirty状態を
 保持・除外した隔離commit snapshotで監査・pushする経路を追加した。通常backupのcleanliness拒否は維持し、
 SHA不一致、到達不能local branch、処理中のHEAD移動は固定modeでも拒否する回帰fixtureを導入した。
+GitHub認証repairのexpected login省略時に正常accountを空文字と比較して拒否する欠陥を修正した。古いmachine
+credentialを有効な保存済み`gh`認証から非対話で置換し、credential不在だけを`interactive-setup-required`へ
+分類する。設定済みGitHub backupのmachine Gateを通常task前のsetupへ追加し、Agent独自のstatus・token・login・
+Keychain探索をCore evalとvalidatorで拒否する実事故回帰を固定した。
 
 ## 現在の目標
 
@@ -48,11 +52,12 @@ Workspace責務境界を壊さず、ClaudAGTエコシステムの変更と整合
 ## 検証結果
 
 - 対象: `PROJECT.md#PC-01`
-- 確認日: 2026-08-16
-- 方法: `git diff --check`、`bash -n tools/finalize-task.sh tools/backup-to-github.sh
-  tools/validate-agent-directory.sh`、`bash tools/validate-agent-directory.sh --full`。
-- 結果: finishからのfull SHA伝達、dirty caller状態を保持するfixed-commit backup、SHA不一致拒否、通常modeの
-  dirty拒否、既存のadapter、boundary、Core eval schemaを含むfull validationが0 warning / 0 failureで完全合格した。
+- 確認日: 2026-08-17
+- 方法: `bash -n tools/setup-github-auth.sh tools/backup-to-github.sh tools/report-upstream-issue.sh
+  tools/test-github-auth.sh tools/validate-agent-directory.sh`、`bash tools/test-github-auth.sh`、
+  `bash tools/validate-agent-directory.sh --full`、`git diff --check`。
+- 結果: expected login省略のinstall・repair、古いmachine credential置換、明示account mismatch拒否、
+  `interactive-setup-required`分類、token非露出、認証逸脱Core evalを含むfull validationが0 warningで合格した。
 
 ## 未完了・ブロッカー
 

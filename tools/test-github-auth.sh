@@ -56,6 +56,10 @@ cat > "$fixture/bin/gh" <<'STUB'
 #!/usr/bin/env bash
 case "${1:-} ${2:-}" in
   'api user')
+    if [[ "${GH_TOKEN:-}" == stale-machine-token ]]; then
+      printf 'HTTP 401: Bad credentials\n' >&2
+      exit 1
+    fi
     case "${FAKE_GH_MODE:-ok}" in
       ok) printf '%s\n' "${FAKE_GH_LOGIN:-fixture-login}" ;;
       401) printf 'HTTP 401: Bad credentials\n' >&2; exit 1 ;;
@@ -64,7 +68,10 @@ case "${1:-} ${2:-}" in
     esac
     ;;
   'issue list') exit 0 ;;
-  'auth token') printf 'fixture-bootstrap-token\n' ;;
+  'auth token')
+    [[ "${FAKE_GH_TOKEN_MODE:-ok}" == ok ]] || exit 1
+    printf 'fixture-bootstrap-token\n'
+    ;;
   'auth git-credential') exit 0 ;;
   *) exit 0 ;;
 esac
@@ -117,6 +124,66 @@ setup_status=$?
 set -e
 [[ "$setup_status" != 0 && "$setup_output" == *'reason=remote-not-configured'* ]] || \
   fail "doctor did not distinguish a missing remote: $setup_output"
+
+# Install and repair accept an omitted expected login. A stale machine credential must be
+# replaced from a valid saved gh credential without starting an interactive login flow.
+mkdir -p "$fixture/bootstrap-workspace" "$fixture/bootstrap-config/agent-directory"
+git -C "$fixture/bootstrap-workspace" init -q
+git init -q --bare "$fixture/bootstrap-backup.git"
+git -C "$fixture/bootstrap-workspace" remote add backup "$fixture/bootstrap-backup.git"
+set +e
+bootstrap_output="$(env -i PATH="$fixture/bin:$PATH" HOME="$fixture/home" \
+  XDG_CONFIG_HOME="$fixture/bootstrap-config" AGENT_DIRECTORY_ROOT="$fixture/bootstrap-workspace" \
+  /bin/bash "$tool_root/setup-github-auth.sh" --install-from-gh --remote backup 2>&1)"
+bootstrap_status=$?
+set -e
+[[ "$bootstrap_status" == 0 && "$bootstrap_output" == \
+  'GITHUB_AUTH_OK source=machine-env login=fixture-login api=ok git=ok' ]] || \
+  fail "install with omitted expected login failed: $bootstrap_output"
+bootstrap_mode="$(stat -f '%Lp' "$fixture/bootstrap-config/agent-directory/github.env" 2>/dev/null || \
+  stat -c '%a' "$fixture/bootstrap-config/agent-directory/github.env" 2>/dev/null || true)"
+[[ "$bootstrap_mode" == 600 ]] || \
+  fail 'installed machine credential permissions were not 0600'
+
+printf 'GH_TOKEN=stale-machine-token\n' > "$fixture/bootstrap-config/agent-directory/github.env"
+chmod 600 "$fixture/bootstrap-config/agent-directory/github.env"
+set +e
+bootstrap_output="$(env -i PATH="$fixture/bin:$PATH" HOME="$fixture/home" \
+  XDG_CONFIG_HOME="$fixture/bootstrap-config" AGENT_DIRECTORY_ROOT="$fixture/bootstrap-workspace" \
+  /bin/bash "$tool_root/setup-github-auth.sh" --repair-from-gh --remote backup 2>&1)"
+bootstrap_status=$?
+set -e
+[[ "$bootstrap_status" == 0 && "$bootstrap_output" == \
+  'GITHUB_AUTH_OK source=machine-env login=fixture-login api=ok git=ok' ]] || \
+  fail "repair with omitted expected login failed: $bootstrap_output"
+grep -Fqx 'GH_TOKEN=fixture-bootstrap-token' \
+  "$fixture/bootstrap-config/agent-directory/github.env" || \
+  fail 'repair did not replace the stale machine credential from saved gh auth'
+
+rm -f "$fixture/bootstrap-config/agent-directory/github.env"
+set +e
+bootstrap_output="$(env -i PATH="$fixture/bin:$PATH" HOME="$fixture/home" \
+  XDG_CONFIG_HOME="$fixture/bootstrap-config" AGENT_DIRECTORY_ROOT="$fixture/bootstrap-workspace" \
+  /bin/bash "$tool_root/setup-github-auth.sh" --install-from-gh \
+  --expected-login different-login --remote backup 2>&1)"
+bootstrap_status=$?
+set -e
+[[ "$bootstrap_status" != 0 && "$bootstrap_output" == \
+  'GITHUB_AUTH_BLOCKED reason=account-mismatch' ]] || \
+  fail "explicit expected login mismatch was not rejected: $bootstrap_output"
+[[ ! -e "$fixture/bootstrap-config/agent-directory/github.env" ]] || \
+  fail 'account mismatch wrote a machine credential'
+
+set +e
+bootstrap_output="$(env -i PATH="$fixture/bin:$PATH" HOME="$fixture/home" \
+  XDG_CONFIG_HOME="$fixture/bootstrap-config" AGENT_DIRECTORY_ROOT="$fixture/bootstrap-workspace" \
+  FAKE_GH_TOKEN_MODE=missing /bin/bash "$tool_root/setup-github-auth.sh" \
+  --repair-from-gh --remote backup 2>&1)"
+bootstrap_status=$?
+set -e
+[[ "$bootstrap_status" != 0 && "$bootstrap_output" == \
+  'GITHUB_AUTH_BLOCKED reason=interactive-setup-required' ]] || \
+  fail "missing saved credential was not classified as interactive setup: $bootstrap_output"
 
 # Report mode: machine credential works without process token; auth failure exits 3 and
 # reuses the same content-addressed draft.

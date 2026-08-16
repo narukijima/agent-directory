@@ -188,7 +188,9 @@ SSHとGitHub以外のhostへGitHub credentialを渡さない。
 実`gh api user`と対象remote probeで判定する。認証失敗はdoctor→安全なrepair 1回→操作再試行1回までとし、
 `auth-store-missing`、`auth-store-permissions`、`account-mismatch`、`github-auth-unavailable`、
 `github-permission-denied`、`github-api-unreachable`、`git-credential-unavailable`、
-`remote-not-configured`を区別する。
+`remote-not-configured`、`interactive-setup-required`を区別する。`interactive-setup-required`は、有効な
+machine credentialも保存済み`gh`認証もなく、非対話repairを完了できない場合だけ返す。通常taskはそこで
+対話login、Keychain探索、SSH切替、認証方式の再実装へ進まず、machine setup未完了として分離する。
 
 ```bash
 bash tools/setup-github-auth.sh --install-from-gh
@@ -200,6 +202,7 @@ bash tools/test-github-auth.sh
 doctor成功は`GITHUB_AUTH_OK source=<source> login=<login> api=ok git=ok`、失敗は
 `GITHUB_AUTH_BLOCKED reason=<reason>`。
 `--expected-login <github-login>`はaccountを固定したい場合だけ使う任意の厳格照合である。
+省略時もinstall・repair・checkは実際に取得したloginを受理し、空文字との比較で拒否しない。
 `--remote`未指定時は`remote.pushDefault`、`backup`、`origin`の順で実在remoteを解決し、存在しなければ
 `remote-not-configured`を返す。
 
