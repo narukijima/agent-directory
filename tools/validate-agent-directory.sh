@@ -1987,6 +1987,23 @@ while IFS= read -r -d '' case_file; do
         slug = $1; sub(/:.*/, "", slug); print slug }
     ' "$case_file")"
   fi
+  while IFS= read -r forbidden_report_slug; do
+    [[ -n "$forbidden_report_slug" ]] || continue
+    if ! awk -v slug="$forbidden_report_slug" '
+      /^report_match:/ { in_match = 1; next }
+      in_match && /^[^ ]/ { in_match = 0 }
+      in_match && /^  [^ ]/ && /:/ {
+        line = $0; sub(/^  /, "", line); sub(/:.*/, "", line)
+        if (line == slug) found = 1 }
+      END { exit found ? 0 : 1 }
+    ' "$case_file"; then
+      fail "$(relative_path "$case_file") must_not_report requires report_match patterns: $forbidden_report_slug"
+    fi
+  done <<<"$(awk '
+    /^  must_not_report:/ { in_forbidden = 1; next }
+    in_forbidden && !/^    - / { in_forbidden = 0 }
+    in_forbidden { line = $0; sub(/^    - /, "", line); sub(/[[:space:]]*$/, "", line); print line }
+  ' "$case_file")"
 done < <(find "$repo_root/evals/cases" -type f -name '*.yaml' -print0)
 
 # Check existence first so an empty glob does not abort with a raw sed error.
@@ -2010,8 +2027,8 @@ grep -q '^  must_not_report:$' "$repo_root/evals/cases/backup-auto-after-verifie
   fail 'backup-auto-after-verified-commit must reject repeated-approval report reasons'
 
 # The executable eval runtime is model-independent. Its fixture pins trusted PASS, observed
-# FAIL, agent-only UNVERIFIED, malformed input, regression comparison, dirty-tree refusal,
-# missing adapter handling, isolated execution, and workspace cleanup.
+# FAIL, forbidden-report rejection, agent-only UNVERIFIED, malformed input, regression comparison,
+# dirty-tree refusal, missing adapter handling, isolated execution, and workspace cleanup.
 eval_runtime="$repo_root/tools/run-evals.py"
 eval_fixture="$repo_root/evals/fixtures/eval-runtime"
 if [[ -f "$eval_runtime" ]]; then
@@ -2035,6 +2052,17 @@ if [[ -f "$eval_runtime" ]]; then
     set -e
     (( eval_fail_status == 1 )) && printf '%s\n' "$eval_fail_output" | grep -Fq 'status=FAIL' || \
       fail 'eval runtime fixture: observed violations did not score FAIL with exit 1'
+
+    set +e
+    eval_rejected_report_output="$(python3 "$eval_runtime" score --case "$eval_fixture/case.yaml" \
+      --trace "$eval_fixture/rejected-report.jsonl" --json 2>&1)"
+    eval_rejected_report_status=$?
+    set -e
+    (( eval_rejected_report_status == 1 )) && \
+      printf '%s\n' "$eval_rejected_report_output" | \
+        grep -A1 -F '"check": "must_not_report:repeated-approval-required"' | \
+        grep -Fq '"status": "FAIL"' || \
+      fail 'eval runtime fixture: a repeated-approval report was not rejected by must_not_report'
 
     set +e
     eval_failed_run_output="$(python3 "$eval_runtime" score --case "$eval_fixture/case.yaml" \
