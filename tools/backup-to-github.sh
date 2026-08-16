@@ -13,6 +13,8 @@ remote='backup'
 branch='main'
 dry_run=false
 root_only=false
+fixed_commit=''
+fixed_snapshot_root=''
 independent_verify_root=''
 independent_index=0
 verify_repo=''
@@ -27,7 +29,7 @@ independent_urls=()
 independent_revisions=()
 
 usage() {
-  printf 'Usage: %s [--remote <name>] [--branch <name>] [--dry-run] [--root-only]\n' "${0##*/}" >&2
+  printf 'Usage: %s [--remote <name>] [--branch <name>] [--dry-run] [--root-only] [--fixed-commit <full-sha>]\n' "${0##*/}" >&2
 }
 
 blocked() {
@@ -142,6 +144,20 @@ ensure_root_head_unchanged() {
   fi
 }
 
+ensure_no_unreachable_local_branches() {
+  local local_branch unmerged=''
+  while IFS= read -r local_branch; do
+    [[ -n "$local_branch" && "$local_branch" != "$branch" ]] || continue
+    if ! git -C "$repo_root" merge-base --is-ancestor "refs/heads/$local_branch" "$local_head" 2>/dev/null; then
+      unmerged="$unmerged $local_branch"
+    fi
+  done < <(git -C "$repo_root" for-each-ref --format='%(refname:short)' refs/heads/)
+  if [[ -n "$unmerged" ]]; then
+    blocked 'unreachable-local-branch' \
+      "these local branches are not reachable from $branch and would not be backed up:$unmerged"
+  fi
+}
+
 frontmatter_key_count() {
   awk -v key="$2" '
     NR == 1 && $0 != "---" { exit }
@@ -171,6 +187,9 @@ redact_repository_url() {
 cleanup() {
   if [[ -n "$independent_verify_root" && -d "$independent_verify_root" ]]; then
     rm -rf -- "$independent_verify_root"
+  fi
+  if [[ -n "$fixed_snapshot_root" && -d "$fixed_snapshot_root" ]]; then
+    rm -rf -- "$fixed_snapshot_root"
   fi
 }
 trap cleanup EXIT
@@ -462,6 +481,11 @@ while (( $# > 0 )); do
       ;;
     --dry-run) dry_run=true; shift ;;
     --root-only) root_only=true; shift ;;
+    --fixed-commit)
+      [[ $# -ge 2 ]] || { usage; exit 2; }
+      fixed_commit="$2"
+      shift 2
+      ;;
     *) usage; exit 2 ;;
   esac
 done
@@ -477,6 +501,16 @@ fi
 if [[ ! "$max_blob_bytes" =~ ^[1-9][0-9]*$ ]]; then
   printf 'ERROR: AGENT_BACKUP_MAX_BLOB_BYTES must be a positive integer\n' >&2
   exit 2
+fi
+if [[ -n "$fixed_commit" ]]; then
+  [[ "$root_only" == true ]] || {
+    printf 'ERROR: --fixed-commit is restricted to --root-only\n' >&2
+    exit 2
+  }
+  [[ "$fixed_commit" =~ ^[0-9a-f]{40}$ ]] || {
+    printf 'ERROR: --fixed-commit requires a full 40-character lowercase commit SHA\n' >&2
+    exit 2
+  }
 fi
 if ! command -v git >/dev/null 2>&1; then
   printf 'ERROR: Git is required\n' >&2
@@ -521,6 +555,59 @@ if ! remote_url="$(git -C "$repo_root" config --get "remote.$remote.url" 2>/dev/
   blocked 'missing-remote' "remote is not configured: $remote"
 fi
 
+# A normal raw backup continues to require a clean repository. The standard finish path
+# may, however, have committed one verified target while another separable target remains
+# dirty. In that narrow root-only case, audit and push an isolated clone of the exact HEAD
+# commit. This excludes the caller's index, worktree, untracked files, and stash without
+# mutating or hiding any of them, while reusing every ordinary backup check on committed bytes.
+if [[ -n "$fixed_commit" ]]; then
+  if [[ "$fixed_commit" != "$local_head" ]]; then
+    blocked 'fixed-commit-mismatch' "requested=$fixed_commit head=$local_head" \
+      'the finish-bound commit must still be the exact current branch HEAD'
+  fi
+  ensure_no_unreachable_local_branches
+  fixed_snapshot_root="$(mktemp -d "${TMPDIR:-/tmp}/agent-backup-fixed.XXXXXX")"
+  if ! git -C "$fixed_snapshot_root" init -q 2>/dev/null || \
+    ! git -C "$fixed_snapshot_root" fetch -q "$repo_root" \
+      "refs/heads/$branch:refs/heads/$branch" 2>/dev/null || \
+    ! git -C "$fixed_snapshot_root" symbolic-ref HEAD "refs/heads/$branch" 2>/dev/null || \
+    ! git -C "$fixed_snapshot_root" read-tree "$fixed_commit" 2>/dev/null || \
+    ! git -C "$repo_root" archive "$fixed_commit" | tar -x -C "$fixed_snapshot_root"; then
+    blocked 'fixed-commit-snapshot-failed' \
+      'could not create an isolated committed-tree snapshot for backup audit'
+  fi
+  if [[ "$(git -C "$fixed_snapshot_root" rev-parse HEAD 2>/dev/null || true)" != "$fixed_commit" ]]; then
+    blocked 'fixed-commit-snapshot-mismatch' \
+      'the isolated snapshot does not resolve to the finish-bound commit'
+  fi
+  git -C "$fixed_snapshot_root" config "remote.$remote.url" "$remote_url"
+
+  original_checkpoint="$(checkpoint_path)"
+  snapshot_cache="$fixed_snapshot_root/.agent-cache"
+  snapshot_checkpoint="$snapshot_cache/${original_checkpoint##*/}"
+  if [[ -f "$original_checkpoint" ]]; then
+    mkdir -p "$snapshot_cache"
+    cp "$original_checkpoint" "$snapshot_checkpoint"
+  fi
+
+  note "fixed commit audit: $fixed_commit (caller worktree state excluded and preserved)"
+  fixed_args=( --remote "$remote" --branch "$branch" --root-only )
+  [[ "$dry_run" != true ]] || fixed_args+=( --dry-run )
+  set +e
+  AGENT_DIRECTORY_ROOT="$fixed_snapshot_root" AGENT_CACHE_DIR="$snapshot_cache" \
+    bash "$fixed_snapshot_root/tools/backup-to-github.sh" "${fixed_args[@]}"
+  fixed_status=$?
+  set -e
+  if (( fixed_status == 0 )); then
+    ensure_root_head_unchanged
+  fi
+  if (( fixed_status == 0 )) && [[ "$dry_run" != true && -f "$snapshot_checkpoint" ]]; then
+    mkdir -p "${original_checkpoint%/*}"
+    cp "$snapshot_checkpoint" "$original_checkpoint"
+  fi
+  exit "$fixed_status"
+fi
+
 # --- 4. registry and ignore projection --------------------------------------------
 
 load_independent_registry
@@ -544,17 +631,7 @@ if git -C "$repo_root" rev-parse --verify --quiet refs/stash >/dev/null; then
   blocked 'stash-present' 'stash entries are never sent to a remote; apply or drop them first'
 fi
 
-unmerged=''
-while IFS= read -r local_branch; do
-  [[ -n "$local_branch" && "$local_branch" != "$branch" ]] || continue
-  if ! git -C "$repo_root" merge-base --is-ancestor "refs/heads/$local_branch" "$local_head" 2>/dev/null; then
-    unmerged="$unmerged $local_branch"
-  fi
-done < <(git -C "$repo_root" for-each-ref --format='%(refname:short)' refs/heads/)
-if [[ -n "$unmerged" ]]; then
-  blocked 'unreachable-local-branch' \
-    "these local branches are not reachable from $branch and would not be backed up:$unmerged"
-fi
+ensure_no_unreachable_local_branches
 
 # --- 6. forbidden content in root -------------------------------------------------
 
