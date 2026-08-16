@@ -26,6 +26,10 @@ remote merge、default branch確認を一つの完了経路にした。local mer
 さらにmerge済みsource branchの残存を未完了として扱い、PR metadata、expected head、default branch反映を
 確認した後にexact remote branchと一致するlocal branchを削除・不在確認するところまで同じ完了経路へ含めた。
 raw ref削除の一般解禁はせず、PR cleanupだけを限定例外としてCore evalとvalidatorで固定した。
+Operator / machine setupを`SETUP.md`へ集約し、Claudeの長期OAuth認証、Workspace / Git root起動、
+secret非表示のruntime preflight、scheduled executionの事前条件を正本化した。Multi-AI Profileには
+Claude CLIのavailability failure時にCodexがobjectiveとproduction responsibilityを引き取る宣言済みfallback、
+partial execution照合、Desktopのmanual alternative、Single Owner / Single Writer維持を追加した。
 
 ## 現在の目標
 
@@ -42,10 +46,11 @@ Workspace責務境界を壊さず、ClaudAGTエコシステムの変更と整合
 
 - 対象: `PROJECT.md#PC-01`
 - 確認日: 2026-08-16
-- 方法: `git diff --check`、`bash -n tools/check-boundary.sh tools/validate-agent-directory.sh`、
-  `bash tools/validate-agent-directory.sh --changed`、`bash tools/validate-agent-directory.sh --full`。
-- 結果: Scheduled Execution責務境界、Issue #92の導入先追記fixture、Markdown参照、cache再生成、
-  boundary、backup、materializer、Core eval schemaを含むfull validationが0 warning / 0 failureで完全合格した。
+- 方法: `git diff --check`、`bash -n tools/check-runtime-readiness.sh tools/validate-agent-directory.sh`、
+  `bash tools/check-runtime-readiness.sh`、`bash tools/validate-agent-directory.sh --changed`、
+  `bash tools/validate-agent-directory.sh --full`。
+- 結果: Codex / Claude availabilityとsecret非表示、誤cwd拒否、Multi-AI fallback、partial execution、Markdown参照、
+  adapter、boundary、Core eval schemaを含むfull validationが0 warning / 0 failureで完全合格した。
 
 ## 未完了・ブロッカー
 
