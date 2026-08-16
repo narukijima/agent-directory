@@ -97,6 +97,18 @@ emailと既存履歴は変更しない。
 scheduleの変更、ネットワーク接続は行わない。成功は`LOCAL_ENVIRONMENT_READY`、停止は
 `LOCAL_ENVIRONMENT_BLOCKED reason=<reason>`を返す。
 
+## check-runtime-readiness.sh
+
+```bash
+bash tools/check-runtime-readiness.sh [--require-codex] [--require-claude]
+```
+
+現在のcwdがAgent WorkspaceのGit rootそのものであることを確認し、Codex / Claude Codeのexecutable、version、
+認証状態をread-onlyでprobeする。`CLAUDE_CODE_OAUTH_TOKEN`は存在だけを報告し、値や認証commandの出力は
+stdout / stderrへ転送しない。引数なしはdiagnosticとしてruntime unavailableを結果へ記録し、required flagを
+指定したruntimeが利用不能な場合だけ非0にする。成功診断は`RUNTIME_READINESS`、停止は
+`RUNTIME_READINESS_BLOCKED reason=<reason>`を返す。詳細なsetup、Trust、credential契約は`SETUP.md`が所有する。
+
 ## finalize-task.sh
 
 ```bash

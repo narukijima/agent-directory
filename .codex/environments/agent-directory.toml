@@ -23,3 +23,8 @@ command = "bash tools/install-git-hooks.sh --status"
 name = "GitHub auth status"
 icon = "debug"
 command = "bash tools/setup-github-auth.sh --check"
+
+[[actions]]
+name = "Runtime preflight"
+icon = "debug"
+command = "bash tools/check-runtime-readiness.sh"

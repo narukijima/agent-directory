@@ -16,7 +16,7 @@ Knowledge、Skill、Projectを正本として育てながら、1タスクの読�
    Agent名・役割はbacktickを保ったまま置換する。自己定義の名乗り行（`- あなたは…`）のbacktick語だけが
    上流報告の匿名化遮断語になり、応対言語・使命・ビジョンは遮断語にならない。
 3. `skills/_template/`または`projects/_template/`を、明示された必要に応じてコピーする。
-4. Codex DesktopまたはClaude Codeで開く。どちらも`tools/setup-local-environment.sh`を共通の初期化入口に使う。
+4. [SETUP.md](SETUP.md)に従ってmachine-localなruntime、認証、Workspace Trust、preflightを準備する。
 5. `bash tools/install-git-hooks.sh --install`でcommit・push境界の検査hookを導入する。
 6. `bash tools/validate-agent-directory.sh --strict --full`を実行する。
 7. `tools/find-context.sh --route <route> --limit 5 -- "検索語"`で対象候補を絞って運用する。
@@ -56,6 +56,7 @@ Routeの区分と対象は[AGENTS.md](AGENTS.md#route)が正本である。本�
 agent-directory/
 ├── AGENTS.md                     # ブートローダー兼ルーター兼目次
 ├── CLAUDE.md                     # @AGENTS.md
+├── SETUP.md                      # Operator / machine側setupの正本
 ├── OPERATING_PROFILE.md          # 条件付きの推奨Multi-AI責任モデル
 ├── PROJECT.md / STATE.md         # このリポジトリ自身の開発契約と状態（テンプレート機能ではない）
 ├── .codex/environments/          # Codex DesktopのLocal Environment
@@ -98,7 +99,8 @@ agent-directory/
 | Codex Desktop | `.codex/environments/agent-directory.toml` | worktree作成時のSetupと共通Actions |
 | Claude Code | `.claude/settings.json` | 新規`SessionStart`から同じSetupを呼ぶ |
 
-Setupは`bash`、`git`、`python3`とGit rootを確認し、Git管理外の検索cacheを生成する。
+setup、認証、Workspace Trust、runtime preflightの詳細は[SETUP.md](SETUP.md)が所有する。共通Setupは
+`bash`、`git`、`python3`とGit rootを確認し、Git管理外の検索cacheを生成する。
 `--git-author-name`または`AGENT_DIRECTORY_GIT_AUTHOR_NAME`の明示overrideがあれば適用し、なければ既存の
 repo-local `user.name`を保持する。local値も未設定のときだけ`AGENTS.md#自己定義`の推奨Agent名を
 既定値にする。emailと既存履歴は変更しない。既存cacheが新鮮なら本文を再読しないfast pathを使う。
