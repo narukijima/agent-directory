@@ -21,7 +21,6 @@ verify_repo=''
 # Local bare remotes are allowed only for isolated fixture verification. Never set this in normal operation.
 allow_local_repository_url="${AGENT_ALLOW_LOCAL_REPOSITORY_URL:-false}"
 expected_login="${AGENT_DIRECTORY_GITHUB_EXPECTED_LOGIN:-}"
-github_repair_attempted=false
 
 # Parallel arrays for the registered Independent Projects. bash 3.2 has no associative arrays.
 independent_names=()
@@ -49,33 +48,17 @@ note() {
 }
 
 ensure_github_remote_auth() {
-  local workspace_root="$1" remote_name="$2" remote_url_value="$3" reason
-  local repair_output='' repair_reason=''
-  local repair_args=(--repair-from-gh --remote "$remote_name")
+  local workspace_root="$1" remote_name="$2" remote_url_value="$3" repository reason
   [[ "$(github_auth_remote_kind "$remote_url_value")" == 'github-https' ]] || return 0
-  if github_auth_resolve "$workspace_root" && \
-    github_auth_probe_api "$expected_login" && \
-    github_auth_probe_git "$workspace_root" "$remote_name" "$remote_url_value"; then
+  repository="$(github_auth_repository_from_url "$remote_url_value")" || \
+    blocked github-destination-not-allowed
+  if github_auth_probe_api "$expected_login" "$workspace_root" "$repository" && \
+    github_auth_resolve "$workspace_root" "$repository" git-push && \
+    github_auth_probe_git "$workspace_root" "$remote_url_value"; then
     return 0
   fi
   reason="${GITHUB_AUTH_REASON:-github-auth-unavailable}"
-  if [[ "$github_repair_attempted" == false ]]; then
-    github_repair_attempted=true
-    if [[ "${AGENT_GITHUB_AUTH_DISABLE_REPAIR:-false}" != true ]]; then
-      [[ -z "$expected_login" ]] || repair_args+=(--expected-login "$expected_login")
-      repair_output="$(bash "$tool_root/setup-github-auth.sh" "${repair_args[@]}" 2>&1)" || true
-      repair_reason="$(printf '%s\n' "$repair_output" | \
-        sed -n 's/^GITHUB_AUTH_BLOCKED reason=\([a-z0-9-]*\)$/\1/p' | tail -n 1)"
-    fi
-    if github_auth_resolve "$workspace_root" && \
-      github_auth_probe_api "$expected_login" && \
-      github_auth_probe_git "$workspace_root" "$remote_name" "$remote_url_value"; then
-      return 0
-    fi
-    reason="${GITHUB_AUTH_REASON:-$reason}"
-    [[ -z "$repair_reason" ]] || reason="$repair_reason"
-  fi
-  blocked "$reason" 'GitHub authentication doctor and one safe repair attempt did not establish API and Git capability'
+  blocked "$reason" 'machine setup and normal tasks are separate; run the documented Operator setup/check without starting an interactive login or fallback'
 }
 
 backup_remote_failure_reason() {
@@ -387,14 +370,14 @@ verify_independent_revision() {
     "could not initialize the verification repository for $project_dir"
 
   ensure_github_remote_auth "$repo_root" "$repository_url" "$repository_url"
-  if ! fetch_output="$(github_git_run "$repo_root" "$repository_url" -C "$verify_repo" \
+  if ! fetch_output="$(github_git_run "$repo_root" "$repository_url" git-read -C "$verify_repo" \
     fetch --quiet "$repository_url" \
     "+refs/heads/*:refs/remotes/upstream/*" "+refs/tags/*:refs/tags/*" 2>&1)"; then
     blocked "$(backup_remote_failure_reason "$fetch_output" independent-remote-unreachable "$repository_url")" \
       "$project_dir declared remote is unreachable: $(redact_repository_url "$repository_url")" \
       'the authenticated remote read failed'
   fi
-  if ! fetch_output="$(github_git_run "$repo_root" "$repository_url" -C "$verify_repo" \
+  if ! fetch_output="$(github_git_run "$repo_root" "$repository_url" git-read -C "$verify_repo" \
     fetch --quiet --no-tags "$repository_url" "$state_revision" 2>&1)"; then
     blocked 'independent-revision-unavailable' \
       "$project_dir adopted revision is not fetchable from its declared remote: $state_revision" \
@@ -417,7 +400,7 @@ verify_local_refs_backed_up() {
   local target="$repo_root/$project_dir"
   local fetch_output branch_ref branch_sha tag_ref tag_sha remote_tag_sha unpublished
 
-  if ! fetch_output="$(github_git_run "$repo_root" "$target" -C "$verify_repo" fetch --quiet --no-tags "$target" \
+  if ! fetch_output="$(github_git_run "$repo_root" "$target" git-read -C "$verify_repo" fetch --quiet --no-tags "$target" \
     "+refs/heads/*:refs/remotes/child/*" "+refs/tags/*:refs/childtags/*" "+HEAD:refs/childhead" 2>&1)"; then
     blocked 'independent-unreachable-local-branch' \
       "could not read local refs from $project_dir" "$fetch_output"
@@ -740,8 +723,8 @@ fi
 
 if [[ "$dry_run" == true ]]; then
   remote_listing=''
-  if ! remote_listing="$(github_git_run "$repo_root" "$remote_url" -C "$repo_root" \
-    ls-remote --heads "$remote" "refs/heads/$branch" 2>&1)"; then
+  if ! remote_listing="$(github_git_run "$repo_root" "$remote_url" git-read -C "$repo_root" \
+    ls-remote --heads "$remote_url" "refs/heads/$branch" 2>&1)"; then
     blocked "$(github_auth_classify_git_error "$remote_listing")" \
       "cannot read refs/heads/$branch from $remote"
   fi
@@ -779,8 +762,8 @@ fi
 classify_push_failure() {
   local push_detail="$1"
   local failure_listing failure_sha
-  if ! failure_listing="$(github_git_run "$repo_root" "$remote_url" -C "$repo_root" \
-    ls-remote --heads "$remote" "refs/heads/$branch" 2>&1)"; then
+  if ! failure_listing="$(github_git_run "$repo_root" "$remote_url" git-read -C "$repo_root" \
+    ls-remote --heads "$remote_url" "refs/heads/$branch" 2>&1)"; then
     blocked "$(github_auth_classify_git_error "$failure_listing")" \
       "cannot read refs/heads/$branch from $remote"
   fi
@@ -800,8 +783,8 @@ classify_push_failure() {
 
 push_output=''
 ensure_root_head_unchanged
-if ! push_output="$(github_git_run "$repo_root" "$remote_url" -C "$repo_root" \
-  push --porcelain "$remote" "$local_head:refs/heads/$branch" 2>&1)"; then
+if ! push_output="$(github_git_run "$repo_root" "$remote_url" git-push -C "$repo_root" \
+  push --porcelain "$remote_url" "$local_head:refs/heads/$branch" 2>&1)"; then
   classify_push_failure "$push_output"
 fi
 note "$(printf '%s\n' "$push_output" | tr '\n' ' ')"
@@ -809,8 +792,8 @@ note "$(printf '%s\n' "$push_output" | tr '\n' ' ')"
 # --- 11. re-verify the remote SHA -----------------------------------------------------
 
 verify_listing=''
-if ! verify_listing="$(github_git_run "$repo_root" "$remote_url" -C "$repo_root" \
-  ls-remote --heads "$remote" "refs/heads/$branch" 2>&1)"; then
+if ! verify_listing="$(github_git_run "$repo_root" "$remote_url" git-read -C "$repo_root" \
+  ls-remote --heads "$remote_url" "refs/heads/$branch" 2>&1)"; then
   blocked "$(github_auth_classify_git_error "$verify_listing")" \
     "cannot re-read refs/heads/$branch from $remote"
 fi

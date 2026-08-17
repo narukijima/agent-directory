@@ -24,7 +24,6 @@ dry_run=false
 search_terms=''
 violations=()
 checked_agent_name_terms=0
-github_repair_attempted=false
 expected_login="${AGENT_DIRECTORY_GITHUB_EXPECTED_LOGIN:-}"
 
 usage() {
@@ -86,11 +85,8 @@ fi
 github_unready_reason=''
 gh_ready() {
   github_unready_reason=''
-  if ! github_auth_resolve "$repo_root"; then
-    github_unready_reason="${GITHUB_AUTH_REASON:-github-auth-unavailable}"
-    return 1
-  fi
-  if github_auth_probe_api "$expected_login"; then
+  if github_auth_probe_api "$expected_login" "$repo_root" "$upstream_repo" && \
+    github_auth_resolve "$repo_root" "$upstream_repo" issues-read; then
     return 0
   fi
   github_unready_reason="${GITHUB_AUTH_REASON:-github-auth-unavailable}"
@@ -98,33 +94,16 @@ gh_ready() {
 }
 
 ensure_github_ready() {
-  local repair_output='' repair_reason=''
-  local repair_args=(--repair-from-gh)
   if gh_ready; then
     return 0
-  fi
-  if [[ "$github_repair_attempted" == false ]]; then
-    github_repair_attempted=true
-    if [[ "${AGENT_GITHUB_AUTH_DISABLE_REPAIR:-false}" != true ]]; then
-      [[ -z "$expected_login" ]] || repair_args+=(--expected-login "$expected_login")
-      repair_output="$(bash "$tool_root/setup-github-auth.sh" "${repair_args[@]}" 2>&1)" || true
-      repair_reason="$(printf '%s\n' "$repair_output" | \
-        sed -n 's/^GITHUB_AUTH_BLOCKED reason=\([a-z0-9-]*\)$/\1/p' | tail -n 1)"
-    fi
-    if gh_ready; then
-      return 0
-    fi
-    [[ -z "$repair_reason" ]] || github_unready_reason="$repair_reason"
   fi
   return 1
 }
 
 github_unready_hint() {
   case "$github_unready_reason" in
-    interactive-setup-required)
-      printf 'finish GitHub CLI authentication as an Operator machine-setup step, then rerun tools/setup-github-auth.sh --install-from-gh; do not start interactive login from a normal task' ;;
-    auth-store-missing|github-auth-unavailable)
-      printf 'run tools/setup-github-auth.sh --install-from-gh once on this machine (tools/UPSTREAM.md#認証)' ;;
+    machine-credential-not-installed|auth-store-missing|github-auth-unavailable)
+      printf 'complete the Operator-only machine setup in SETUP.md, then run tools/setup-github-auth.sh --check; normal tasks do not repair or start login' ;;
     auth-store-permissions)
       printf 'the machine credential store must be directory mode 700 and file mode 600' ;;
     account-mismatch)
@@ -395,7 +374,8 @@ if [[ -n "$search_terms" ]]; then
   fi
   ensure_github_ready || auth_exit "$github_unready_reason" "$(github_unready_hint)"
   set +e
-  candidates="$(gh issue list --repo "$upstream_repo" --state open --search "$search_terms" \
+  candidates="$(github_auth_gh_run "$repo_root" "$upstream_repo" issues-read \
+    issue list --repo "$upstream_repo" --state open --search "$search_terms" \
     --json number,title --jq '.[] | "#\(.number) \(.title)"' 2>&1)"
   search_status=$?
   set -e
@@ -436,7 +416,8 @@ normalize_issue_title() {
 }
 if [[ -z "$comment_issue" ]]; then
   set +e
-  candidates="$(gh issue list --repo "$upstream_repo" --state open --search "$title" \
+  candidates="$(github_auth_gh_run "$repo_root" "$upstream_repo" issues-read \
+    issue list --repo "$upstream_repo" --state open --search "$title" \
     --json number,title --jq '.[] | "\(.number)\t\(.title)"' 2>&1)"
   candidate_status=$?
   set -e
@@ -468,8 +449,11 @@ if [[ -z "$comment_issue" ]]; then
 fi
 
 if [[ -n "$comment_issue" ]]; then
+  github_auth_resolve "$repo_root" "$upstream_repo" issues-write || \
+    auth_exit "${GITHUB_AUTH_REASON:-github-operation-not-allowed}" "$(github_unready_hint)"
   set +e
-  issue_url="$(gh issue comment "$comment_issue" --repo "$upstream_repo" --body-file "$send_body" 2>&1)"
+  issue_url="$(github_auth_gh_run "$repo_root" "$upstream_repo" issues-write \
+    issue comment "$comment_issue" --repo "$upstream_repo" --body-file "$send_body" 2>&1)"
   issue_status=$?
   set -e
   if (( issue_status != 0 )); then
@@ -478,8 +462,11 @@ if [[ -n "$comment_issue" ]]; then
   fi
   printf 'UPSTREAM_REPORT_COMMENTED issue=%s\n' "$issue_url"
 else
+  github_auth_resolve "$repo_root" "$upstream_repo" issues-write || \
+    auth_exit "${GITHUB_AUTH_REASON:-github-operation-not-allowed}" "$(github_unready_hint)"
   set +e
-  issue_url="$(gh issue create --repo "$upstream_repo" --title "$title" --body-file "$send_body" 2>&1)"
+  issue_url="$(github_auth_gh_run "$repo_root" "$upstream_repo" issues-write \
+    issue create --repo "$upstream_repo" --title "$title" --body-file "$send_body" 2>&1)"
   issue_status=$?
   set -e
   if (( issue_status != 0 )); then

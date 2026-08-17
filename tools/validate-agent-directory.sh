@@ -1851,7 +1851,7 @@ required_cases=(
   github-auth-env-absence-is-not-failure github-auth-machine-credential
   github-auth-real-capability-probe github-auth-no-token-leak upstream-drafted-is-not-success
   github-machine-readiness-before-work
-  upstream-auth-repair-once backup-shared-github-auth backup-https-credential-helper
+  upstream-auth-no-runtime-repair backup-shared-github-auth backup-https-credential-helper
   backup-ssh-does-not-require-token
   decay-knowledge-current-clean decay-knowledge-current-aged
   decay-project-routing-clean decay-project-routing-aged
@@ -2042,23 +2042,34 @@ grep -Fqx '    - reauthentication-required' "$github_auth_core_case" || \
   fail 'github-auth-no-token-leak must reject inferred reauthentication'
 grep -Fqx '    - additional-approval-required' "$github_auth_core_case" || \
   fail 'github-auth-no-token-leak must reject repeated approval'
-grep -Fq 'if [[ -n "$expected_login" && "$login_output" != "$expected_login" ]]; then' \
-  "$repo_root/tools/setup-github-auth.sh" || \
-  fail 'setup-github-auth.sh must treat expected login as optional during install and repair'
 grep -Fq 'blocked interactive-setup-required' "$repo_root/tools/setup-github-auth.sh" || \
-  fail 'setup-github-auth.sh must distinguish interactive machine setup from ordinary auth failure'
+  fail 'setup-github-auth.sh must distinguish Operator migration from ordinary auth failure'
 grep -Fq -- '--machine-ready' "$repo_root/tools/task.sh" || \
   fail 'task.sh context must enforce cross-process GitHub machine readiness'
 grep -Fq 'blocked machine-credential-not-installed' "$repo_root/tools/setup-github-auth.sh" || \
   fail 'setup-github-auth.sh must classify a missing cross-process machine credential'
 grep -Fq -- '--install-token' "$repo_root/tools/setup-github-auth.sh" || \
   fail 'setup-github-auth.sh must support direct machine PAT installation'
-machine_line="$(grep -n 'machine_file="$(github_auth_machine_file)"' \
-  "$repo_root/tools/lib/github-auth.sh" | head -n 1 | cut -d: -f1)"
-process_line="$(grep -n 'if \[\[ -n "${GH_TOKEN:-}" \]\]' \
-  "$repo_root/tools/lib/github-auth.sh" | head -n 1 | cut -d: -f1)"
-[[ -n "$machine_line" && -n "$process_line" && "$machine_line" -lt "$process_line" ]] || \
-  fail 'GitHub resolver must prefer the machine credential before process tokens'
+github_auth_lib="$repo_root/tools/lib/github-auth.sh"
+grep -Fq 'pwd.getpwuid(os.getuid()).pw_dir' "$github_auth_lib" || \
+  fail 'GitHub resolver must derive one store from the OS account rather than process HOME/XDG values'
+grep -Fq 'AGENT_DIRECTORY_GITHUB_CREDENTIAL_V1' "$github_auth_lib" || \
+  fail 'GitHub resolver must require the strict versioned machine credential format'
+grep -Fq 'machine-token-not-fine-grained' "$github_auth_lib" || \
+  fail 'GitHub resolver must reject non-fine-grained machine tokens'
+grep -Fq 'AGENT_DIRECTORY_GITHUB_CI' "$github_auth_lib" || \
+  fail 'process token fallback must require an explicit CI context'
+for forbidden_resolver_fallback in 'workspace-env' 'gh-stored' 'repair-from-gh'; do
+  if grep -Fq "$forbidden_resolver_fallback" "$github_auth_lib" \
+    "$repo_root/tools/backup-to-github.sh" "$repo_root/tools/report-upstream-issue.sh"; then
+    fail "normal GitHub authentication must not use implicit fallback: $forbidden_resolver_fallback"
+  fi
+done
+for git_child_control in 'core.hooksPath=/dev/null' 'credential.helper=' \
+  'http.followRedirects=false' 'protocol.https.allow=always'; do
+  grep -Fq "$git_child_control" "$github_auth_lib" || \
+    fail "GitHub child Git is missing isolation control: $git_child_control"
+done
 github_machine_case="$repo_root/evals/cases/github-machine-readiness-before-work.yaml"
 for forbidden_machine_command in 'gh auth login' 'git credential-osxkeychain get' \
   'security find-internet-password' 'security find-generic-password'; do
@@ -2275,7 +2286,7 @@ if [[ -f "$backup_tool" ]]; then
   if (( push_invocations != 1 )); then
     fail "tools/backup-to-github.sh must contain exactly one shared-wrapper push invocation (found $push_invocations)"
   fi
-  if ! grep -Eq '^[[:space:]]*push[[:space:]]+--porcelain[[:space:]]+"\$remote"[[:space:]]+"\$local_head:refs/heads/\$branch"' "$backup_tool"; then
+  if ! grep -Eq '^[[:space:]]*push[[:space:]]+--porcelain[[:space:]]+"\$remote_url"[[:space:]]+"\$local_head:refs/heads/\$branch"' "$backup_tool"; then
     fail 'tools/backup-to-github.sh must push only the immutable audited SHA in $local_head:refs/heads/$branch'
   fi
   grep -Fq 'lib/github-auth.sh' "$backup_tool" || \
