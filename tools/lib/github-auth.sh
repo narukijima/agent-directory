@@ -98,23 +98,6 @@ github_auth_resolve() {
   export GH_PROMPT_DISABLED=1
   export GH_NO_UPDATE_NOTIFIER=1
 
-  if [[ -n "${GH_TOKEN:-}" ]]; then
-    github_auth_select_token "$GH_TOKEN" 'process-gh-token'
-    return $?
-  fi
-  if [[ -n "${GITHUB_TOKEN:-}" ]]; then
-    github_auth_select_token "$GITHUB_TOKEN" 'process-github-token'
-    return $?
-  fi
-  if [[ -n "$workspace_root" && -f "$workspace_root/.env" ]]; then
-    if github_auth_read_known_key "$workspace_root/.env" GH_TOKEN false; then
-      github_auth_select_token "$GITHUB_AUTH_PARSED_VALUE" 'workspace-env'
-      GITHUB_AUTH_PARSED_VALUE=''
-      return 0
-    fi
-    GITHUB_AUTH_PARSED_VALUE=''
-  fi
-
   machine_file="$(github_auth_machine_file)"
   GITHUB_AUTH_MACHINE_FILE="$machine_file"
   if [[ -e "$machine_file" ]]; then
@@ -131,6 +114,25 @@ github_auth_resolve() {
     GITHUB_AUTH_PARSED_VALUE=''
     GITHUB_AUTH_SOURCE='none'
     return 1
+  fi
+
+  # A machine credential is the local multi-Agent default. Process and Workspace
+  # credentials remain fallbacks for CI and machines that have no shared store.
+  if [[ -n "${GH_TOKEN:-}" ]]; then
+    github_auth_select_token "$GH_TOKEN" 'process-gh-token'
+    return $?
+  fi
+  if [[ -n "${GITHUB_TOKEN:-}" ]]; then
+    github_auth_select_token "$GITHUB_TOKEN" 'process-github-token'
+    return $?
+  fi
+  if [[ -n "$workspace_root" && -f "$workspace_root/.env" ]]; then
+    if github_auth_read_known_key "$workspace_root/.env" GH_TOKEN false; then
+      github_auth_select_token "$GITHUB_AUTH_PARSED_VALUE" 'workspace-env'
+      GITHUB_AUTH_PARSED_VALUE=''
+      return 0
+    fi
+    GITHUB_AUTH_PARSED_VALUE=''
   fi
 
   if command -v gh >/dev/null 2>&1; then

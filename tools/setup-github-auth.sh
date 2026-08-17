@@ -11,7 +11,7 @@ remote_name=''
 remote_explicit=false
 
 usage() {
-  printf 'Usage: %s (--install-from-gh|--machine-ready|--check|--repair-from-gh) [--expected-login <login>] [--remote <name>]\n' "${0##*/}" >&2
+  printf 'Usage: %s (--install-token|--install-from-gh|--machine-ready|--check|--repair-from-gh) [--expected-login <login>] [--remote <name>]\n' "${0##*/}" >&2
   exit 2
 }
 
@@ -22,7 +22,7 @@ blocked() {
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --install-from-gh|--machine-ready|--check|--repair-from-gh)
+    --install-token|--install-from-gh|--machine-ready|--check|--repair-from-gh)
       [[ -z "$mode" ]] || usage
       mode="${1#--}"
       shift
@@ -39,6 +39,34 @@ done
   blocked not-git-repository
 
 machine_file="$(github_auth_machine_file)"
+
+write_machine_token() {
+  local candidate="$1" auth_dir temp_file=''
+  auth_dir="$(dirname "$machine_file")"
+  umask 077
+  mkdir -p "$auth_dir" || blocked auth-store-permissions
+  chmod 700 "$auth_dir" || blocked auth-store-permissions
+  temp_file="$(mktemp "$auth_dir/.github.env.XXXXXX")" || blocked auth-store-permissions
+  trap '[[ -z "${temp_file:-}" ]] || rm -f "$temp_file"' EXIT
+  printf 'GH_TOKEN=%s\n' "$candidate" > "$temp_file"
+  chmod 600 "$temp_file" || blocked auth-store-permissions
+  mv -f "$temp_file" "$machine_file" || blocked auth-store-permissions
+  temp_file=''
+}
+
+install_token() {
+  local candidate=''
+  if [[ -t 0 ]]; then
+    printf 'GitHub fine-grained PAT: ' >&2
+    IFS= read -r -s candidate || blocked token-input-missing
+    printf '\n' >&2
+  else
+    IFS= read -r candidate || blocked token-input-missing
+  fi
+  github_auth_value_valid "$candidate" || blocked token-input-invalid
+  write_machine_token "$candidate"
+  candidate=''
+}
 
 machine_ready() {
   if ! github_auth_machine_permissions "$machine_file"; then
@@ -77,7 +105,7 @@ machine_is_healthy() {
 }
 
 install_from_gh() {
-  local candidate='' login_output='' failure_reason='' auth_dir temp_file=''
+  local candidate='' login_output='' failure_reason=''
   if machine_is_healthy; then
     return 0
   fi
@@ -100,17 +128,8 @@ install_from_gh() {
     candidate=''
     blocked account-mismatch
   fi
-  auth_dir="$(dirname "$machine_file")"
-  umask 077
-  mkdir -p "$auth_dir" || blocked auth-store-permissions
-  chmod 700 "$auth_dir" || blocked auth-store-permissions
-  temp_file="$(mktemp "$auth_dir/.github.env.XXXXXX")" || blocked auth-store-permissions
-  trap '[[ -z "${temp_file:-}" ]] || rm -f "$temp_file"' EXIT
-  printf 'GH_TOKEN=%s\n' "$candidate" > "$temp_file"
+  write_machine_token "$candidate"
   candidate=''
-  chmod 600 "$temp_file" || blocked auth-store-permissions
-  mv -f "$temp_file" "$machine_file" || blocked auth-store-permissions
-  temp_file=''
 }
 
 configure_git_helper() {
@@ -120,6 +139,7 @@ configure_git_helper() {
 }
 
 case "$mode" in
+  install-token) install_token ;;
   install-from-gh|repair-from-gh) install_from_gh; configure_git_helper ;;
   machine-ready) machine_ready; exit 0 ;;
   check) ;;

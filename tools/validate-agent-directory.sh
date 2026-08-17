@@ -2051,6 +2051,14 @@ grep -Fq -- '--machine-ready' "$repo_root/tools/task.sh" || \
   fail 'task.sh context must enforce cross-process GitHub machine readiness'
 grep -Fq 'blocked machine-credential-not-installed' "$repo_root/tools/setup-github-auth.sh" || \
   fail 'setup-github-auth.sh must classify a missing cross-process machine credential'
+grep -Fq -- '--install-token' "$repo_root/tools/setup-github-auth.sh" || \
+  fail 'setup-github-auth.sh must support direct machine PAT installation'
+machine_line="$(grep -n 'machine_file="$(github_auth_machine_file)"' \
+  "$repo_root/tools/lib/github-auth.sh" | head -n 1 | cut -d: -f1)"
+process_line="$(grep -n 'if \[\[ -n "${GH_TOKEN:-}" \]\]' \
+  "$repo_root/tools/lib/github-auth.sh" | head -n 1 | cut -d: -f1)"
+[[ -n "$machine_line" && -n "$process_line" && "$machine_line" -lt "$process_line" ]] || \
+  fail 'GitHub resolver must prefer the machine credential before process tokens'
 github_machine_case="$repo_root/evals/cases/github-machine-readiness-before-work.yaml"
 for forbidden_machine_command in 'gh auth login' 'git credential-osxkeychain get' \
   'security find-internet-password' 'security find-generic-password'; do
