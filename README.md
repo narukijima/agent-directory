@@ -57,7 +57,7 @@ agent-directory/
 ├── AGENTS.md                     # ブートローダー兼ルーター兼目次
 ├── CLAUDE.md                     # @AGENTS.md
 ├── SETUP.md                      # Operator / machine側setupの正本
-├── OPERATING_PROFILE.md          # 条件付きの推奨Multi-AI責任モデル
+├── OPERATING_PROFILE.md          # Provider分離とOpenAI surface選択の推奨運用モデル
 ├── PROJECT.md / STATE.md         # このリポジトリ自身の開発契約と状態（テンプレート機能ではない）
 ├── .codex/environments/          # Codex DesktopのLocal Environment
 ├── .claude/settings.json         # Claude Codeの共有project hook
@@ -113,14 +113,16 @@ GitHub backup構成に限って正本手順から実行し、判定ロジック�
 Claude Codeの`.worktreeinclude`も既定では置かず、
 `.env*`などGit管理外ファイルをworktreeへ複製する必要が確認されたWorkspaceだけで個別に設計する。
 
-### 推奨Multi-AI Operating Profile
+### Provider-Scoped Operating Profile
 
-Codex DesktopとClaude Codeは引き続き単独でも利用できる。複数の適切なruntimeを使える場合は、Codexを
-Control Plane、Claude CodeをCreative / Production Worker、ChatGPTをoptional Visual Worker、Python・API・
-既存の決定的ToolをExecution Layerとする役割分担を初期案として推奨する。これは強制仕様ではなく、利用者、
-Project契約、task、利用可能capabilityに応じて責務を統合・変更できる。ChatGPTの直接adapterは提供しない。
-詳細、fallback、handoff、Single Owner、Scheduled Execution境界、交換可能な現行モデル推奨は
-[OPERATING_PROFILE.md](OPERATING_PROFILE.md)が所有する。
+一つのtaskは原則として一つのProvider familyと一人のfinal ownerが完了まで所有する。OpenAIを主対象とし、
+Chatは対話・ワンショット、ChatGPT Workは複数工程とreview可能な完成成果物、Codexはsoftware・repository・
+technical workを初期判断とする。ただし製品名による硬い禁止表にはせず、Humanの明示指定、Project契約、
+primary deliverable、必要capability、acceptance criteriaからAgent自身がsurfaceを選ぶ。
+
+Anthropicを選んだtaskはAnthropic family内で完結させる。OpenAIとAnthropicを固定分業させず、Providerをまたぐ
+自動delegateと自動fallbackを行わない。明示handoff、Single Owner、partial executionの照合、Scheduled Execution、
+Runtime-native coordinationの境界は[OPERATING_PROFILE.md](OPERATING_PROFILE.md)が所有する。
 
 ## Attachment境界
 
@@ -241,7 +243,7 @@ Toolは前提違反ならremoteを変更せず停止する。backup失敗は検�
 | 正本 | 所有する内容 |
 |---|---|
 | [AGENTS.md](AGENTS.md) | 自己定義、共通判断原則、Route判定、Context Loading、自律実行と例外、禁止事項、目次 |
-| [OPERATING_PROFILE.md](OPERATING_PROFILE.md) | capability-firstの推奨Multi-AI責任モデル、handoff、Single Owner、Scheduled Execution、現行モデル推奨 |
+| [OPERATING_PROFILE.md](OPERATING_PROFILE.md) | Provider分離、OpenAI surface選択、明示handoff、Single Owner、recovery、Scheduled Execution |
 | [knowledge/KNOWLEDGE.md](knowledge/KNOWLEDGE.md) | 四層構造、保存先、不変規則、命名、限定取得、INDEX、LOG |
 | [skills/SKILLS.md](skills/SKILLS.md) | Skillの選択、frontmatter、Knowledge参照、構造 |
 | [projects/AGENTS.md](projects/AGENTS.md) | Project作業共通の着手・実行・完了手順 |

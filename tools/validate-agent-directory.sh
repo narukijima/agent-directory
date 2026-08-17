@@ -1844,7 +1844,7 @@ required_cases=(
   scheduled-trigger-normal-task
   control-policy-tamper control-mixed-scope-commit-split control-ordinary-failure-no-penalty
   failure-evidence-boundary correction-invalidates-stale-inference
-  delegation-default-off delegation-depth-one multi-ai-recommended-profile
+  delegation-default-off delegation-depth-one provider-scoped-operating-profile
   pr-required-remote-completion
   upstream-issue-privacy upstream-issue-preapproved-send upstream-issue-fixed-destination
   upstream-issue-allowlisted-destination
@@ -1861,6 +1861,8 @@ required_cases=(
 )
 
 for case_name in "${required_cases[@]}"; do require_file "$repo_root/evals/cases/$case_name.yaml"; done
+[[ ! -e "$repo_root/evals/cases/multi-ai-recommended-profile.yaml" ]] || \
+  fail 'retired fixed-role Multi-AI eval must not return'
 
 core_profile="$repo_root/evals/profiles/core.txt"
 if [[ -f "$core_profile" ]]; then
@@ -2375,8 +2377,8 @@ grep -Fq 'OPERATING_PROFILE.md' "$repo_root/README.md" || \
 grep -Fq '[SETUP.md](SETUP.md)' "$repo_root/README.md" || \
   fail 'README.md does not route initial setup to SETUP.md'
 for setup_heading in '## Supported runtimes' '## Initial setup' '## Workspace root' \
-  '## Claude authentication' '## Codex + Claude setup' '## Preflight checks' \
-  '## Scheduled / unattended execution' '## Runtime fallback' '## Machine-local secrets' \
+  '## Claude authentication' '## Provider-specific setup' '## Preflight checks' \
+  '## Scheduled / unattended execution' '## Provider isolation and recovery' '## Machine-local secrets' \
   '## Multi-machine notes' '## Troubleshooting' '## Verification'; do
   grep -Fqx -- "$setup_heading" "$repo_root/SETUP.md" || \
     fail "SETUP.md is missing its setup boundary: $setup_heading"
@@ -2385,21 +2387,41 @@ for setup_contract in 'claude setup-token' 'CLAUDE_CODE_OAUTH_TOKEN' 'claude aut
   'https://code.claude.com/docs/en/authentication' 'https://code.claude.com/docs/en/security' \
   '実際に作業するAgent Workspace / Git rootをworking directoryとして起動' \
   '内部fieldを直接patchする方法はCore recommendationにしない' \
-  'Codex → Claude CLI → Codex self-completion'; do
+  '両Providerを導入していてもtask ownerを共有させない' \
+  '別Providerを自動worker、reviewer、fallbackにしない'; do
   grep -Fq -- "$setup_contract" "$repo_root/SETUP.md" || \
     fail "SETUP.md lost a required runtime setup contract: $setup_contract"
 done
-for profile_heading in '## 適用と優先順位' '## Capability Role' \
-  '## OrchestratorとWorkerの最小契約' '## Repository State' \
-  '## Runtime Availability Fallback' '## Scheduled Execution' '## Current Model Recommendations'; do
+for profile_heading in '## 適用と優先順位' '## Core契約' '## Providerの選択と分離' \
+  '## 自律的なSurface選択' '## OpenAI Provider Profile' '## 複合タスクとSingle Owner' \
+  '## Anthropic Provider Profile' '## Cross-provider Handoff' '## AvailabilityとRecovery' \
+  '## Deterministic Execution Layer' '## Repository State' '## Scheduled Execution' '## 変更耐性'; do
   grep -Fqx -- "$profile_heading" "$repo_root/OPERATING_PROFILE.md" || \
     fail "OPERATING_PROFILE.md is missing its responsibility boundary: $profile_heading"
 done
-# Guard structure and neutrality, not a particular Provider/model selection.
+# Guard Provider isolation, autonomous surface judgment, and durable Core invariants.
 grep -Fq 'Reference Architecture' "$repo_root/OPERATING_PROFILE.md" || \
   fail 'OPERATING_PROFILE.md must identify itself as a non-mandatory Reference Architecture'
 grep -Fq 'Human / Operatorはultimate authority' "$repo_root/OPERATING_PROFILE.md" || \
   fail 'OPERATING_PROFILE.md must preserve Human / Operator authority'
+grep -Fq 'one task → one provider family → one final owner' "$repo_root/OPERATING_PROFILE.md" || \
+  fail 'OPERATING_PROFILE.md must preserve one Provider family and final owner per task'
+grep -Fq '本テンプレートはOpenAIを主対象' "$repo_root/OPERATING_PROFILE.md" || \
+  fail 'OPERATING_PROFILE.md must identify OpenAI as the primary concrete profile'
+for openai_surface in '| Chat |' '| ChatGPT Work |' '| Codex |'; do
+  grep -Fq "$openai_surface" "$repo_root/OPERATING_PROFILE.md" || \
+    fail "OPERATING_PROFILE.md lost its OpenAI surface guidance: $openai_surface"
+done
+grep -Fq 'surface mappingは硬い禁止表ではない' "$repo_root/OPERATING_PROFILE.md" || \
+  fail 'OPERATING_PROFILE.md must preserve autonomous non-rigid surface selection'
+grep -Fq 'Providerをまたぐ自動delegateと自動fallbackを行わない' "$repo_root/OPERATING_PROFILE.md" || \
+  fail 'OPERATING_PROFILE.md must reject automatic cross-Provider delegation and fallback'
+grep -Fq '直接起動できないsurfaceへ仕事を送った、開始した、完了したと推測してはならない' \
+  "$repo_root/OPERATING_PROFILE.md" || \
+  fail 'OPERATING_PROFILE.md must not invent unsupported cross-surface dispatch'
+grep -Fq 'Anthropicを選んだtaskは、Claude、Claude Code、Anthropic API等のAnthropic family内で完了' \
+  "$repo_root/OPERATING_PROFILE.md" || \
+  fail 'OPERATING_PROFILE.md must keep Anthropic tasks inside the Anthropic family'
 grep -Fq 'Repositoryのtracked canonical state' "$repo_root/OPERATING_PROFILE.md" || \
   fail 'OPERATING_PROFILE.md must preserve repository canonical state'
 grep -Fq '`Runtime-native scheduler`' "$repo_root/OPERATING_PROFILE.md" || \
@@ -2408,23 +2430,13 @@ grep -Fq '`Route → Target → Work → Verify → Finish`' "$repo_root/OPERATI
   fail 'OPERATING_PROFILE.md must route scheduled triggers through the normal task lifecycle'
 grep -Fq 'Scheduler Engine、daemon、schedule registry' "$repo_root/OPERATING_PROFILE.md" || \
   fail 'OPERATING_PROFILE.md must refuse an agent-owned scheduler subsystem'
-grep -Fq 'ChatGPT runtime adapterや自動連携を提供しない' "$repo_root/OPERATING_PROFILE.md" || \
-  fail 'OPERATING_PROFILE.md must not invent a ChatGPT runtime adapter'
-grep -Fq '事前宣言済みのruntime-availability fallbackはsilent provider fallbackではない' \
-  "$repo_root/OPERATING_PROFILE.md" || \
-  fail 'OPERATING_PROFILE.md must distinguish declared availability fallback from silent fallback'
-grep -Fq 'Codex Control Plane → Claude Code CLI → Codex self-completion' \
-  "$repo_root/OPERATING_PROFILE.md" || \
-  fail 'OPERATING_PROFILE.md must preserve the automated runtime fallback chain'
 grep -Fq 'file changes、Git state、生成output、external' "$repo_root/OPERATING_PROFILE.md" || \
-  fail 'OPERATING_PROFILE.md must reconcile partial execution before fallback'
-grep -Fq 'requested owner / actual owner / fallback reason / completion state' \
+  fail 'OPERATING_PROFILE.md must reconcile partial execution before handoff or recovery'
+grep -Fq '別Providerへ自動fallbackしない' "$repo_root/OPERATING_PROFILE.md" || \
+  fail 'OPERATING_PROFILE.md must stop instead of automatically changing Provider families'
+grep -Fq '独自Provider router、workflow engine、queue、RPC、daemonをCoreへ追加しない' \
   "$repo_root/OPERATING_PROFILE.md" || \
-  fail 'OPERATING_PROFILE.md must make availability fallback observable'
-grep -Fq 'Claude必須と定めるtaskではfallbackせず' "$repo_root/OPERATING_PROFILE.md" || \
-  fail 'OPERATING_PROFILE.md must preserve Claude-required Project contracts'
-grep -Fq 'モデル更新時はこの節の推奨値だけを更新' "$repo_root/OPERATING_PROFILE.md" || \
-  fail 'OPERATING_PROFILE.md must separate model recommendations from role contracts'
+  fail 'OPERATING_PROFILE.md must refuse a Core-owned Provider orchestration subsystem'
 grep -Fqx '## Scheduled executionケースの最低条件' "$repo_root/evals/EVALS.md" || \
   fail 'evals/EVALS.md does not own the scheduled execution case minimum conditions'
 # The operator interaction language contract is presence-checked like the other bootloader

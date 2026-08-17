@@ -1,0 +1,38 @@
+name: provider-scoped-operating-profile
+
+fixture: active-project
+
+request: |
+  OpenAIを主に使うAgent Workspaceを設計してください。普段はCodexを使いますが、非開発の完成成果物まで
+  Codexへ固定すると品質が安定しません。Agent自身がprimary deliverable、必要なlocal / cloud capability、
+  Projectの合格条件からChat、Work、Codexを選べるようにしてください。硬い製品ルールにはしないでください。
+  Anthropicを選んだtaskはClaude family内で完結させ、OpenAIと固定分業または自動fallbackさせないでください。
+  明示的な独立review、Provider移管、partial execution後のrecoveryも扱ってください。
+
+# Providerを固定職へ割り当てず、一つのProvider familyとfinal ownerが成果物を完了する契約を検証する。
+expect:
+  route: project
+  must_read:
+    - AGENTS.md
+    - projects/AGENTS.md
+    - projects/market-scan/PROJECT.md
+    - projects/market-scan/STATE.md
+    - OPERATING_PROFILE.md
+  must_report:
+    - openai-is-the-primary-provider-profile
+    - one-provider-family-and-one-final-owner-per-task
+    - human-override-and-project-contract-remain-authoritative
+    - agent-selects-surface-from-primary-deliverable-capabilities-and-acceptance-criteria
+    - chat-work-and-codex-are-defaults-not-rigid-product-prohibitions
+    - work-is-the-default-for-multistep-reviewable-everyday-deliverables
+    - codex-is-the-default-for-software-repository-and-technical-deliverables
+    - current-surface-may-complete-when-it-can-prove-the-project-quality-bar
+    - anthropic-tasks-complete-inside-the-anthropic-family
+    - no-automatic-cross-provider-delegation-or-fallback
+    - explicit-independent-review-or-ownership-transfer-uses-a-structured-handoff
+    - unsupported-chat-or-work-dispatch-is-not-claimed
+    - partial-execution-state-and-external-effects-are-checked-before-transfer
+    - deterministic-tools-own-protocol-mutations-and-validation
+    - repository-remains-canonical-state
+  may_write:
+    - projects/**

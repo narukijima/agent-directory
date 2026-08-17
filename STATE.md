@@ -12,9 +12,12 @@ ClaudAGT AgentのIndependent Projectとして継続開発するProject契約を�
 公開Issue #87〜#90に対し、未公開privacy履歴の限定訂正契約、説明文付きSTATE契約anchorの抽出、raw CRを持たない
 router判定、blob一回読込による決定的なrange privacy検査と回帰fixtureを導入し、通常・full validationを
 0 warningで合格させた。
-capability-firstのRecommended Multi-AI Operating Profileを独立正本として追加し、Codex、Claude Code、
-optional ChatGPT、決定的Toolの推奨分担、単一runtime fallback、Single Owner、repository state、
-Scheduled Executionの交換可能な現行mappingをCore compatibilityと分離した。
+OpenAIを主対象とするProvider-Scoped Operating Profileへ移行した。一つのtaskを一つのProvider familyと一人の
+final ownerが完了まで所有し、OpenAIではAgent自身がHumanの明示指定、Project契約、primary deliverable、
+必要capability、acceptance criteriaからChat、Work、Codexを選ぶ。surface mappingは既定判断であり、硬い
+製品禁止表にはしない。Anthropic taskはAnthropic family内で完結させ、Providerをまたぐ固定分業、自動delegate、
+自動fallbackを標準経路から撤廃した。明示handoff、partial execution照合、Single Owner、repository state、
+Scheduled ExecutionをProvider非依存Coreと分離した。
 定期実行はOperator / Runtime / OS側の外部triggerとし、Agent内部では通常の
 `Route → Target → Work → Verify → Finish`だけを使う。独自executor、schedule管理、provider adapter、
 専用lock / state / log、専用evalを廃止し、変更時validationと必要時のcache再生成へ集約した。
@@ -26,10 +29,10 @@ remote merge、default branch確認を一つの完了経路にした。local mer
 さらにmerge済みsource branchの残存を未完了として扱い、PR metadata、expected head、default branch反映を
 確認した後にexact remote branchと一致するlocal branchを削除・不在確認するところまで同じ完了経路へ含めた。
 raw ref削除の一般解禁はせず、PR cleanupだけを限定例外としてCore evalとvalidatorで固定した。
-Operator / machine setupを`SETUP.md`へ集約し、Claudeの長期OAuth認証、Workspace / Git root起動、
-secret非表示のruntime preflight、scheduled executionの事前条件を正本化した。Multi-AI Profileには
-Claude CLIのavailability failure時にCodexがobjectiveとproduction responsibilityを引き取る宣言済みfallback、
-partial execution照合、Desktopのmanual alternative、Single Owner / Single Writer維持を追加した。
+Operator / machine setupを`SETUP.md`へ集約し、OpenAI主運用と任意のAnthropic運用を独立したreadiness gateへ
+分離した。Claudeの長期OAuth認証、Workspace / Git root起動、secret非表示のruntime preflight、scheduled
+executionの事前条件は維持しつつ、両Providerを一つのtask ownerやfallback chainとして要求しない。
+availability failure時は同じProvider内でrecoveryし、partial executionを照合してから停止または明示handoffする。
 Issue #98に対し、finishが直前の検証済みcommitのfull SHAをroot-only backupへ束縛し、別targetのdirty状態を
 保持・除外した隔離commit snapshotで監査・pushする経路を追加した。通常backupのcleanliness拒否は維持し、
 SHA不一致、到達不能local branch、処理中のHEAD移動は固定modeでも拒否する回帰fixtureを導入した。
@@ -57,8 +60,8 @@ Workspace責務境界を壊さず、ClaudAGTエコシステムの変更と整合
 - 対象: `PROJECT.md#PC-01`
 - 確認日: 2026-08-17
 - 方法: `git diff --check`、`bash tools/validate-agent-directory.sh --full`。
-- 結果: root router、自己修復契約、Core profile、guard policy、必須case、YAML schemaを含むfull validationが
-  0 warningで合格した。
+- 結果: Provider-Scoped Operating Profile、OpenAI surface選択、Anthropic分離、cross-provider自動fallback拒否、
+  Core profile、guard policy、必須case、YAML schemaを含むfull validationが0 warningで合格した。
 
 ## 未完了・ブロッカー
 
@@ -70,6 +73,9 @@ Workspace責務境界を壊さず、ClaudAGTエコシステムの変更と整合
 - 現在判断ではactiveなKnowledgeとSkillを優先し、非activeな参照は履歴確認時だけ使う。
 - 明示依頼は通常完了経路全体のStanding Authorizationであり、工程ごとの再承認を要求しない。
 - 失敗原因は直接観測できた範囲だけ確定し、訂正または新しい検証で否定された旧推論を再利用しない。
+- 一つのtaskは一つのProvider familyと一人のfinal ownerが完了まで所有する。
+- OpenAIを主対象とし、Chat、Work、Codexはprimary deliverableと品質証拠からAgent自身が選ぶ。
+- Anthropic taskはAnthropic family内で完結させ、Providerをまたぐ自動分業・自動fallbackを行わない。
 
 ## 失敗・却下済み
 

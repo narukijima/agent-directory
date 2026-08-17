@@ -13,7 +13,7 @@ forbidden	*/.DS_Store	OS生成物
 frozen	knowledge/raw/*	不変原資料（追加のみ）
 frozen	knowledge/wiki/logs/*	閉鎖済みlog（追加のみ）
 guarded	AGENTS.md	最上位規約
-guarded	OPERATING_PROFILE.md	推奨Multi-AI責任モデル
+guarded	OPERATING_PROFILE.md	Provider分離とsurface選択の運用モデル
 guarded	CLAUDE.md	bridge
 guarded	.gitignore	追跡境界の定義
 guarded	.codex/*	Codex Desktop共有adapter
@@ -37,7 +37,8 @@ guarded	tools/setup-local-environment.sh	自動実行される共通setup
 guarded	tools/setup-github-auth.sh	認証setupとrepair
 guarded	tools/run-evals.py	Core eval scorer
 guarded	evals/EVALS.md	行動eval契約
-guarded	evals/cases/multi-ai-recommended-profile.yaml	推奨Multi-AI責任モデルeval
+guarded	evals/cases/multi-ai-recommended-profile.yaml	撤廃済み固定分担evalのtombstone
+guarded	evals/cases/provider-scoped-operating-profile.yaml	Provider分離とOpenAI surface選択eval
 guarded	evals/cases/scheduled-trigger-normal-task.yaml	Scheduled Execution責務境界eval
 guarded	evals/cases/pr-required-remote-completion.yaml	PR必須remote完了経路eval
 guarded	evals/TRACE.md	trace語彙とadapter契約

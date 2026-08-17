@@ -1,186 +1,182 @@
-# OPERATING_PROFILE.md — Recommended Multi-AI Operating Profile
+# OPERATING_PROFILE.md — Provider-Scoped Operating Profile
 
-複数のAI runtimeと決定的Toolを利用できるAgentが、役割分担を毎回ゼロから設計し直さないための
-推奨責任モデルである。これはReference Architectureであり、Runtime Permission、必須Provider、
-モデル合格条件、または新しいRouteではない。利用者の明示指示とProject固有契約が常に優先する。
+Agent Workspaceを複数のAI Providerから利用できる場合に、Provider間の固定分業で目的・文脈・完成責任を
+分散させず、利用中のAgentが成果物に適したsurfaceを自律的に選ぶための推奨運用モデルである。
+これはReference Architectureであり、新しいRoute、必須Provider、Provider router、またはモデル合格条件ではない。
+
+本テンプレートはOpenAIを主対象として現行surfaceの判断材料を具体化する。Anthropicは独立したProvider familyとして
+扱い、OpenAIとの自動分業や自動fallbackを標準経路にしない。
 
 ## 適用と優先順位
 
-複数runtimeが利用可能でtaskに利益がある場合、このProfileを初期案として使う。単一runtimeしかない場合、
-小さなtask、画像を必要としないtask、または利用者が別構成を指定した場合は、利用可能な主体へ責務を統合してよい。
+Providerとsurfaceを決める優先順位は次のとおりとする。
 
-役割を決める優先順位は次のとおりとする。
-
-1. Human / Operatorの明示override
+1. Human / Operatorの明示指定
 2. Project固有契約
-3. 本書のRecommended Profile
-4. 実際に利用可能なcapability
+3. taskのprimary deliverableと完了条件
+4. 必要なfile、app、browser、repository、local / cloud capability
+5. 現在利用可能なProvider / surface
 
-代替Providerや別モデルへsilent fallbackしない。推奨から外れるときは、変更した役割、primary owner、
-利用するcapabilityを作業記録またはhandoffで明示する。Human / Operatorはultimate authorityであり、
-Project固有approval、安全境界、lifecycle、成果契約は本書より上位にある。
+Human / Operatorはultimate authorityである。Project固有approval、安全境界、lifecycle、成果契約は本書より
+上位にある。製品名から機械的に経路を決めず、目的、主成果物、必要な道具、review方法、完了証拠をまとめて判断する。
 
-ただし、後述する事前宣言済みのruntime-availability fallbackはsilent provider fallbackではない。利用不能な
-workerから、objectiveを保持しているControl Planeへproduction responsibilityを戻す責任継続であり、
-適用理由とactual ownerを記録する。品質評価を理由に無断でProviderを切り替えることとは区別する。
+## Core契約
 
-## Capability Role
+長期的な運用契約は次のとおりである。
 
-長期的な責任構造は製品名ではなくcapabilityで定義する。現在の推奨mappingは次のとおりである。
+```text
+one task → one provider family → one final owner
+```
 
-| Capability role | Primary ownerの現在推奨 | 主な責務 |
+- 一つのtaskは原則として一つのProvider family内で完了させる。
+- primary deliverableに一人のfinal ownerを置き、複数surfaceを同時final ownerにしない。
+- Provider側memoryや会話履歴ではなく、RepositoryとProject成果契約をcanonical stateにする。
+- surface選択は品質を上げる既定判断であり、製品名だけをvalidatorの永久的な成功条件にしない。
+- publish、API mutation、ID、retry、schema validation、永続化は決定的Toolへ委ねる。
+- Runtime PermissionはOperator / Runtime側が所有し、Provider別permission wrapperを追加しない。
+
+## Providerの選択と分離
+
+明示されたProvider、または現在taskを開始したProvider familyが、そのtaskのobjectiveと完了責任を保持する。
+別Providerの方が得意そうだという推測だけで、Providerをまたぐ自動delegateと自動fallbackを行わない。
+
+OpenAIとAnthropicを同時に利用できても、一つの仮想チームとして固定分業させない。別Providerを使うのは、
+Humanの明示指定、Project契約、独立した比較・review、または明示的な所有権移管がある場合だけである。
+外部API、DB、browser、決定的Toolを使うことはProvider移管ではない。推論とfinal ownershipを誰が持つかで判定する。
+
+## 自律的なSurface選択
+
+Agentは依頼文の語ではなくprimary deliverableからsurfaceを選ぶ。次を判断材料にし、必要なsurfaceを自律的に選択する。
+
+- 完成物は回答、会話、file、report、presentation、code、commit、PRのどれか。
+- 単発生成か、複数工程と途中状態を持つworkか。
+- local file / app / browserが必要か、cloud継続が必要か。
+- repository、Git、test、diff、technical reviewが中心か。
+- Projectのacceptance criteriaをどのsurfaceで最も直接検証できるか。
+
+surface mappingは硬い禁止表ではない。現在surfaceが必要capabilityを持ち、Projectの品質基準と完了証拠を満たせるなら、
+Agentはそのsurfaceで完了してよい。別surfaceの方が明確に適する場合は理由と期待成果を示し、handoffまたは切替を選ぶ。
+直接起動できないsurfaceへ仕事を送った、開始した、完了したと推測してはならない。
+
+## OpenAI Provider Profile
+
+OpenAIを利用するtaskでは、現行の公式区分を初期判断として次を使う。
+
+| Surface | 主な用途 | 選択の目安 |
 |---|---|---|
-| Control Plane | Codex | 目的解釈、戦略、計画、分解、worker選択、横断調整、状態確認、評価、final gate、学習更新 |
-| Creative / Production Worker | Claude Code | 調査、情報探索、企画、編集、執筆、構成、候補生成、creative brief、Project固有の深い制作 |
-| Visual Worker | ChatGPT（optional external worker） | 画像生成・編集、visual composition、social / carousel画像、visual conceptの実制作 |
-| Deterministic Execution Layer | Python、shell、API、DB、既存Tool | protocol実行、検証、永続化、冪等性、時刻・ID・lock・retryなどの決定的処理 |
+| Chat | 質問、相談、比較、短いdraft、要約、ワンショット生成・編集 | その場の対話や短い返答が主成果物 |
+| ChatGPT Work | 調査、分析、複数工程、file、document、spreadsheet、presentation等の完成成果物 | review可能な成果物まで作ることが主目的 |
+| Work Local | local file、app、browserを使うwork | Operatorのmachine上のcontextが必要 |
+| Work Cloud | 長時間・継続・scheduled work | machineを閉じても継続する必要がある場合に利用可能なら選択 |
+| Codex | codebase理解、実装、Git、test、diff、PR、technical review | software / repository変更が主成果物 |
+| Voice | Chat、Work、Codexの開始、確認、追加指示を行うruntime-native coordination | 利用可能なDesktop機能として使い、Core APIとはみなさない |
+| OpenAI API / Workspace Agent | Project固有のprogrammatic workflow | 公開・実装済みの契約がある場合だけ利用 |
 
-製品やモデルが変わっても、責任構造を保ってcapabilityに合うruntimeへmappingを更新できる。
-Provider抽象framework、runtime registry、queue、RPC、daemonをCoreへ追加する根拠にはしない。
+現行区分の根拠はOpenAIの
+[Use ChatGPT](https://learn.chatgpt.com/docs/use-chatgpt)、
+[Get started with ChatGPT Work](https://learn.chatgpt.com/docs/get-started-with-work)、
+[ChatGPT Voice](https://learn.chatgpt.com/docs/features/voice)、
+[Codex SDK](https://learn.chatgpt.com/docs/codex-sdk)を参照する。
 
-## 推奨Control Plane
+CodexをWorkspace全体の恒久的なControl Planeには固定しない。CodexはOpenAI family内のdeveloper / technical
+surfaceであり、Work向けtaskの入口になった場合は、現在capabilityで品質基準を満たして完了するか、最小handoffを
+準備してWorkへ切り替えるかを判断する。公開された直接dispatch契約がないsurfaceを自動spawnする前提を置かない。
 
-Codexを利用できる複数runtime環境では、Codexをoperational chiefとすることを推奨する。
+## 複合タスクとSingle Owner
 
-> Think globally / delegate locally / verify centrally.
+codeとreport、調査と画像、実装とpresentationのような複合taskでは、primary deliverableを一つ決める。
 
-Codexは全体戦略、優先順位、planning、task decomposition、orchestration、worker選択、Project横断調整、
-repository stateの確認、成果物検査、評価、final gate、learning loop、次回戦略、scheduled AI workflowの
-上位統括をprimary responsibilityとする。制作、visual work、決定的protocolをすべて自身で抱え込まず、
-taskとcapabilityが適合するownerへ渡し、結果を中央で統合・検証する。
+- 動作するsoftware、repository change、test済みcommitが主成果物ならCodexをowner候補とする。
+- document、analysis、spreadsheet、presentation等のreview可能な業務成果物が主成果物ならWorkをowner候補とする。
+- 会話、判断材料、短いdraft、単発生成が主成果物ならChatをowner候補とする。
 
-Codexだけが利用可能ならproductionまで担当してよい。利用できない場合は、Projectが指定したruntime、
-または必要な計画・統合・検証capabilityを持つruntimeがControl Planeを兼任できる。
+別surfaceの出力はownerへ渡す候補・asset・evidenceであり、それだけでcanonical stateにならない。final ownerが
+Project成果契約、検証、保存境界を通して統合する。内部subagentを使う場合もfinal ownerとSingle Writerは変えない。
 
-## 推奨Creative / Production Worker
+## Anthropic Provider Profile
 
-Claude Codeを利用できる場合、文章、編集、企画、調査、コンテンツ制作の主力workerとして推奨する。
-research、information foraging、source investigation、idea generation、creative exploration、editing、
-copywriting、article / SNS writing、storytelling、structure development、content planning、比較案、
-creative / visual brief、Project固有の深い制作をobjectiveとconstraintsの範囲で所有する。
+Anthropicを選んだtaskは、Claude、Claude Code、Anthropic API等のAnthropic family内で完了させる。
+OpenAIを自動worker、reviewer、fallbackとして呼ばない。Anthropic内部のsurface mappingは現行公式仕様、
+Humanの指示、Project契約、primary deliverableに基づいて選び、本CoreがOpenAIとの見かけ上の対称性を推測して固定しない。
 
-標準関係は、Control Planeがobjective・constraints・必要contextを渡し、Claude Codeがresearch・production・
-candidatesを返し、Control Planeが評価・選択・次のactionを決める形である。Claude Codeしか利用できない
-環境では、同じruntimeがControl Planeも兼任できる。workerは委譲範囲を越えて全体戦略や正本を独自に
-変更しない。
+Claude Codeから開始したtaskでも、Anthropic family内でobjective、primary deliverable、completion evidenceを保持する。
+別Providerが必要になった場合は、通常delegateではなく後述する明示handoffとして扱う。
 
-## 推奨Visual Worker
+## Cross-provider Handoff
 
-画像生成または画像編集が必要でChatGPTを利用できる場合、optional Visual Workerとして推奨する。
-ChatGPTはimage generation、image editing、visual composition、creative visual production、social image、
-carousel、visual concept executionを担当できる。
+Providerをまたぐのは次の場合だけである。
 
-このテンプレートはChatGPT runtime adapterや自動連携を提供しない。直接呼び出せない環境では、Control Planeが
-visual requirementを決め、Creative Workerがcreative / visual briefを作り、利用者またはProject固有経路が
-ChatGPTへhandoffし、出力をControl Planeへ戻す。画像が不要ならVisual Workerを置かない。
+- Human / Operatorが明示した。
+- Project契約が特定Providerまたは独立reviewを要求する。
+- 比較、批評、red-team等を別Providerの独立taskとして実行する。
+- 現在ownerがstateを確定し、HumanまたはProject契約に沿って所有権を明示移管する。
+
+handoffの最小候補は次である。
+
+```text
+objective / primary deliverable / requested provider / current owner / target
+canonical inputs / completed work / remaining work / constraints
+file and Git state / external effects / receipts / uncertainties
+acceptance criteria / completion state
+```
+
+受取側が実際に開始した証拠がない限り、handoffを実行中または完了と報告しない。review目的の別Provider出力は
+候補または証拠であり、元のfinal ownerが採否を判断する。
+
+## AvailabilityとRecovery
+
+executable unavailable、authentication unavailable、startup failure、runtime outage、infrastructure timeout等では、
+まず同じProvider family内で状態を再観測し、意味のある再試行、resume、利用可能な別surfaceを検討する。
+surfaceを変える場合もprimary deliverable、actual owner、既存outputを明示する。
+
+Provider family全体が利用不能なら、別Providerへ自動fallbackしない。file changes、Git state、生成output、external
+side effects、publish / send / API mutation、receipt、idempotencyを照合し、未完了と次の一手を報告する。
+必要ならCross-provider Handoff packageを準備し、移管はHumanまたはProject契約の選択後に行う。
+
+品質不足、成果物の検証失敗、通常のtask failureはavailability failureではない。surfaceやProviderを変えて隠さず、
+既存のself-repair、acceptance criteria、verification、停止・報告契約に従う。
 
 ## Deterministic Execution Layer
 
-LLMが判断する必要のないことをLLMへ委ねない。API request、publish、fetch、metrics収集、schema validation、
-date / time / timezone / DST / business-day計算、ID生成、重複検知、idempotency、state serialization、
-DB更新、file変換、deterministic quality gate、retry policy、locking、protocol実装は、既存のPython、shell、
-API、DB、決定的Toolをprimary ownerとする。
+LLMが判断する必要のないAPI request、publish、fetch、metrics収集、schema validation、date / time / timezone計算、
+ID生成、重複検知、idempotency、state serialization、DB更新、file変換、retry policy、locking、protocol実装は、
+既存のPython、shell、API、DB、決定的Toolをprimary ownerとする。
 
-Control Planeはprotocolを曖昧に再現する主体ではなく、必要なToolを選び、入力・destination・結果・失敗を
-確認する主体である。外部作用、秘密、Runtime Permissionは`AGENTS.md`と各Project契約の既存境界に従う。
-
-## OrchestratorとWorkerの最小契約
-
-AI間のhandoffは会話の暗黙状態だけに依存せず、taskに必要な範囲で次を構造化する。巨大なworkflow engineや
-全項目必須のschemaをCoreへ導入せず、Project固有実装があればそれを使う。
-
-依頼側の最小候補:
-
-```text
-task_id / objective / owner / target / context / constraints
-required_output / sources / deadline / state / evaluation_criteria
-```
-
-返却側の最小候補:
-
-```text
-result / candidates / evidence / claims / uncertainties
-assets / recommended_choice / validation
-```
-
-責任は`one responsibility → one primary owner → optional collaborators`とする。CodexとClaude Codeの双方を
-final ownerにせず、同じschedule、production job、state更新を重複所有させない。委譲は
-`tools/CONTROL.md#委譲の境界`に従い、同一Git rootのWriterとfinal gateを一つに保つ。
-
-## Runtime Availability Fallback
-
-runtime fallbackは、delegate先のruntimeが作業を開始・継続できないavailability failureだけを対象にする。
-対象例はexecutable unavailable、authentication unavailable / expired、startup failure、runtime unavailable、
-invocation failure、infrastructure-level timeout、delegation channel failureである。通常のtask failure、品質不足、
-成果物の検証失敗はfallback条件ではなく、既存のself-repair、verification、停止・報告契約に従う。
-
-CodexがControl Plane、Claude CodeがCreative / Production Workerである自動・無人実行の推奨chainは次である。
-
-```text
-Codex Control Plane → Claude Code CLI → Codex self-completion
-```
-
-Claude Code CLIがavailability failureなら、Control Planeはobjective、constraints、canonical state、完了責任を
-保持し、Codexをactual production ownerとして一時的に兼任させる。これはClaudeと同等の成果を保証するという
-意味ではなく、task自体を未実行のまま放棄しないための責任継続である。Project契約またはHuman overrideが
-Claude必須と定めるtaskではfallbackせず、その契約の停止・報告規則を優先する。
-
-Claude Desktop / Claude Code DesktopはOperatorが存在するinteractive環境でmanual alternativeとして選べるが、
-Coreの自動fallback chainには入れない。interactive時はClaude CLI、Desktop、Codex self-completionのいずれかを
-OperatorまたはProject契約に沿って選び、ownerを明示する。
-
-workerが一部を実行した後の停止では、Control Planeは引継ぎ前にfile changes、Git state、生成output、external
-side effects、publish / send / API mutation、receipt、idempotencyを確認する。未確認のまま最初から同じ外部作用を
-再実行しない。既存成果を採用・修復・再開する範囲を決め、同一Git rootのSingle Writerと各責任のSingle Ownerを
-維持する。
-
-fallback時の最小記録は`requested owner / actual owner / fallback reason / completion state`とし、既存の作業記録、
-STATE、handoffのうち対象Projectが所有する方法へ残す。このためのruntime registry、workflow engine、queue、
-daemon、独自orchestratorは追加しない。
+Agentはprotocolを曖昧に再現せず、Toolを選び、入力、destination、結果、失敗、receiptを確認する。決定的Toolは
+Provider familyの一員ではなく、共通Coreのexecution capabilityである。
 
 ## Repository State
 
 Repositoryのtracked canonical stateを、会話履歴、Provider側memory、検索cache、runtime stateより優先する。
-複数AIは同じ正本を参照し、各製品の独立した「記憶」をglobal stateや並行する正本にしない。workerの出力は
-候補または証拠であり、primary ownerが既存Route、成果契約、検証を通して統合したものだけがcanonical stateになる。
+Providerやsurfaceの出力は候補または証拠であり、既存Route、成果契約、検証を通して統合したものだけが
+canonical stateになる。Providerを切り替えても、並行する正本を作らない。
 
 ## Scheduled Execution
 
 scheduleはAgent内部のRoute、Executor、成果分類、reasoning systemではなく、通常taskを開始する外部triggerである。
-起点がHumanでもscheduled triggerでも、Agent内部は同じ
-`Route → Target → Work → Verify → Finish`、Project契約、Single Writer、安全境界を使う。
+起点がHumanでもscheduled triggerでも、Agent内部は同じ`Route → Target → Work → Verify → Finish`、Project契約、
+Single Writer、安全境界を使う。
 
-第一選択は利用中のAI Runtime / Productが提供する`Runtime-native scheduler`である。現在の製品mappingでは
-Codex Automations、Claude Code / Coworkのscheduled task機能が候補だが、これは交換可能なcurrent
-recommendationであり、Core contract、validator、evalの合格条件ではない。
+第一選択は選択中Provider / Productが提供する`Runtime-native scheduler`である。利用できない、利用しない、または
+OperatorがOS-native executionを選ぶ場合だけ、macOSの`launchd`、Linuxの`systemd timer`、Unixの`cron`を
+外部triggerとして使える。設定と運用はOperatorまたは対象Projectが所有する。
+このrepositoryはScheduler Engine、daemon、schedule registry、Provider別adapterを実装しない。
 
-Runtime-native schedulerを利用できない、利用しない、またはOperatorがOS-native executionを選ぶ場合だけ、
-macOSの`launchd`、Linuxの`systemd timer`、汎用Unixの`cron`を外部triggerとして使える。設定と運用は
-Operatorまたは対象Projectが所有し、このrepositoryはScheduler Engine、daemon、schedule registry、
-Provider別adapterを実装しない。
+scheduled taskも一つのProvider familyとfinal ownerを持つ。認証失敗やruntime unavailable時に別Providerへ自動移管せず、
+同じProvider内のrecovery、state照合、停止・handoffを通常契約に沿って行う。
 
-週次full validation等が必要なら、選んだ外部schedulerから通常のvalidator / audit taskを起動する。
-既定scheduleは持たず、変更時のvalidation、stale cacheの必要時再生成、検出時のself-healingまたは停止を優先する。
+## 変更耐性
 
-CodexがControl Planeであるscheduled workflowは、`objectiveを保持 → Claude availabilityを確認 → 利用可能なら
-delegate → unavailableならCodexがproduction responsibilityを兼任 → Verify → Finish`とする。Claudeの
-authentication failureだけを理由にobjectiveを破棄しない。delegate後にavailability failureとなった場合は、
-`Runtime Availability Fallback`のpartial execution確認を完了してからownerを切り替える。
+OpenAIやAnthropicの製品名、surface、model、dispatch capabilityは変化し得る。current mappingは本書だけで管理し、
+Core route、Project合格条件、permission wrapper、adapterへ複製しない。公式仕様が変わった場合は、実際のcapabilityを
+再確認し、本書のProvider Profileだけを最小更新する。
 
-## Current Model Recommendations
-
-Role contractは上記の長期原則であり、modelは交換可能なcurrent recommendationである。現在の推奨値は
-この節だけで管理し、validator、eval、adapter、Project合格条件へ複製または固定しない。
-
-| Role | Current recommendation | Reasoning / Effort | 主用途 |
-|---|---|---|---|
-| Control Plane | Codex 5.6 Sol | Medium | orchestration、planning、strategy、coordination、evaluation、final gate、scheduled AI workflow |
-| Creative / Production Worker | Claude Opus 5 | High | research、production、editing、writing、creative work、deep content development |
-
-利用者は別モデルを選べる。モデル更新時はこの節の推奨値だけを更新し、Role contract、Core compatibility、
-validator合否を変更しない。
+新しい製品機能を採用するために、独自Provider router、workflow engine、queue、RPC、daemonをCoreへ追加しない。
+Runtime-native coordinationで目的を満たせない具体的なProject要件が確認された場合だけ、そのProjectが実装を所有する。
 
 ## 要約
 
-> Codexは考え、統括する。Claude Codeは調査し、編集し、制作する。ChatGPTはvisualを生成・編集する。
-> 決定的Toolはprotocolを実行する。Repositoryはcanonical stateであり続け、Humanがultimate authorityである。
+> 一つのtaskは一つのProvider familyと一人のfinal ownerが完了まで所有する。
+> OpenAIではChat、Work、Codexをprimary deliverableに応じて自律的に選ぶ。
+> AnthropicはAnthropic family内で完結し、Providerをまたぐ自動分業・自動fallbackを行わない。
+> RepositoryとProject成果契約が品質の正本であり、Humanがultimate authorityである。

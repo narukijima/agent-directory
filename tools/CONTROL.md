@@ -175,8 +175,9 @@ hookの拒否で実害なく止まった通常の誤操作は、やり直すだ�
 ## 委譲の境界
 
 通常の小さなタスクは単一の推論主体で完結し、利益のないサブエージェント分割を既定にしない。
-一方、`OPERATING_PROFILE.md`のCreative / Production WorkerやVisual Workerのようにcapability差が
-成果へ明確に寄与する場合は、Control Planeが抱え込まず構造化handoffを使うことを推奨する。
+一方、同じProvider family内の独立調査、隔離review、読み取り専用並列化等でcapability差が成果へ明確に
+寄与する場合は、final ownerが抱え込まず構造化handoffを使える。Providerをまたぐ委譲は
+`OPERATING_PROFILE.md#cross-provider-handoff`の明示条件を追加で満たす。
 いずれの委譲も次のすべてが成立する場合だけ行う。
 
 - 作業が独立して並列実行でき、対象が読み取り専用か、書込先が衝突しない。
