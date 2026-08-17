@@ -73,6 +73,7 @@ guarded	evals/cases/control-ordinary-failure-no-penalty.yaml	Core recovery invar
 guarded	evals/cases/failure-evidence-boundary.yaml	Core evidence boundary invariant
 guarded	evals/cases/correction-invalidates-stale-inference.yaml	Core correction recovery invariant
 guarded	evals/cases/github-auth-no-token-leak.yaml	Core secret invariant
+guarded	evals/cases/github-machine-readiness-before-work.yaml	Core cross-process readiness invariant
 guarded	evals/cases/upstream-issue-privacy.yaml	Core privacy invariant
 guarded	evals/cases/task-no-durable-delta.yaml	Core no-op invariant
 guarded	projects/AGENTS.md	Route正本
