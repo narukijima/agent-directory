@@ -170,24 +170,25 @@ pushせず、`--dry-run`はremoteへ書き込まない。成功とdry-runはstdo
 
 ## GitHub認証Tool
 
-GitHub共通resolverはmachine `github.env`を優先し、storeがないCI等だけprocess token、Workspace `.env`、
-保存済み`gh`へfallbackする。値を出力せず、APIと実remoteで能力を判定し、
-GitHub HTTPSのchild Gitだけへcredential helperを適用する。失敗分類と一回限りの非対話repairは
-[SETUP.md](../SETUP.md#initial-setup)と[tools/BACKUP.md](BACKUP.md)が所有する。通常taskはBrowser login、
-Keychain探索、SSH切替、独自認証を行わない。
+GitHub共通resolverはOS account homeのversioned machine `github.env`だけを通常local sourceにする。明示CIだけ
+process tokenをexact repository / operation allowlist付きで使い、Workspace `.env`、保存済み`gh`、stale storeからの
+fallbackは行わない。値を出力・常時exportせず、APIまたはGitHub HTTPSを使う個別childだけへ渡す。child Gitは
+repository hook、ambient credential helper/config、redirect、HTTPS以外のprotocolを無効化する。通常taskはBrowser login、
+device flow、passkey、Keychain探索、SSH切替、credential repairを行わない。根本制約とresidual riskは
+[threat model](agent-directory-threat-model.md)、初期setupとrotationは[SETUP.md](../SETUP.md#initial-setup)が所有する。
 
 ```bash
 bash tools/setup-github-auth.sh --install-token
 bash tools/setup-github-auth.sh --install-from-gh
 bash tools/setup-github-auth.sh --machine-ready
 bash tools/setup-github-auth.sh --check
-bash tools/setup-github-auth.sh --repair-from-gh
 bash tools/test-github-auth.sh
 ```
 
-`--machine-ready`はnetworkもfallbackも使わず、machine directory `0700`、file `0600`、単一`GH_TOKEN`形式を
-検査する。成功は`GITHUB_MACHINE_READY source=machine-env`、未導入は`machine-credential-not-installed`。
-doctor成功は`GITHUB_AUTH_OK source=<source> login=<login> api=ok git=ok`、失敗は`GITHUB_AUTH_BLOCKED`。
+`--machine-ready`はnetworkもfallbackも使わず、owner/mode/link、strict five-line format、repository enrollmentを
+検査する。成功は`GITHUB_MACHINE_READY source=machine-file repository=<owner/repo>`、未導入は
+`machine-credential-not-installed`。doctor成功は
+`GITHUB_AUTH_OK source=<source> login=<login> api=ok git=ok repository=<owner/repo>`、失敗は`GITHUB_AUTH_BLOCKED`。
 `--expected-login`は任意、remote解決順は`remote.pushDefault`、`backup`、`origin`である。
 
 ## report-upstream-issue.sh

@@ -23,9 +23,14 @@ Operator / machine側setupの正本である。Providerとsurfaceの選択、分
 3. shellでこのWorkspaceのGit rootへ移動する。
 4. `bash tools/setup-local-environment.sh`を実行する。
 5. `bash tools/install-git-hooks.sh --install`を実行する。
-6. GitHubを利用するmachineでは、Operatorがfine-grained PATをmachineごとに一つ発行し、対象remoteを持つ
-   Workspaceで`bash tools/setup-github-auth.sh --install-token --remote backup`を実行する。保存済み`gh`認証を
-   移行する場合だけ`--install-from-gh`を使う。続けて
+6. GitHubを利用するmachineでは、Operatorがmachine名を含む名前でfine-grained PATを一つ発行する。resource ownerを
+   一つ、repository accessを`Only select repositories`、expirationを必須とし、backupだけなら
+   `Contents: Read and write`だけを付ける。対象remoteを持つWorkspaceで
+   `bash tools/setup-github-auth.sh --install-token --remote backup`を実行する。IssueまたはPRも使う場合だけ、
+   GitHub側permissionとlocal `--operation issues-read --operation issues-write`または
+   `--operation pull-requests-read --operation pull-requests-write`を追加する。複数repositoryは同じresource owner内で
+   `--repository owner/repo`を繰り返す。保存済みfine-grained PATを移行するOperator setupだけ
+   `--install-from-gh`を使う。続けて
    `bash tools/setup-github-auth.sh --check --remote backup`を実行する。最後にprocess環境を引き継がない別shellで
    `bash tools/setup-github-auth.sh --machine-ready --remote backup`が合格することを確認する。GitHubを使わないmachineでは省略する。
 7. 利用するProviderのruntimeを認証する。OpenAI主運用では
@@ -36,15 +41,33 @@ Operator / machine側setupの正本である。Providerとsurfaceの選択、分
 監査するときだけ両flagを指定する。引数なしのpreflightは両runtimeをread-onlyで診断するが、runtime unavailable
 だけでは非0にしない。
 
-GitHub machine credentialはWorkspaceやAgentではなくmachineが所有し、同じmachine上の全Agent Workspaceが
-machine-local `github.env`を第一優先で使う。process tokenとWorkspace `.env`はmachine storeがないCI等のfallbackである。
-`--install-token`はtokenをargvやremote URLへ入れず、端末では非表示入力し、directory `0700`・file `0600`で保存する。
-`--install-from-gh`は有効な保存済み`gh`認証を同じstoreへ移行する非対話処理である。
+GitHub machine credentialはWorkspaceやAgentではなくmachineが所有し、同じOS userのAgentを一つのtrust domainとして
+扱う暫定fine-grained PAT方式である。根本制約、PAT / GitHub App / broker比較、移行条件は
+[threat model](tools/agent-directory-threat-model.md)が所有する。同じOS userで任意shellとfilesystem readが可能な
+Agentに対し、`0600` fileは秘密境界ではない。保存pathの非公開性にも依存しない。
+
+storeはprocessごとの`HOME`や`XDG_CONFIG_HOME`ではなく、OS account databaseが返すhomeの
+`.config/agent-directory/github.env`へ固定する。version、resource owner、repository allowlist、operation allowlist、
+fine-grained PATの厳密な5行だけを保持する。directory `0700`、file `0600`、current owner、no symlink、nlink=1を要求し、
+同時installはlockで拒否、同一directoryのtemporary fileからatomic replaceする。cloud sync folderへ置かず、Time Machine等の
+backupは暗号化・access control・除外方針をOperatorが確認する。
+
+通常local taskはmachine storeだけを使い、process `GH_TOKEN` / `GITHUB_TOKEN`、Workspace `.env`、保存済み`gh`へ
+fallbackしない。process tokenは`CI=true`と`AGENT_DIRECTORY_GITHUB_CI=true`を明示し、`GITHUB_REPOSITORY`と
+`AGENT_DIRECTORY_GITHUB_CI_OPERATIONS`が一致するCIだけで使える。`--install-token`はtokenをargvやremote URLへ入れず、
+端末では非表示入力する。`--install-from-gh`はOperatorが既存fine-grained PATを移行する初期setup専用である。
 `interactive-setup-required`なら、有効な保存済み認証がないため通常taskを開始せず、Operatorが専用setupとして
-GitHub CLIの認証を完了してから同じ2コマンドを再実行する。Agentは通常task中にBrowser loginを開始しない。
+GitHub CLIの認証を完了してからsetupを再実行する。Agentは通常task中にBrowser login、device flow、passkey、SSH切替、
+Keychain探索、credential repairを開始しない。stale storeが存在するときもprocess tokenへfallbackしない。
 設定済みGitHub HTTPS `backup`を持つWorkspaceでは、`tools/task.sh context`がnetwork接続前にmachine storeの
-実在・権限・形式を検査する。process `GH_TOKEN`だけでは合格しないため、一つのAgentだけが成功して別Agentが
+実在・権限・形式・repository enrollmentを検査する。process `GH_TOKEN`だけでは合格しないため、一つのAgentだけが成功して別Agentが
 失敗する状態を通常task開始前に拒否する。これはcredentialの有効性probeではなくcross-process readiness gateである。
+実APIとremote capabilityは別に`--check`で検査する。
+
+rotationは、新tokenを同じallowlistでatomic installし、`--machine-ready`、`--check`の順で確認してから旧tokenを
+GitHubでrevokeする。machine紛失時は先に該当machine名のtokenをrevokeし、GitHub側selected repositoriesを影響一覧として
+監査する。repository追加時はGitHub側token scopeとlocal allowlistを同時に更新する。organization ownerはfine-grained PATの
+利用可否、approval、maximum lifetime policyを確認する。classic PATは禁止する。
 
 ## Workspace root
 

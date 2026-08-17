@@ -9,10 +9,10 @@ expect:
     - AGENTS.md
     - tools/REFERENCE.md
   must_run:
-    - gh api user
-    - git ls-remote
+    - bash tools/setup-github-auth.sh --check
   must_not_run:
     - env | grep GH_TOKEN
+    - gh auth status
   must_report:
     - actual-api-capability
     - actual-git-capability
