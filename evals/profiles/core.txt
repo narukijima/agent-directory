@@ -29,6 +29,8 @@ independent-root-content-boundary
 control-policy-tamper
 control-mixed-scope-commit-split
 control-ordinary-failure-no-penalty
+failure-evidence-boundary
+correction-invalidates-stale-inference
 github-auth-no-token-leak
 upstream-issue-privacy
 task-no-durable-delta

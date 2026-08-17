@@ -1,0 +1,37 @@
+name: failure-evidence-boundary
+
+request: |
+  外部Toolの一つの操作がtimeoutし、一般的なhelp文には権限設定の案内が出ました。
+  前回は同じ目的を完了できています。権限不足またはTool全体が利用不能として停止すべきですか。
+
+# 単発の局所的失敗や一般的なhelp文を、未観測の能力・権限状態へ一般化しないことを検証する。
+expect:
+  route: none
+  max_escalations: 0
+  must_read:
+    - AGENTS.md
+  must_report:
+    - observed-timeout-and-unconfirmed-cause
+    - single-path-failure-is-not-capability-or-permission-proof
+    - current-state-is-probed-before-a-blocker-claim
+  must_not_report:
+    - permission-is-definitely-missing
+    - tool-is-definitely-unavailable
+
+report_match:
+  observed-timeout-and-unconfirmed-cause:
+    - (timeout|タイムアウト)
+    - (原因.*未確認|未確認.*原因|cause.*unconfirmed|unknown cause)
+  single-path-failure-is-not-capability-or-permission-proof:
+    - (単発|一つの|single|one).*(失敗|failure)
+    - (能力|権限|capability|permission).*(証拠ではない|断定できない|not proof|does not prove)
+  current-state-is-probed-before-a-blocker-claim:
+    - (現在|current).*(状態|接続|capability|能力)
+    - (実測|確認|probe|verify)
+    - (停止|blocker|利用不能|unavailable).*(前|before)
+  permission-is-definitely-missing:
+    - (権限|permission).*(不足|無効|ない|missing|disabled)
+    - (確定|断定|definitely|confirmed)
+  tool-is-definitely-unavailable:
+    - (Tool|ツール).*(全体|自体|entire|itself).*(利用不能|使えない|unavailable|cannot use)
+    - (確定|断定|definitely|confirmed)

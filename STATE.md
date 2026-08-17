@@ -37,6 +37,9 @@ GitHub認証repairのexpected login省略時に正常accountを空文字と比�
 credentialを有効な保存済み`gh`認証から非対話で置換し、credential不在だけを`interactive-setup-required`へ
 分類する。設定済みGitHub backupのmachine Gateを通常task前のsetupへ追加し、Agent独自のstatus・token・login・
 Keychain探索をCore evalとvalidatorで拒否する実事故回帰を固定した。
+実運用対話で観測した誤断定・訂正忘れ・無差分反復を、個別ProviderやProjectの手順へ広げず共通判断原則と
+自己修復契約へ統合した。単発失敗を能力・権限全体へ一般化しない証拠境界、訂正で否定された旧推論の失効、
+意味ある差分を伴う再試行、目的・成果契約・指定経路の維持を二つのCore evalと既存回復evalへ固定した。
 
 ## 現在の目標
 
@@ -53,11 +56,9 @@ Workspace責務境界を壊さず、ClaudAGTエコシステムの変更と整合
 
 - 対象: `PROJECT.md#PC-01`
 - 確認日: 2026-08-17
-- 方法: `bash -n tools/setup-github-auth.sh tools/backup-to-github.sh tools/report-upstream-issue.sh
-  tools/test-github-auth.sh tools/validate-agent-directory.sh`、`bash tools/test-github-auth.sh`、
-  `bash tools/validate-agent-directory.sh --full`、`git diff --check`。
-- 結果: expected login省略のinstall・repair、古いmachine credential置換、明示account mismatch拒否、
-  `interactive-setup-required`分類、token非露出、認証逸脱Core evalを含むfull validationが0 warningで合格した。
+- 方法: `git diff --check`、`bash tools/validate-agent-directory.sh --full`。
+- 結果: root router、自己修復契約、Core profile、guard policy、必須case、YAML schemaを含むfull validationが
+  0 warningで合格した。
 
 ## 未完了・ブロッカー
 
@@ -68,6 +69,7 @@ Workspace責務境界を壊さず、ClaudAGTエコシステムの変更と整合
 - `agent-directory`はClaudAGT rootではなく、その配下のIndependent Projectである。
 - 現在判断ではactiveなKnowledgeとSkillを優先し、非activeな参照は履歴確認時だけ使う。
 - 明示依頼は通常完了経路全体のStanding Authorizationであり、工程ごとの再承認を要求しない。
+- 失敗原因は直接観測できた範囲だけ確定し、訂正または新しい検証で否定された旧推論を再利用しない。
 
 ## 失敗・却下済み
 

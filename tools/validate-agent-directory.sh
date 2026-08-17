@@ -1843,6 +1843,7 @@ required_cases=(
   canonical-area-entry-names
   scheduled-trigger-normal-task
   control-policy-tamper control-mixed-scope-commit-split control-ordinary-failure-no-penalty
+  failure-evidence-boundary correction-invalidates-stale-inference
   delegation-default-off delegation-depth-one multi-ai-recommended-profile
   pr-required-remote-completion
   upstream-issue-privacy upstream-issue-preapproved-send upstream-issue-fixed-destination

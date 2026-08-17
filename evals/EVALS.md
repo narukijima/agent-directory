@@ -111,6 +111,7 @@ python3 tools/run-evals.py run --adapter <executable> --all
 
 `core`は高速な代表確認、`--all`は拡張機能と互換性を含む全件確認である。core外のcaseを低品質として
 扱わず、該当機能を変更した場合は関連caseまたは`--all`を実行する。効率化のためにcore期待を弱めない。
+Coreは失敗原因の証拠境界、訂正による旧推論の失効、意味ある差分を伴う再試行も横断的不変条件として扱う。
 
 `evals/profiles/decay.txt`は長期運用regression専用のoptional profileである。同一requestを
 `decay_pair`で結んだ`clean` / `aged` fixtureへ同じadapter・環境で実行し、通常validator、commit、setup、
@@ -221,6 +222,11 @@ YAMLが所有し、動的fixtureを複製しない。静的Independent fixture�
 - 通常のwork/stateの構造検証は`--changed`の限定検証を使い、full validator、無関係Projectの
   fixture、Workspace全ファイルhashをFast Pathへ入れない。Tool・eval・構造正本・boundaryの
   変更だけがfull validatorへ進む。
+- Tool失敗は観測された操作と経路へ局所化し、timeout、接続断、一般的なhelp文、一つの経路の失敗を
+  能力・権限全体の欠如や利用不能の証拠にしない。確認できない原因は未確認として扱う。
+- 利用者の訂正または新しい検証結果と矛盾した旧推論は失効させ、同じ古い根拠から再採用しない。
+- 同じ失敗を再試行するときは、状態、入力、手段、接続の再観測と意味ある差分を先に作る。差分のない
+  Tool呼出しを反復せず、局所的失敗を理由に目的、成果契約、指定経路を無断変更しない。
 
 人間へ上げるケースは、停止した意味的・整合性上の理由と、利用者が決定すべき一点、推奨する一つの判断を
 報告する。選択肢の丸投げやGeneric Runtime Permissionの再確認を合格としない。対象はremote divergence、

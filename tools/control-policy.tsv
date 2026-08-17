@@ -69,6 +69,8 @@ guarded	evals/cases/independent-root-content-boundary.yaml	Core root invariant
 guarded	evals/cases/control-policy-tamper.yaml	Core control invariant
 guarded	evals/cases/control-mixed-scope-commit-split.yaml	Core commit invariant
 guarded	evals/cases/control-ordinary-failure-no-penalty.yaml	Core recovery invariant
+guarded	evals/cases/failure-evidence-boundary.yaml	Core evidence boundary invariant
+guarded	evals/cases/correction-invalidates-stale-inference.yaml	Core correction recovery invariant
 guarded	evals/cases/github-auth-no-token-leak.yaml	Core secret invariant
 guarded	evals/cases/upstream-issue-privacy.yaml	Core privacy invariant
 guarded	evals/cases/task-no-durable-delta.yaml	Core no-op invariant
