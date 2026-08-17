@@ -29,6 +29,7 @@ expect_source() {
 }
 
 mkdir -p "$fixture/home" "$fixture/config" "$fixture/workspace" "$fixture/bin" "$fixture/tmp"
+git -C "$fixture/workspace" init -q
 printf 'GH_TOKEN=workspace-token\n' > "$fixture/workspace/.env"
 expect_source process-gh-token env GH_TOKEN=process-token
 expect_source process-github-token env GITHUB_TOKEN=github-process-token
@@ -40,6 +41,70 @@ chmod 700 "$fixture/config/agent-directory"
 printf 'GH_TOKEN=machine-token\n' > "$fixture/config/agent-directory/github.env"
 chmod 600 "$fixture/config/agent-directory/github.env"
 expect_source machine-env env
+
+# Cross-process readiness requires the machine store itself. A process-only token may
+# make one Agent succeed, but must not let setup claim that sibling Agents are ready.
+rm -f "$fixture/config/agent-directory/github.env"
+for process_case in one two; do
+  set +e
+  machine_output="$(env -i PATH="$PATH" HOME="$fixture/home" XDG_CONFIG_HOME="$fixture/config" \
+    AGENT_DIRECTORY_ROOT="$fixture/workspace" GH_TOKEN="process-$process_case-token" \
+    /bin/bash "$tool_root/setup-github-auth.sh" --machine-ready 2>&1)"
+  machine_status=$?
+  set -e
+  [[ "$machine_status" != 0 && "$machine_output" == \
+    'GITHUB_AUTH_BLOCKED reason=machine-credential-not-installed' ]] || \
+    fail "process-only credential incorrectly satisfied machine readiness: $machine_output"
+done
+
+printf 'GH_TOKEN=machine-token\n' > "$fixture/config/agent-directory/github.env"
+chmod 600 "$fixture/config/agent-directory/github.env"
+for process_case in one two; do
+  machine_output="$(env -i PATH="$PATH" HOME="$fixture/home" XDG_CONFIG_HOME="$fixture/config" \
+    AGENT_DIRECTORY_ROOT="$fixture/workspace" \
+    /bin/bash "$tool_root/setup-github-auth.sh" --machine-ready 2>&1)" || \
+    fail "clean process $process_case could not read machine readiness"
+  [[ "$machine_output" == 'GITHUB_MACHINE_READY source=machine-env' ]] || \
+    fail "clean process $process_case returned inconsistent machine readiness: $machine_output"
+done
+
+# The normal task entrance enforces the same gate before context resolution. This
+# proves that a process token cannot let one Agent start work ahead of its siblings.
+mkdir -p "$fixture/task-workspace/tools/lib" "$fixture/task-config"
+cp "$tool_root/task.sh" "$fixture/task-workspace/tools/task.sh"
+cp "$tool_root/setup-github-auth.sh" "$fixture/task-workspace/tools/setup-github-auth.sh"
+cp "$tool_root/lib/github-auth.sh" "$fixture/task-workspace/tools/lib/github-auth.sh"
+cat > "$fixture/task-workspace/tools/prepare-context.sh" <<'PREPARE'
+#!/usr/bin/env bash
+printf 'prepare-called\n' > "${TASK_PREPARE_MARKER:?}"
+printf 'route=project\ntarget=projects/demo\ngit_root=.\nrepository_owner=embedded\nREAD:\nAGENTS.md\n'
+PREPARE
+chmod 700 "$fixture/task-workspace/tools/"*.sh
+git -C "$fixture/task-workspace" init -q
+git -C "$fixture/task-workspace" remote add backup https://github.com/example/fixture.git
+set +e
+task_output="$(env -i PATH="$PATH" HOME="$fixture/home" XDG_CONFIG_HOME="$fixture/task-config" \
+  AGENT_DIRECTORY_ROOT="$fixture/task-workspace" GH_TOKEN=process-only-token \
+  TASK_PREPARE_MARKER="$fixture/prepare.marker" /bin/bash "$fixture/task-workspace/tools/task.sh" \
+  context --route project --target projects/demo 2>&1)"
+task_status=$?
+set -e
+[[ "$task_status" != 0 && "$task_output" == *'reason=machine-credential-not-installed'* && \
+  "$task_output" == *'TASK_BLOCKED action=context reason=github-machine-not-ready'* ]] || \
+  fail "task entrance did not reject process-only readiness: $task_output"
+[[ ! -e "$fixture/prepare.marker" ]] || fail 'task resolved context before machine readiness'
+
+mkdir -p "$fixture/task-config/agent-directory"
+chmod 700 "$fixture/task-config/agent-directory"
+printf 'GH_TOKEN=task-machine-token\n' > "$fixture/task-config/agent-directory/github.env"
+chmod 600 "$fixture/task-config/agent-directory/github.env"
+task_output="$(env -i PATH="$PATH" HOME="$fixture/home" XDG_CONFIG_HOME="$fixture/task-config" \
+  AGENT_DIRECTORY_ROOT="$fixture/task-workspace" TASK_PREPARE_MARKER="$fixture/prepare.marker" \
+  /bin/bash "$fixture/task-workspace/tools/task.sh" context --route project --target projects/demo 2>&1)" || \
+  fail "task entrance rejected a valid shared machine store: $task_output"
+[[ "$task_output" == *'GITHUB_MACHINE_READY source=machine-env'* && \
+  "$task_output" == *'TASK_CONTEXT v2'* && -e "$fixture/prepare.marker" ]] || \
+  fail "task entrance did not converge on shared machine readiness: $task_output"
 
 chmod 644 "$fixture/config/agent-directory/github.env"
 set +e

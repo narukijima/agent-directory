@@ -1,9 +1,6 @@
 # REFERENCE.md — Tool個別契約
 
-`tools/TOOLS.md#Tool一覧`に登録された固定Toolの呼び出し形・入出力・生成物・停止reasonの正本。
-条件付きロード専用とし、扱うToolの節だけを読む（一括読込しない）。Route、境界、予算、
-自律実行の規約は`tools/TOOLS.md`が所有し、本書はTool個別の契約だけを持つ。下流Workspaceの
-固有Toolも、登録は`tools/TOOLS.md#Tool一覧`へ1行、詳細は本書へ節を追加して所有させる。
+Toolの呼出形・結果・停止reasonの参照。Route、境界、予算、自律実行と一覧は`tools/TOOLS.md`が所有する。
 
 ## task.sh
 
@@ -15,18 +12,13 @@ tools/task.sh finish --route <route> --target <path> --message "変更理由" --
 tools/task.sh status
 ```
 
-通常タスクの薄い入口。`context`は互換実装の`prepare-context.sh`からtask classとprofileを隠して
-読む正本とGit所有境界だけを返す。`verify`は変更集合から`--changed`検証を起動し、meta変更はvalidatorが
-full staticへ自動fallbackする。`finish`は通常変更だけを`finalize-task.sh`へ委譲し、protected変更は
-`TASK_BLOCKED reason=protected-change`として手動の安全経路へ返す。`status`はGit rootと変更件数だけを返す。
+通常タスクの薄い入口。`context`は読込正本とGit Ownerを返し、GitHub HTTPS `backup`設定時は先に
+machine storeをread-only検査する。process tokenだけなら`github-machine-not-ready`で拒否する。
+`verify`は`--changed`、`finish`は通常変更の検証・commit・backup、`status`はGit rootと変更件数を扱う。
+protected変更は`protected-change`へ返す。結果は`TASK_CONTEXT v2`または`TASK_OK|BLOCKED|FAILED`である。
 
-正規結果は`TASK_CONTEXT v2`、`TASK_OK`、`TASK_BLOCKED`、`TASK_FAILED`のいずれかである。下位Toolの
-診断はstderrへ保持し、既存consumer向けの結果語彙を変更しない。
-
-`--current-work`は「明示targetに今ある未commit成果をバックアップする」依頼専用で、通常のfinishへ
-追加のscope検査を掛ける。呼出前にAgentがGit root、変更一覧、Owner、Project契約、Single Writer、secret、
-固有検証を確認し、対象だけをstageする。下位`finalize-task.sh`はtarget外変更または対象内の未stage変更を
-commit前に拒否し、合格時だけ通常と同じ検証・commit・profile準拠backupを行う。
+`--current-work`は明示targetの既存成果専用である。AgentがOwner、契約、Single Writer、secret、固有検証を
+確認して対象だけをstageし、下位Toolがtarget外／未stage対象差分を拒否して通常finishへ合流する。
 
 ## build-context-cache.sh
 
@@ -178,33 +170,24 @@ pushせず、`--dry-run`はremoteへ書き込まない。成功とdry-runはstdo
 
 ## GitHub認証Tool
 
-`tools/lib/github-auth.sh`はIssue送信とbackupが共通利用する唯一のresolverで、process `GH_TOKEN` →
-process `GITHUB_TOKEN` → Workspace `.env` → マシン共通`github.env` → `gh`保存認証の順に解決する。
-値は出力せず、machine directory `0700`・file `0600`以外をfail closedする。APIは`gh api user`、Gitは
-実remote readで能力を判定し、GitHub HTTPSだけ`gh auth git-credential`をchild Gitへ適用する。
-SSHとGitHub以外のhostへGitHub credentialを渡さない。
-
-`GH_TOKEN`等のprocess環境不在や`gh auth status`だけを失敗根拠にしない。`GH_HOST=github.com`を固定し、
-実`gh api user`と対象remote probeで判定する。認証失敗はdoctor→安全なrepair 1回→操作再試行1回までとし、
-`auth-store-missing`、`auth-store-permissions`、`account-mismatch`、`github-auth-unavailable`、
-`github-permission-denied`、`github-api-unreachable`、`git-credential-unavailable`、
-`remote-not-configured`、`interactive-setup-required`を区別する。`interactive-setup-required`は、有効な
-machine credentialも保存済み`gh`認証もなく、非対話repairを完了できない場合だけ返す。通常taskはそこで
-対話login、Keychain探索、SSH切替、認証方式の再実装へ進まず、machine setup未完了として分離する。
+`tools/lib/github-auth.sh`はIssueとbackupの共通resolverで、process `GH_TOKEN`、`GITHUB_TOKEN`、Workspace
+`.env`、machine `github.env`、保存済み`gh`の順に解決する。値を出力せず、APIと実remoteで能力を判定し、
+GitHub HTTPSのchild Gitだけへcredential helperを適用する。失敗分類と一回限りの非対話repairは
+[SETUP.md](../SETUP.md#initial-setup)と[tools/BACKUP.md](BACKUP.md)が所有する。通常taskはBrowser login、
+Keychain探索、SSH切替、独自認証を行わない。
 
 ```bash
 bash tools/setup-github-auth.sh --install-from-gh
+bash tools/setup-github-auth.sh --machine-ready
 bash tools/setup-github-auth.sh --check
 bash tools/setup-github-auth.sh --repair-from-gh
 bash tools/test-github-auth.sh
 ```
 
-doctor成功は`GITHUB_AUTH_OK source=<source> login=<login> api=ok git=ok`、失敗は
-`GITHUB_AUTH_BLOCKED reason=<reason>`。
-`--expected-login <github-login>`はaccountを固定したい場合だけ使う任意の厳格照合である。
-省略時もinstall・repair・checkは実際に取得したloginを受理し、空文字との比較で拒否しない。
-`--remote`未指定時は`remote.pushDefault`、`backup`、`origin`の順で実在remoteを解決し、存在しなければ
-`remote-not-configured`を返す。
+`--machine-ready`はnetworkもfallbackも使わず、machine directory `0700`、file `0600`、単一`GH_TOKEN`形式を
+検査する。成功は`GITHUB_MACHINE_READY source=machine-env`、未導入は`machine-credential-not-installed`。
+doctor成功は`GITHUB_AUTH_OK source=<source> login=<login> api=ok git=ok`、失敗は`GITHUB_AUTH_BLOCKED`。
+`--expected-login`は任意、remote解決順は`remote.pushDefault`、`backup`、`origin`である。
 
 ## report-upstream-issue.sh
 

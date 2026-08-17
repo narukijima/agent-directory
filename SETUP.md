@@ -25,7 +25,8 @@ Operator / machine側setupの正本である。Providerとsurfaceの選択、分
 5. `bash tools/install-git-hooks.sh --install`を実行する。
 6. 設定済みGitHub HTTPS `backup` remoteがあるWorkspaceでは、通常taskを始める前に
    `bash tools/setup-github-auth.sh --install-from-gh --remote backup`、続けて
-   `bash tools/setup-github-auth.sh --check --remote backup`を実行する。GitHub remoteを使わないWorkspaceでは省略する。
+   `bash tools/setup-github-auth.sh --check --remote backup`を実行する。最後にprocess環境を引き継がない別shellで
+   `bash tools/setup-github-auth.sh --machine-ready --remote backup`が合格することを確認する。GitHub remoteを使わないWorkspaceでは省略する。
 7. 利用するProviderのruntimeを認証する。OpenAI主運用では
    `bash tools/check-runtime-readiness.sh --require-codex`、Anthropic運用では`--require-claude`を実行する。
 8. `bash tools/validate-agent-directory.sh --strict --full`を実行する。
@@ -37,6 +38,9 @@ Operator / machine側setupの正本である。Providerとsurfaceの選択、分
 GitHub bootstrapは、有効な保存済み`gh`認証をmachine-local `github.env`へ安全に導入する非対話処理である。
 `interactive-setup-required`なら、有効な保存済み認証がないため通常taskを開始せず、Operatorが専用setupとして
 GitHub CLIの認証を完了してから同じ2コマンドを再実行する。Agentは通常task中にBrowser loginを開始しない。
+設定済みGitHub HTTPS `backup`を持つWorkspaceでは、`tools/task.sh context`がnetwork接続前にmachine storeの
+実在・権限・形式を検査する。process `GH_TOKEN`だけでは合格しないため、一つのAgentだけが成功して別Agentが
+失敗する状態を通常task開始前に拒否する。これはcredentialの有効性probeではなくcross-process readiness gateである。
 
 ## Workspace root
 
