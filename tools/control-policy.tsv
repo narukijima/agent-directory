@@ -34,7 +34,7 @@ guarded	tools/lib/github-auth.sh	認証resolver
 guarded	tools/lib/project-registry.sh	Git rootとOwner解決
 guarded	tools/materialize-project-repositories.sh	Independent復元とroot境界
 guarded	tools/setup-local-environment.sh	自動実行される共通setup
-guarded	tools/setup-github-auth.sh	認証setupとrepair
+guarded	tools/setup-github-auth.sh	認証setupとmachine enrollment
 guarded	tools/run-evals.py	Core eval scorer
 guarded	evals/EVALS.md	行動eval契約
 guarded	evals/cases/multi-ai-recommended-profile.yaml	撤廃済み固定分担evalのtombstone
