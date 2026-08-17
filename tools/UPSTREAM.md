@@ -29,9 +29,9 @@
 
 ## 認証
 
-認証順序、secret境界、doctor、repair、結果語彙は`tools/REFERENCE.md#GitHub認証Tool`だけが所有する。
+認証source、secret境界、doctor、結果語彙は`tools/REFERENCE.md#GitHub認証Tool`だけが所有する。
 本書はIssue送信固有の契約だけを持ち、認証resolverを再定義しない。送信Toolは共通resolverの実API probeを
-使い、失敗時はrepair 1回・送信再試行1回までとし、なお失敗なら未送信としてexit 3にする。
+使い、失敗時は通常task内でrepair、別credential、interactive loginへfallbackせず、未送信としてexit 3にする。
 
 ## Standing Authorizationによる送信
 
@@ -134,9 +134,9 @@ commit SHA等）へ置き換える。再現方法は固有情報を除いた最�
    DETAILへ列挙して新規Issueを作成する（観測を捨てない。重複の統合は上流側の責務）。
 3. 本文を作成して送信する。検査で止まったら（`UPSTREAM_REPORT_BLOCKED`）、退避された下書きを
    抽象化して同じToolで再試行する。
-4. 認証不能時はdoctor→安全なrepair 1回→report再試行1回を行う。なお不成立なら内容hashで既存下書きを
+4. 認証不能時は分類済みreasonを保持し、内容hashで既存下書きを
    再利用し、`UPSTREAM_REPORT_DRAFTED reason=<原因> path=<path>`を出してexit 3で停止する。
-   `DRAFTED`は未送信であり成功・完了として報告しない。
+   `DRAFTED`は未送信であり成功・完了として報告しない。credential導入・rotationは別のOperator setupで行う。
 5. 送信結果（Issue URL）を作業報告へ含める。修正が上流で成立しても、取り込みは別作業とし
    自動でpull・更新しない。
 

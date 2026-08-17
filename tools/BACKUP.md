@@ -46,9 +46,10 @@ ignore状態にかかわらずToolが停止する（backup対象外の派生領�
 
 ## GitHub認証
 
-認証順序、secret境界、HTTPS / SSH判定、doctor、repair、結果語彙は
-`tools/REFERENCE.md#GitHub認証Tool`だけが所有する。backupは同じresolverを使い、認証失敗と
+認証source、secret境界、HTTPS / SSH判定、doctor、結果語彙は
+`tools/REFERENCE.md#GitHub認証Tool`だけが所有する。backupは同じresolverと`git-read` / `git-push` allowlistを使い、認証失敗と
 remote未設定・divergence・到達不能・push失敗を区別する。認証失敗でも検証済みlocal commitを取り消さない。
+通常backupはcredential repairや別sourceへのfallbackを行わない。
 
 ## backup Tool
 

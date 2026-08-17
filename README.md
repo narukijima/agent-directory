@@ -176,6 +176,12 @@ tools/task.sh context --route project --target projects/<name>
 tools/task.sh context --route meta --target tools/TOOLS.md
 ```
 
+設定済みGitHub HTTPS `backup`を持つWorkspaceでは、`context`がmachine credentialのcross-process readinessを
+先に検査する。一時的なprocess tokenだけで一体のAgentを成功扱いにせず、全Agentが読むmachine storeを必須にする。
+GitHubを利用する場合は利用者自身がmachineごとにfine-grained PATを一つ発行し、`setup-github-auth.sh --install-token`
+で共通storeへ導入する。tokenをAgentやWorkspaceごとに複製しない。同一OS userを一trust domainとする制約、
+repository/operation scope、rotation、brokerへの移行条件は[GitHub threat model](tools/agent-directory-threat-model.md)を参照する。
+
 明示パスと正本の明示参照を最優先とし、検索結果は候補として扱う。選択後に正本を読む。
 `.agent-cache/`は正本から再生成され、検索のstale回復はrouting catalogだけを一度作り直す。
 manifest（全体inventory）はfull検証とboundary作業だけが再生成する。
