@@ -41,6 +41,7 @@ chmod 700 "$fixture/config/agent-directory"
 printf 'GH_TOKEN=machine-token\n' > "$fixture/config/agent-directory/github.env"
 chmod 600 "$fixture/config/agent-directory/github.env"
 expect_source machine-env env
+expect_source machine-env env GH_TOKEN=process-token
 
 # Cross-process readiness requires the machine store itself. A process-only token may
 # make one Agent succeed, but must not let setup claim that sibling Agents are ready.
@@ -196,6 +197,24 @@ mkdir -p "$fixture/bootstrap-workspace" "$fixture/bootstrap-config/agent-directo
 git -C "$fixture/bootstrap-workspace" init -q
 git init -q --bare "$fixture/bootstrap-backup.git"
 git -C "$fixture/bootstrap-workspace" remote add backup "$fixture/bootstrap-backup.git"
+
+# An Operator can install a fine-grained PAT directly without device login or argv
+# exposure. The common capability probe then verifies API and Git access.
+set +e
+bootstrap_output="$(printf 'direct-machine-token\n' | env -i PATH="$fixture/bin:$PATH" \
+  HOME="$fixture/home" XDG_CONFIG_HOME="$fixture/bootstrap-config" \
+  AGENT_DIRECTORY_ROOT="$fixture/bootstrap-workspace" /bin/bash \
+  "$tool_root/setup-github-auth.sh" --install-token --remote backup 2>&1)"
+bootstrap_status=$?
+set -e
+[[ "$bootstrap_status" == 0 && "$bootstrap_output" == \
+  'GITHUB_AUTH_OK source=machine-env login=fixture-login api=ok git=ok' ]] || \
+  fail "direct token install failed: $bootstrap_output"
+grep -Fqx 'GH_TOKEN=direct-machine-token' \
+  "$fixture/bootstrap-config/agent-directory/github.env" || \
+  fail 'direct token install did not write the machine credential'
+rm -f "$fixture/bootstrap-config/agent-directory/github.env"
+
 set +e
 bootstrap_output="$(env -i PATH="$fixture/bin:$PATH" HOME="$fixture/home" \
   XDG_CONFIG_HOME="$fixture/bootstrap-config" AGENT_DIRECTORY_ROOT="$fixture/bootstrap-workspace" \

@@ -170,13 +170,14 @@ pushせず、`--dry-run`はremoteへ書き込まない。成功とdry-runはstdo
 
 ## GitHub認証Tool
 
-`tools/lib/github-auth.sh`はIssueとbackupの共通resolverで、process `GH_TOKEN`、`GITHUB_TOKEN`、Workspace
-`.env`、machine `github.env`、保存済み`gh`の順に解決する。値を出力せず、APIと実remoteで能力を判定し、
+GitHub共通resolverはmachine `github.env`を優先し、storeがないCI等だけprocess token、Workspace `.env`、
+保存済み`gh`へfallbackする。値を出力せず、APIと実remoteで能力を判定し、
 GitHub HTTPSのchild Gitだけへcredential helperを適用する。失敗分類と一回限りの非対話repairは
 [SETUP.md](../SETUP.md#initial-setup)と[tools/BACKUP.md](BACKUP.md)が所有する。通常taskはBrowser login、
 Keychain探索、SSH切替、独自認証を行わない。
 
 ```bash
+bash tools/setup-github-auth.sh --install-token
 bash tools/setup-github-auth.sh --install-from-gh
 bash tools/setup-github-auth.sh --machine-ready
 bash tools/setup-github-auth.sh --check

@@ -23,10 +23,11 @@ Operator / machine側setupの正本である。Providerとsurfaceの選択、分
 3. shellでこのWorkspaceのGit rootへ移動する。
 4. `bash tools/setup-local-environment.sh`を実行する。
 5. `bash tools/install-git-hooks.sh --install`を実行する。
-6. 設定済みGitHub HTTPS `backup` remoteがあるWorkspaceでは、通常taskを始める前に
-   `bash tools/setup-github-auth.sh --install-from-gh --remote backup`、続けて
+6. GitHubを利用するmachineでは、Operatorがfine-grained PATをmachineごとに一つ発行し、対象remoteを持つ
+   Workspaceで`bash tools/setup-github-auth.sh --install-token --remote backup`を実行する。保存済み`gh`認証を
+   移行する場合だけ`--install-from-gh`を使う。続けて
    `bash tools/setup-github-auth.sh --check --remote backup`を実行する。最後にprocess環境を引き継がない別shellで
-   `bash tools/setup-github-auth.sh --machine-ready --remote backup`が合格することを確認する。GitHub remoteを使わないWorkspaceでは省略する。
+   `bash tools/setup-github-auth.sh --machine-ready --remote backup`が合格することを確認する。GitHubを使わないmachineでは省略する。
 7. 利用するProviderのruntimeを認証する。OpenAI主運用では
    `bash tools/check-runtime-readiness.sh --require-codex`、Anthropic運用では`--require-claude`を実行する。
 8. `bash tools/validate-agent-directory.sh --strict --full`を実行する。
@@ -35,7 +36,10 @@ Operator / machine側setupの正本である。Providerとsurfaceの選択、分
 監査するときだけ両flagを指定する。引数なしのpreflightは両runtimeをread-onlyで診断するが、runtime unavailable
 だけでは非0にしない。
 
-GitHub bootstrapは、有効な保存済み`gh`認証をmachine-local `github.env`へ安全に導入する非対話処理である。
+GitHub machine credentialはWorkspaceやAgentではなくmachineが所有し、同じmachine上の全Agent Workspaceが
+machine-local `github.env`を第一優先で使う。process tokenとWorkspace `.env`はmachine storeがないCI等のfallbackである。
+`--install-token`はtokenをargvやremote URLへ入れず、端末では非表示入力し、directory `0700`・file `0600`で保存する。
+`--install-from-gh`は有効な保存済み`gh`認証を同じstoreへ移行する非対話処理である。
 `interactive-setup-required`なら、有効な保存済み認証がないため通常taskを開始せず、Operatorが専用setupとして
 GitHub CLIの認証を完了してから同じ2コマンドを再実行する。Agentは通常task中にBrowser loginを開始しない。
 設定済みGitHub HTTPS `backup`を持つWorkspaceでは、`tools/task.sh context`がnetwork接続前にmachine storeの
