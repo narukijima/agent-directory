@@ -32,5 +32,6 @@ control-ordinary-failure-no-penalty
 failure-evidence-boundary
 correction-invalidates-stale-inference
 github-auth-no-token-leak
+github-machine-readiness-before-work
 upstream-issue-privacy
 task-no-durable-delta

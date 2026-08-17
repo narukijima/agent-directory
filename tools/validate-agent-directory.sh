@@ -1850,6 +1850,7 @@ required_cases=(
   upstream-issue-allowlisted-destination
   github-auth-env-absence-is-not-failure github-auth-machine-credential
   github-auth-real-capability-probe github-auth-no-token-leak upstream-drafted-is-not-success
+  github-machine-readiness-before-work
   upstream-auth-repair-once backup-shared-github-auth backup-https-credential-helper
   backup-ssh-does-not-require-token
   decay-knowledge-current-clean decay-knowledge-current-aged
@@ -2046,6 +2047,16 @@ grep -Fq 'if [[ -n "$expected_login" && "$login_output" != "$expected_login" ]];
   fail 'setup-github-auth.sh must treat expected login as optional during install and repair'
 grep -Fq 'blocked interactive-setup-required' "$repo_root/tools/setup-github-auth.sh" || \
   fail 'setup-github-auth.sh must distinguish interactive machine setup from ordinary auth failure'
+grep -Fq -- '--machine-ready' "$repo_root/tools/task.sh" || \
+  fail 'task.sh context must enforce cross-process GitHub machine readiness'
+grep -Fq 'blocked machine-credential-not-installed' "$repo_root/tools/setup-github-auth.sh" || \
+  fail 'setup-github-auth.sh must classify a missing cross-process machine credential'
+github_machine_case="$repo_root/evals/cases/github-machine-readiness-before-work.yaml"
+for forbidden_machine_command in 'gh auth login' 'git credential-osxkeychain get' \
+  'security find-internet-password' 'security find-generic-password'; do
+  grep -Fqx "    - $forbidden_machine_command" "$github_machine_case" || \
+    fail "github-machine-readiness-before-work must reject auth divergence: $forbidden_machine_command"
+done
 
 # The executable eval runtime is model-independent. Its fixture pins trusted PASS, observed
 # FAIL, forbidden-report rejection, agent-only UNVERIFIED, malformed input, regression comparison,

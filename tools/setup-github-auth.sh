@@ -11,7 +11,7 @@ remote_name=''
 remote_explicit=false
 
 usage() {
-  printf 'Usage: %s (--install-from-gh|--check|--repair-from-gh) [--expected-login <login>] [--remote <name>]\n' "${0##*/}" >&2
+  printf 'Usage: %s (--install-from-gh|--machine-ready|--check|--repair-from-gh) [--expected-login <login>] [--remote <name>]\n' "${0##*/}" >&2
   exit 2
 }
 
@@ -22,7 +22,7 @@ blocked() {
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --install-from-gh|--check|--repair-from-gh)
+    --install-from-gh|--machine-ready|--check|--repair-from-gh)
       [[ -z "$mode" ]] || usage
       mode="${1#--}"
       shift
@@ -39,6 +39,18 @@ done
   blocked not-git-repository
 
 machine_file="$(github_auth_machine_file)"
+
+machine_ready() {
+  if ! github_auth_machine_permissions "$machine_file"; then
+    [[ "$GITHUB_AUTH_REASON" == auth-store-missing ]] && blocked machine-credential-not-installed
+    blocked "${GITHUB_AUTH_REASON:-machine-credential-invalid}"
+  fi
+  if ! github_auth_read_known_key "$machine_file" GH_TOKEN true; then
+    blocked machine-credential-invalid
+  fi
+  GITHUB_AUTH_PARSED_VALUE=''
+  printf 'GITHUB_MACHINE_READY source=machine-env\n'
+}
 
 machine_is_healthy() {
   local saved_gh="${GH_TOKEN-}" saved_github="${GITHUB_TOKEN-}" had_gh=false had_github=false
@@ -109,6 +121,7 @@ configure_git_helper() {
 
 case "$mode" in
   install-from-gh|repair-from-gh) install_from_gh; configure_git_helper ;;
+  machine-ready) machine_ready; exit 0 ;;
   check) ;;
   *) usage ;;
 esac
