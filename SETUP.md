@@ -59,11 +59,16 @@ fallbackしない。process tokenは`CI=true`と`AGENT_DIRECTORY_GITHUB_CI=true`
 `interactive-setup-required`なら、有効な保存済み認証がないため通常taskを開始せず、Operatorが専用setupとして
 GitHub CLIの認証を完了してからsetupを再実行する。Agentは通常task中にBrowser login、device flow、passkey、SSH切替、
 Keychain探索、credential repairを開始しない。stale storeが存在するときもprocess tokenへfallbackしない。
-設定済みGitHub HTTPS `backup`を持つWorkspaceでは、`tools/task.sh context`がnetwork接続前にmachine storeの
-実在・権限・形式・repository enrollmentを検査する。process `GH_TOKEN`だけでは合格しないため、一つのAgentだけが成功して別Agentが
-失敗する状態を通常task開始前に拒否する。これはcredentialの有効性probeではなくcross-process readiness gateである。
-実APIとremote capabilityは別に`--check`で検査する。
+`tools/task.sh context`、ローカル探索・編集・検証はGitHubを使わないため、machine storeの有無・形式・allowlistで
+停止しない。cross-process readinessはbackup、push、Issue、PR、remote materializationの直前に
+`--machine-ready --operation <operation>`または各固定Toolの共有resolverで検査する。process `GH_TOKEN`が存在しても
+通常localでは`present-not-consumed`と診断し、credential不正とは扱わない。実APIとGit remote capabilityは別に
+`--check`で検査する。
 
+repository追加時は、GitHub側selected repositories / permissionを更新した後、valid storeに対する一度の
+`--enroll-existing --remote <name> --operation ...`でtokenを表示・再入力せずlocal allowlistをatomic replaceする。
+このmodeはGitHub側scopeを変更しないため、続けて`--check`でprovider設定との一致を確認する。不一致は
+`github-repository-not-enrolled`または`github-operation-not-enrolled`としてnetwork接続前に区別する。
 rotationは、新tokenを同じallowlistでatomic installし、`--machine-ready`、`--check`の順で確認してから旧tokenを
 GitHubでrevokeする。machine紛失時は先に該当machine名のtokenをrevokeし、GitHub側selected repositoriesを影響一覧として
 監査する。repository追加時はGitHub側token scopeとlocal allowlistを同時に更新する。organization ownerはfine-grained PATの
@@ -124,22 +129,25 @@ Provider選択、handoff policy、Provider別permission logicを複製しない�
 
 ## Preflight checks
 
-`tools/check-runtime-readiness.sh`はnetwork mutationを行わず、secret値を表示しないread-only diagnosticである。
+`tools/check-runtime-readiness.sh`は既定でnetwork mutationを行わず、secret値を表示しないcapability diagnosticである。
+workspace writeを実測するときだけ、一時fileを作成・削除する`--probe-workspace-write`を明示する。
 
 ```bash
 bash tools/check-runtime-readiness.sh
 bash tools/check-runtime-readiness.sh --require-codex
 bash tools/check-runtime-readiness.sh --require-claude
+bash tools/check-runtime-readiness.sh --probe-workspace-write
 ```
 
 次を確認する。
 
-- cwdがこのAgent WorkspaceのGit rootそのものであること
-- `codex` / `claude` executable availabilityとversion
-- `codex login status` / `claude auth status`
+- cwd、filesystem read、process spawningの観測結果と、filesystem writeの実測有無
+- `codex` / `claude` executable availability、version、provider authenticationを別fieldで表示
+- network、GitHub API、Git remote、localhostが未宣言・未検査であること
 - `CLAUDE_CODE_OAUTH_TOKEN`がprocess environmentに存在するか（値は表示しない）
+- `GH_TOKEN` / `GITHUB_TOKEN`の存在と、通常localでは消費しないpolicy（値は表示しない）
 
-成功時は`RUNTIME_READINESS`を1行で返す。required runtimeが利用不能なら診断行に続けて
+成功時は`RUNTIME_CAPABILITIES`を1行で返す。未検査capabilityを`ready`と表示しない。required runtimeが利用不能なら診断行に続けて
 `RUNTIME_READINESS_BLOCKED reason=<reason>`を返し、非0で終了する。これはavailabilityの観測であり、
 taskのowner変更やfallback実行は行わない。
 

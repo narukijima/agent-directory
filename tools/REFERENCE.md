@@ -12,8 +12,8 @@ tools/task.sh finish --route <route> --target <path> --message "変更理由" --
 tools/task.sh status
 ```
 
-通常タスクの薄い入口。`context`は読込正本とGit Ownerを返し、GitHub HTTPS `backup`設定時は先に
-machine storeをread-only検査する。process tokenだけなら`github-machine-not-ready`で拒否する。
+通常タスクの薄い入口。`context`はローカルの読込正本とGit Ownerだけを返し、GitHub remote、machine store、
+process tokenの状態では停止しない。GitHub capabilityは外部操作を所有するToolが操作直前に検査する。
 `verify`は`--changed`、`finish`は通常変更の検証・commit・backup、`status`はGit rootと変更件数を扱う。
 protected変更は`protected-change`へ返す。結果は`TASK_CONTEXT v2`または`TASK_OK|BLOCKED|FAILED`である。
 
@@ -92,13 +92,14 @@ scheduleの変更、ネットワーク接続は行わない。成功は`LOCAL_EN
 ## check-runtime-readiness.sh
 
 ```bash
-bash tools/check-runtime-readiness.sh [--require-codex] [--require-claude]
+bash tools/check-runtime-readiness.sh [--require-codex] [--require-claude] [--probe-workspace-write]
 ```
 
-現在のcwdがAgent WorkspaceのGit rootそのものであることを確認し、Codex / Claude Codeのexecutable、version、
-認証状態をread-onlyでprobeする。`CLAUDE_CODE_OAUTH_TOKEN`は存在だけを報告し、値や認証commandの出力は
-stdout / stderrへ転送しない。引数なしはdiagnosticとしてruntime unavailableを結果へ記録し、required flagを
-指定したruntimeが利用不能な場合だけ非0にする。成功診断は`RUNTIME_READINESS`、停止は
+現在のcwd、filesystem read、process spawningを観測し、Codex / Claude Codeのexecutable、version、provider authenticationを
+別fieldでprobeする。filesystem writeは`--probe-workspace-write`指定時だけ一時fileで実測する。network、GitHub API、
+Git remote、localhostは未宣言なら`not-declared`であり、検査せず`ready`としない。credential environmentは存在だけを報告し、
+値や認証commandの出力はstdout / stderrへ転送しない。required flagを指定したruntimeが利用不能な場合だけ非0にする。
+成功診断は`RUNTIME_CAPABILITIES`、停止は
 `RUNTIME_READINESS_BLOCKED reason=<reason>`を返す。詳細なsetup、Trust、credential契約は`SETUP.md`が所有する。
 
 ## finalize-task.sh
@@ -170,26 +171,26 @@ pushせず、`--dry-run`はremoteへ書き込まない。成功とdry-runはstdo
 
 ## GitHub認証Tool
 
-GitHub共通resolverはOS account homeのversioned machine `github.env`だけを通常local sourceにする。明示CIだけ
-process tokenをexact repository / operation allowlist付きで使い、Workspace `.env`、保存済み`gh`、stale storeからの
-fallbackは行わない。値を出力・常時exportせず、APIまたはGitHub HTTPSを使う個別childだけへ渡す。child Gitは
-repository hook、ambient credential helper/config、redirect、HTTPS以外のprotocolを無効化する。通常taskはBrowser login、
-device flow、passkey、Keychain探索、SSH切替、credential repairを行わない。根本制約とresidual riskは
-[threat model](agent-directory-threat-model.md)、初期setupとrotationは[SETUP.md](../SETUP.md#initial-setup)が所有する。
+通常localはOS account homeのmachine `github.env`、明示CIはallowlist付きprocess tokenだけを使う。値はisolated childだけへ渡し、
+fallback / login / Keychain / SSH / repairを行わない。保存は[SETUP.md](../SETUP.md#initial-setup)、riskは[threat model](agent-directory-threat-model.md)が所有する。
 
 ```bash
 bash tools/setup-github-auth.sh --install-token
 bash tools/setup-github-auth.sh --install-from-gh
+bash tools/setup-github-auth.sh --enroll-existing --remote origin --operation pull-requests-write
 bash tools/setup-github-auth.sh --machine-ready
+bash tools/setup-github-auth.sh --machine-ready --remote backup --operation git-push
 bash tools/setup-github-auth.sh --check
 bash tools/test-github-auth.sh
 ```
 
-`--machine-ready`はnetworkもfallbackも使わず、owner/mode/link、strict five-line format、repository enrollmentを
-検査する。成功は`GITHUB_MACHINE_READY source=machine-file repository=<owner/repo>`、未導入は
-`machine-credential-not-installed`。doctor成功は
-`GITHUB_AUTH_OK source=<source> login=<login> api=ok git=ok repository=<owner/repo>`、失敗は`GITHUB_AUTH_BLOCKED`。
-`--expected-login`は任意、remote解決順は`remote.pushDefault`、`backup`、`origin`である。
+`--enroll-existing`はvalid storeを再入力なしでatomic追加し、GitHub側scopeは変えない。`--machine-ready`はnetworkなしでenrollmentを検査する。
+`--check`はAPI / Gitをprobeし`GITHUB_AUTH_OK`、失敗は`GITHUB_AUTH_BLOCKED`を返す。診断
+`GITHUB_AUTH_DIAGNOSTIC`はsecretなしでlayer、target、transport、source、enrollment、試行面、到達、reason、status、evidenceを持つ。
+
+reasonはRuntime=`runtime-denied|executable-missing|credential-helper-missing|github-dns-failure|github-network-failure|github-timeout`、
+local policy=`github-repository-not-enrolled|github-operation-not-enrolled|github-remote-invalid|auth-store-*`、provider=`github-authentication-failed|github-authorization-failed|git-transport-mismatch`、unknown=`github-unknown-failure`。
+401/403以外の一般的な`Permission denied`をPAT拒否へ一般化せず、unknownを到達不能へ丸めない。
 
 ## report-upstream-issue.sh
 
@@ -203,20 +204,9 @@ Issueを送る唯一の経路。宛先は許可リスト固定・添付なし。
 bash tools/materialize-project-repositories.sh --all|--project <name> [--check]
 ```
 
-registryの登録と採用revisionから`projects/<name>/`へ通常cloneを再現する（復旧、移行、partial解消）。
-
-- 入力: `--all`か`--project <name>`と任意の`--check`（cloneせず整合だけを検査）。列挙は
-  `projects/REPOSITORIES.md`だけを正本とし、`PROJECT.md`のfrontmatterを走査しない。
-- 出力: 成功は`MATERIALIZATION_OK total=<n> cloned=<n> verified=<n>`をstdoutへ1行、停止は
-  `MATERIALIZATION_BLOCKED reason=<reason> project=<name>`をstderrへ出し非0で終了する
-  （停止reasonの正本はTool出力とvalidator隔離fixture）。
-- targetが無いときだけ採用revisionをdetached checkoutし、branch tipへ勝手に進めない。既存cloneは
-  HEADと採用SHAの一致まで検査し（detached HEADは要求しない）、reset、clean、stash、merge、rebaseで
-  変形しない。認証情報を保存せず、絶対pathを正本へ書かない。
-  `repository_role: project`では採用revisionの`PROJECT.md` / `STATE.md`を検査し、`public-foundation`では
-  Owner Agent rootがactive状態を所有するため両ファイルを要求しない。Git、origin、HEAD、cleanliness、revisionの
-  検査は役割にかかわらず同一である。
-  `AGENT_ALLOW_LOCAL_REPOSITORY_URL=true`は隔離fixture専用。
+registryと採用revisionからcloneを再現し、`--check`は整合だけを検査する。成功は`MATERIALIZATION_OK`、停止は
+`MATERIALIZATION_BLOCKED`。欠落時だけ採用SHAへcheckoutし、既存cloneは変形しない。GitHub HTTPS clone / fetch直前に
+共有resolverの`git-read`を要求する。`project`は両契約も検査する。
 
 ## validate-agent-directory.sh
 
