@@ -15,7 +15,8 @@ Runtime拒否、Agent Directory local policy拒否、external provider拒否、R
 3. **Secrets** — credential、token、password、秘密情報を追跡・commit・出力しない。
 4. **Standing Authorization** — 公開、送信、本番、課金、権限変更、通常push、削除は、利用者の明示依頼
    または既存契約によるauthorizationと一意なtarget / destinationなしに実行しない。明示依頼があれば
-   同じ操作の追加承認を求めない。
+   同じ操作の追加承認を求めない。Runtimeが許可したscope内通常工程を、Agent自身がTool call単位のapprovalへ
+   再分解しない。
 5. **Remote Integrity** — remoteの目的とSHAを確認し、divergence、宛先不明、非fast-forwardを自動解決しない。
 6. **Control Integrity** — 本安全核、判定器、hook、validatorの弱体化や迂回を通常変更として扱わない。
 

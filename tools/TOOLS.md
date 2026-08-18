@@ -158,7 +158,7 @@ Private backup設定済みのroot所有workは`--root-only`、未設定は`not-c
 | `build-context-cache.sh` | catalog・manifest・検索索引の再生成 | `tools/REFERENCE.md` |
 | `find-context.sh` | Route確定後の候補検索（metadata最大5件） | `tools/REFERENCE.md` |
 | `setup-local-environment.sh` | Codex / Claude Code共通のローカル初期化 | `tools/REFERENCE.md` |
-| `check-runtime-readiness.sh` | Workspace rootとCodex / Claudeのread-only preflight | `SETUP.md` / `tools/REFERENCE.md` |
+| `check-runtime-readiness.sh` | Runtime Profile、task capability、Workspace / Provider readinessのpreflight | `SETUP.md` / `tools/REFERENCE.md` |
 | `validate-agent-directory.sh` | 構造・境界・サイズの機械検査 | `tools/REFERENCE.md` |
 | `check-boundary.sh` / `install-git-hooks.sh` | commit・push境界検査とhook導入 | `tools/CONTROL.md` |
 

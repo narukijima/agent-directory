@@ -20,6 +20,38 @@ Providerとsurfaceを決める優先順位は次のとおりとする。
 Human / Operatorはultimate authorityである。Project固有approval、安全境界、lifecycle、成果契約は本書より
 上位にある。製品名から機械的に経路を決めず、目的、主成果物、必要な道具、review方法、完了証拠をまとめて判断する。
 
+## Operator Runtime Profile
+
+Agent Directory共通のRuntime autonomyは、Provider固有のmode名ではなく次の3段階で宣言する。
+
+| Profile | 実行契約 | 主な利用環境 |
+|---|---|---|
+| `ask` | 外部作用・高リスク操作でRuntimeのinteractive approvalを比較的積極的に使う。Agent Directoryのsemantic stop条件は変えない | 保守的な対話運用 |
+| `auto` | 推奨default。明示taskのscope内にある通常操作をAgentが判断して完遂し、同じ目的・target・destinationをTool call単位で再承認させない。Runtimeが真に危険または曖昧と判定した場合だけ確認する | 通常のAgent Workspace |
+| `full` | Runtimeが提供できる最大のfilesystem / network / command能力と最少approvalを使う。Agent DirectoryのRepository integrityとsemantic safetyは維持する | dedicated / isolated machine |
+
+未指定時は`auto`を推奨するが、Agent DirectoryはOperatorのRuntime設定を変更しない。`ask / auto / full`は
+Runtimeへの要求と運用意図であり、現在のcapabilityを観測した証拠ではない。Operator / Runtimeはprofileを選び、
+実際のsandbox、approval、filesystem、network等を提供する。Agentは与えられた能力内で最大限進め、Agent Directoryは
+意味的安全とWorkspace integrityだけを判定する。
+
+profileはtask capabilityの固定集合ではない。必要capabilityはtaskごとに`filesystem_read`、`filesystem_write`、
+`network`、`localhost`、`process_spawn`、`git`、`github`、`browser`、`api`から宣言し、実測可能なものだけを
+`observed`、Runtimeが提供を宣言した未実測値を`declared`、未検査を`not-probed`、既知の不一致を`unavailable`とする。
+`full`だからGitHubが必要、`ask`だからlocal editが不可、という推論をしない。
+
+## Standing Authorizationと通常完遂
+
+明示されたtaskは、同じobjective、scope、target、destinationで完了に必要な通常工程へのStanding Authorizationである。
+read / search、file create / edit / move、mkdir、package install / update、build / test / lint / format、local server、
+localhost / network / public documentation / API、Git add / commit / branch、設定済み通常GitHub finish、明示された
+deploy / publishの通常工程を、操作ごとの追加approvalへ分解しない。Runtimeが許可済みで、target / destinationが一意、
+Project契約とsemantic safetyに衝突しないなら、Agent自身も「念のため」の再確認を追加しない。
+
+target / destination / credential、目的、不可逆対象、lifecycle、secret、予期しない課金、ownership、credential scope、
+Project契約、divergence、Single Writer、正本のいずれかが一意でない場合だけ、人間が決める不足一点へ上げる。
+`full`でもこの条件は消えず、`ask`でも既に一意な依頼をAgent Directoryが独自に再承認させる理由にはならない。
+
 ## Core契約
 
 長期的な運用契約は次のとおりである。
@@ -131,6 +163,8 @@ surfaceを変える場合もprimary deliverable、actual owner、既存outputを
 
 Runtimeのsandbox / network / filesystem拒否、Agent Directory local policyのallowlist拒否、external providerの
 authentication / authorization拒否、Repository integrity停止を同じProvider availability failureへまとめない。
+停止・未完了は少なくとも`runtime`、`agent-directory-local-policy`、`external-provider`、`repository-integrity`、
+`project-contract`、`network-service`の発生層に分け、観測できた層だけを報告する。
 同じfailure fingerprintはruntime permission、cwd / Git root、target、remote、credential source、allowlist、network、
 Tool path、provider stateのいずれかが変わるまで再試行しない。
 
@@ -182,6 +216,7 @@ Runtime-native coordinationで目的を満たせない具体的なProject要件�
 ## 要約
 
 > 一つのtaskは一つのProvider familyと一人のfinal ownerが完了まで所有する。
+> Runtime autonomyは`ask / auto / full`からOperatorが選び、推奨defaultは通常作業を完遂する`auto`とする。
 > OpenAIではChat、Work、Codexをprimary deliverableに応じて自律的に選ぶ。
 > AnthropicはAnthropic family内で完結し、Providerをまたぐ自動分業・自動fallbackを行わない。
 > RepositoryとProject成果契約が品質の正本であり、Humanがultimate authorityである。

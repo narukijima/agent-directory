@@ -8,6 +8,18 @@ require_codex=false
 require_claude=false
 probe_workspace_write=false
 write_probe=''
+runtime_profile="${AGENT_DIRECTORY_RUNTIME_PROFILE:-}"
+runtime_profile_source='environment'
+required_capabilities=''
+filesystem_read='not-probed'
+filesystem_write='not-probed'
+network='not-probed'
+localhost='not-probed'
+process_spawn='not-probed'
+git_capability='not-probed'
+github='not-probed'
+browser='not-probed'
+api='not-probed'
 
 cleanup() {
   [[ -z "$write_probe" ]] || rm -f -- "$write_probe" 2>/dev/null || true
@@ -15,12 +27,17 @@ cleanup() {
 trap cleanup EXIT HUP INT TERM
 
 usage() {
-  printf 'Usage: %s [--require-codex] [--require-claude] [--probe-workspace-write]\n' "${0##*/}" >&2
+  printf '%s\n' \
+    "Usage: ${0##*/} [--profile ask|auto|full] [--require-codex] [--require-claude]" \
+    '       [--require-capability <name>] [--capability-state <name>=declared|unavailable]' \
+    '       [--probe-workspace-write]' >&2
   exit 2
 }
 
 blocked() {
-  printf 'RUNTIME_READINESS_BLOCKED reason=%s\n' "$1" >&2
+  printf 'RUNTIME_READINESS_BLOCKED reason=%s layer=%s' "$2" "$1" >&2
+  [[ -z "${3:-}" ]] || printf ' capability=%s' "$3" >&2
+  printf '\n' >&2
   exit 1
 }
 
@@ -28,33 +45,132 @@ sanitize_version() {
   printf '%s' "$1" | tr '[:space:]' '_' | tr -cd '[:alnum:]._+()-'
 }
 
+normalize_capability() {
+  case "$(printf '%s' "$1" | tr '-' '_')" in
+    filesystem_read|filesystem_write|network|localhost|process_spawn|git|github|browser|api)
+      printf '%s' "$(printf '%s' "$1" | tr '-' '_')"
+      ;;
+    *) return 1 ;;
+  esac
+}
+
+capability_state() {
+  case "$1" in
+    filesystem_read) printf '%s' "$filesystem_read" ;;
+    filesystem_write) printf '%s' "$filesystem_write" ;;
+    network) printf '%s' "$network" ;;
+    localhost) printf '%s' "$localhost" ;;
+    process_spawn) printf '%s' "$process_spawn" ;;
+    git) printf '%s' "$git_capability" ;;
+    github) printf '%s' "$github" ;;
+    browser) printf '%s' "$browser" ;;
+    api) printf '%s' "$api" ;;
+  esac
+}
+
+set_capability_state() {
+  case "$1" in
+    filesystem_read) filesystem_read="$2" ;;
+    filesystem_write) filesystem_write="$2" ;;
+    network) network="$2" ;;
+    localhost) localhost="$2" ;;
+    process_spawn) process_spawn="$2" ;;
+    git) git_capability="$2" ;;
+    github) github="$2" ;;
+    browser) browser="$2" ;;
+    api) api="$2" ;;
+  esac
+}
+
+require_capability() {
+  local capability="$1"
+  printf '%s\n' "$required_capabilities" | grep -Fqx -- "$capability" || \
+    required_capabilities="${required_capabilities}${capability}
+"
+}
+
+capability_is_required() {
+  printf '%s\n' "$required_capabilities" | grep -Fqx -- "$1"
+}
+
+requirements_csv() {
+  local result
+  result="$(printf '%s' "$required_capabilities" | sed '/^$/d' | paste -sd, -)"
+  printf '%s' "${result:-none}"
+}
+
+require_value() {
+  [[ "$#" -ge 2 && -n "$2" ]] || usage
+}
+
 while [ "$#" -gt 0 ]; do
   case "$1" in
+    --profile)
+      require_value "$@"
+      runtime_profile="$2"
+      runtime_profile_source='explicit'
+      shift
+      ;;
     --require-codex) require_codex=true ;;
     --require-claude) require_claude=true ;;
-    --probe-workspace-write) probe_workspace_write=true ;;
+    --require-capability)
+      require_value "$@"
+      capability="$(normalize_capability "$2")" || usage
+      require_capability "$capability"
+      shift
+      ;;
+    --capability-state)
+      require_value "$@"
+      capability="$(normalize_capability "${2%%=*}")" || usage
+      declared_state="${2#*=}"
+      [[ "$2" == *=* && "$declared_state" != "$2" ]] || usage
+      case "$declared_state" in declared|unavailable) ;; *) usage ;; esac
+      set_capability_state "$capability" "$declared_state"
+      shift
+      ;;
+    --probe-workspace-write)
+      probe_workspace_write=true
+      require_capability filesystem_write
+      ;;
     -h|--help) usage ;;
     *) usage ;;
   esac
   shift
 done
 
-command -v git >/dev/null 2>&1 || blocked 'git-executable-unavailable'
+if [[ -z "$runtime_profile" ]]; then
+  runtime_profile='auto'
+  runtime_profile_source='recommended-default'
+fi
+case "$runtime_profile" in ask|auto|full) ;; *) usage ;; esac
+
+if capability_is_required filesystem_write && [[ "$filesystem_write" != unavailable ]]; then
+  probe_workspace_write=true
+fi
+
+command -v git >/dev/null 2>&1 || blocked runtime 'git-executable-unavailable' git
+git_capability='observed'
+process_spawn='observed'
 current_dir="$(pwd -P)"
 current_git_root="$(git -C "$current_dir" rev-parse --show-toplevel 2>/dev/null || true)"
-[[ -n "$current_git_root" ]] || blocked 'not-git-repository'
+[[ -n "$current_git_root" ]] || blocked repository-integrity 'not-git-repository'
 current_git_root="$(CDPATH= cd -- "$current_git_root" && pwd -P)"
 [[ "$current_dir" == "$repo_root" && "$current_git_root" == "$repo_root" ]] || \
-  blocked 'workspace-root-mismatch'
-[[ -r "$repo_root/AGENTS.md" ]] || blocked 'filesystem-read-denied'
+  blocked repository-integrity 'workspace-root-mismatch'
+[[ -r "$repo_root/AGENTS.md" ]] || blocked runtime 'filesystem-read-denied' filesystem_read
+filesystem_read='observed'
 
-filesystem_write='not-probed'
 if [[ "$probe_workspace_write" == true ]]; then
-  write_probe="$(mktemp "$repo_root/.runtime-write-probe.XXXXXX" 2>/dev/null)" || \
-    blocked 'filesystem-write-denied'
-  rm -f -- "$write_probe" || blocked 'filesystem-write-cleanup-failed'
-  write_probe=''
-  filesystem_write='observed'
+  if write_probe="$(mktemp "$repo_root/.runtime-write-probe.XXXXXX" 2>/dev/null)"; then
+    if rm -f -- "$write_probe"; then
+      write_probe=''
+      filesystem_write='observed'
+    else
+      filesystem_write='unavailable'
+    fi
+  else
+    filesystem_write='unavailable'
+  fi
 fi
 
 codex_executable='unavailable'
@@ -104,20 +220,49 @@ if [[ -n "${GH_TOKEN:-${GITHUB_TOKEN:-}}" ]]; then
   github_process_token='present'
 fi
 
-printf 'RUNTIME_CAPABILITIES workspace_root=observed filesystem_read=observed filesystem_write=%s process_spawning=observed network_requirement=not-declared github_api_requirement=not-declared git_remote_requirement=not-declared localhost_requirement=not-declared codex_executable=%s codex_authentication=%s codex_version=%s claude_executable=%s claude_authentication=%s claude_version=%s claude_oauth_env=%s github_process_token=%s github_process_token_policy=explicit-ci-only\n' \
-  "$filesystem_write" "$codex_executable" "$codex_authentication" "$codex_version" \
+network_requirement='not-declared'
+github_api_requirement='not-declared'
+git_remote_requirement='not-declared'
+localhost_requirement='not-declared'
+capability_is_required network && network_requirement='required'
+capability_is_required api && network_requirement='required'
+capability_is_required github && github_api_requirement='required'
+capability_is_required github && git_remote_requirement='required'
+capability_is_required localhost && localhost_requirement='required'
+
+printf 'RUNTIME_CAPABILITIES runtime_profile=%s runtime_profile_source=%s required_capabilities=%s workspace_root=observed filesystem_read=%s filesystem_write=%s network=%s localhost=%s process_spawn=%s process_spawning=%s git=%s github=%s browser=%s api=%s network_requirement=%s github_api_requirement=%s git_remote_requirement=%s localhost_requirement=%s codex_executable=%s codex_authentication=%s codex_version=%s claude_executable=%s claude_authentication=%s claude_version=%s claude_oauth_env=%s github_process_token=%s github_process_token_policy=explicit-ci-only\n' \
+  "$runtime_profile" "$runtime_profile_source" "$(requirements_csv)" \
+  "$filesystem_read" "$filesystem_write" "$network" "$localhost" "$process_spawn" "$process_spawn" \
+  "$git_capability" "$github" "$browser" "$api" "$network_requirement" \
+  "$github_api_requirement" "$git_remote_requirement" "$localhost_requirement" \
+  "$codex_executable" "$codex_authentication" "$codex_version" \
   "$claude_executable" "$claude_authentication" "$claude_version" "$claude_oauth_env" \
   "$github_process_token"
 
+unverified_capabilities=''
+while IFS= read -r required_capability; do
+  [[ -n "$required_capability" ]] || continue
+  required_state="$(capability_state "$required_capability")"
+  if [[ "$required_state" == unavailable ]]; then
+    blocked runtime 'capability-unavailable' "$required_capability"
+  fi
+  if [[ "$required_state" == not-probed ]]; then
+    unverified_capabilities="${unverified_capabilities}${required_capability},"
+  fi
+done <<< "$required_capabilities"
+if [[ -n "$unverified_capabilities" ]]; then
+  printf 'RUNTIME_READINESS_UNVERIFIED capabilities=%s\n' "${unverified_capabilities%,}"
+fi
+
 if [[ "$require_codex" == true && "$codex_authentication" != authenticated ]]; then
   if [[ "$codex_executable" == available ]]; then
-    blocked 'codex-authentication-unavailable'
+    blocked external-provider 'codex-authentication-unavailable'
   fi
-  blocked "codex-executable-$codex_executable"
+  blocked runtime "codex-executable-$codex_executable"
 fi
 if [[ "$require_claude" == true && "$claude_authentication" != authenticated ]]; then
   if [[ "$claude_executable" == available ]]; then
-    blocked 'claude-authentication-unavailable'
+    blocked external-provider 'claude-authentication-unavailable'
   fi
-  blocked "claude-executable-$claude_executable"
+  blocked runtime "claude-executable-$claude_executable"
 fi
