@@ -123,6 +123,9 @@ required_files=(
   'projects/.gitignore'
   'projects/_template/PROJECT.md'
   'projects/_template/STATE.md'
+  'evals/EVALS.md'
+  'evals/TRACE.md'
+  'evals/profiles/core.txt'
   'tools/CONTROL.md'
   'tools/SAFETY.md'
   'tools/TOOLS.md'
@@ -136,6 +139,7 @@ required_files=(
   'tools/install-git-hooks.sh'
   'tools/lib/project-registry.sh'
   'tools/materialize-project-repositories.sh'
+  'tools/run-evals.py'
   'tools/task.sh'
   'tools/validate-agent-directory.sh'
   'tools/validator/check-markdown-references.sh'
@@ -158,6 +162,7 @@ tools/hooks/pre-push
 tools/install-git-hooks.sh
 tools/lib/project-registry.sh
 tools/materialize-project-repositories.sh
+tools/run-evals.py
 tools/task.sh
 tools/validate-agent-directory.sh
 tools/validator/check-markdown-references.sh
@@ -168,16 +173,57 @@ actual_tools="$(
   find tools -type f -not -name '.DS_Store' -print | LC_ALL=C sort
 )"
 if [[ "$actual_tools" != "$expected_tools" ]]; then
-  fail 'tools/ differs from the 16-file owner-approved allowlist'
+  fail 'tools/ differs from the 17-file owner-approved allowlist'
   diff -u <(printf '%s\n' "$expected_tools") <(printf '%s\n' "$actual_tools") >&2 || true
 fi
 
-for retired in OPERATING_PROFILE.md SETUP.md CLAUDE.md .env.example evals tools/BACKUP.md tools/REFERENCE.md tools/UPSTREAM.md tools/THREAT_MODEL.md; do
-  [[ ! -e "$repo_root/$retired" ]] || fail "retired path exists: $retired"
-done
-if git -C "$repo_root" ls-files | grep -E '(^|/)CLAUDE\.md$|(^|/)\.codex/|(^|/)\.claude/' | grep -q .; then
-  fail 'Provider-specific bridge or adapter exists in the public template'
+expected_evals="$(cat <<'EVALS'
+evals/EVALS.md
+evals/TRACE.md
+evals/cases/ambiguous-file-delete-refusal.yaml
+evals/cases/context-budget-stop.yaml
+evals/cases/explicit-file-delete-standing-authorization.yaml
+evals/cases/independent-root-content-boundary.yaml
+evals/cases/owner-gated-permanent-addition.yaml
+evals/cases/project-goal-change-protection.yaml
+evals/cases/protect-immutable-records.yaml
+evals/cases/protect-paused-project.yaml
+evals/cases/route-to-knowledge.yaml
+evals/cases/route-to-project.yaml
+evals/cases/route-to-skill.yaml
+evals/fixtures/active-project/projects/market-scan/AGENTS.md
+evals/fixtures/active-project/projects/market-scan/PROJECT.md
+evals/fixtures/active-project/projects/market-scan/STATE.md
+evals/fixtures/active-project/projects/market-scan/inputs/quarter.csv
+evals/fixtures/active-project/projects/market-scan/outputs/quarterly-report.md
+evals/fixtures/active-project/projects/market-scan/scripts/publish-report.sh
+evals/fixtures/active-project/projects/market-scan/scripts/send-report.sh
+evals/fixtures/active-project/projects/market-scan/scripts/verify-report.sh
+evals/fixtures/active-skill/skills/literature-review/SKILL.md
+evals/fixtures/eval-runtime/case.yaml
+evals/fixtures/eval-runtime/pass.jsonl
+evals/fixtures/independent-project/projects/.gitignore
+evals/fixtures/independent-project/projects/REPOSITORIES.md
+evals/fixtures/independent-project/projects/data-pipeline/AGENTS.md
+evals/fixtures/independent-project/projects/data-pipeline/PROJECT.md
+evals/fixtures/independent-project/projects/data-pipeline/STATE.md
+evals/fixtures/protect-paused-project/projects/market-scan/PROJECT.md
+evals/fixtures/protect-paused-project/projects/market-scan/STATE.md
+evals/profiles/core.txt
+EVALS
+)"
+actual_evals="$(
+  cd "$repo_root"
+  find evals -type f -print | LC_ALL=C sort
+)"
+if [[ "$actual_evals" != "$expected_evals" ]]; then
+  fail 'evals/ differs from the owner-approved 11-case Core suite'
+  diff -u <(printf '%s\n' "$expected_evals") <(printf '%s\n' "$actual_evals") >&2 || true
 fi
+
+profile_cases="$(grep -Ev '^[[:space:]]*(#|$)' "$repo_root/evals/profiles/core.txt" | LC_ALL=C sort)"
+actual_cases="$(find "$repo_root/evals/cases" -type f -name '*.yaml' -exec basename {} .yaml \; | LC_ALL=C sort)"
+[[ "$profile_cases" == "$actual_cases" ]] || fail 'evals/profiles/core.txt must list every Core case exactly once'
 
 for heading in '## 自己定義' '## 共通判断原則' '## Route' '## Context Loading' '## 自律実行' '## 差分判定' '## 人間へ上げる例外' '## 禁止事項' '## 参照順序'; do
   grep -Fqx "$heading" "$repo_root/AGENTS.md" || fail "AGENTS.md is missing heading: $heading"
@@ -185,6 +231,7 @@ done
 grep -Fq '新しいTool、Skill、恒久的な仕組み、抽象化、依存は原則追加しない' "$repo_root/AGENTS.md" || fail 'AGENTS.md lost the owner gate for permanent additions'
 grep -Fq 'Skillの新設は既存Skillの更新・統合で目的を満たせない場合だけ候補' "$repo_root/skills/SKILLS.md" || fail 'skills/SKILLS.md lost the owner gate'
 grep -Fq '新しいToolは原則追加しない' "$repo_root/tools/TOOLS.md" || fail 'tools/TOOLS.md lost the Tool owner gate'
+grep -Fq 'validatorはそれらを違反として拒否しない' "$repo_root/README.md" || fail 'README.md must allow downstream Runtime adapters'
 grep -Fq 'if [[ "$op" == '\''delete'\'' ]]' "$repo_root/tools/check-boundary.sh" || fail 'check-boundary.sh must permit cleanup deletion of forbidden paths'
 
 if [[ "$strict" == true ]] && grep -Eq '<agent-name>|<agent-role>|<agent-mission>|<agent-vision>|<operator-language>' "$repo_root/AGENTS.md"; then
@@ -247,7 +294,7 @@ if [[ -f "$repo_root/tools/control-policy.tsv" ]]; then
     $1 !~ /^(exempt|forbidden|frozen|guarded|contract)$/ || $2 == "" || NF > 3 { bad = 1 }
     END { exit bad }
   ' "$repo_root/tools/control-policy.tsv" || fail 'tools/control-policy.tsv has an invalid row'
-  pins=('forbidden:.env*' 'frozen:knowledge/raw/*' 'frozen:knowledge/wiki/logs/*' 'guarded:AGENTS.md' 'guarded:skills/SKILLS.md' 'guarded:tools/SAFETY.md' 'guarded:tools/CONTROL.md' 'guarded:tools/TOOLS.md' 'guarded:tools/control-policy.tsv' 'guarded:tools/check-boundary.sh' 'guarded:tools/install-git-hooks.sh' 'guarded:tools/validate-agent-directory.sh' 'guarded:tools/task.sh' 'contract:projects/*/PROJECT.md')
+  pins=('forbidden:.env*' 'frozen:knowledge/raw/*' 'frozen:knowledge/wiki/logs/*' 'guarded:AGENTS.md' 'guarded:skills/SKILLS.md' 'guarded:tools/SAFETY.md' 'guarded:tools/CONTROL.md' 'guarded:tools/TOOLS.md' 'guarded:tools/control-policy.tsv' 'guarded:tools/check-boundary.sh' 'guarded:tools/install-git-hooks.sh' 'guarded:tools/validate-agent-directory.sh' 'guarded:tools/task.sh' 'guarded:tools/run-evals.py' 'guarded:evals/*' 'contract:projects/*/PROJECT.md')
   for pin in "${pins[@]}"; do
     tier="${pin%%:*}"
     pattern="${pin#*:}"
@@ -259,7 +306,10 @@ while IFS= read -r script; do
   /bin/bash -n "$repo_root/$script" || fail "$script fails bash -n"
 done < <(cd "$repo_root" && find tools -type f -name '*.sh' -print | LC_ALL=C sort)
 
+python3 -c 'import sys; compile(open(sys.argv[1], encoding="utf-8").read(), sys.argv[1], "exec")' "$repo_root/tools/run-evals.py" || fail 'tools/run-evals.py has invalid Python syntax'
+
 executables=(tools/append-knowledge-log.sh tools/build-context-cache.sh tools/check-boundary.sh tools/find-context.sh tools/install-git-hooks.sh tools/materialize-project-repositories.sh tools/task.sh tools/validate-agent-directory.sh)
+executables+=(tools/run-evals.py)
 for executable in "${executables[@]}"; do
   [[ -x "$repo_root/$executable" ]] || fail "$executable is not executable"
 done
@@ -293,6 +343,10 @@ if [[ "$full" == true ]]; then
   fi
   if (( failures == 0 )); then
     materialize_output="$(bash "$repo_root/tools/materialize-project-repositories.sh" --all --check 2>&1)" || fail "Independent Project check failed: $materialize_output"
+  fi
+  if (( failures == 0 )); then
+    eval_output="$(cd "$repo_root" && python3 tools/run-evals.py score --case evals/fixtures/eval-runtime/case.yaml --trace evals/fixtures/eval-runtime/pass.jsonl 2>&1)" || fail "Core eval runner self-check failed: $eval_output"
+    printf '%s\n' "$eval_output" | grep -Fq 'status=PASS' || fail 'Core eval runner self-check did not report PASS'
   fi
 fi
 

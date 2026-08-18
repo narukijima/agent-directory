@@ -24,7 +24,7 @@
 | `knowledge` | 取り込み、照会、統合 | `knowledge/KNOWLEDGE.md` |
 | `skill` | 再利用手順・研究方法 | `skills/SKILLS.md`と対象`SKILL.md` |
 | `project` | 固有作業・成果物・研究 | `projects/AGENTS.md` |
-| `meta` | 構造、規約、tool | 対象領域の正本と変更対象 |
+| `meta` | 構造、規約、eval、tool | 対象領域の正本と変更対象 |
 | `none` | 永続変更のない回答 | 追加ロードなし |
 
 ## Context Loading
@@ -72,6 +72,7 @@ target / destination / credential、目的・契約、不可逆対象、lifecycl
 - Project: `projects/PROJECTS.md`、`projects/LIFECYCLE.md`、`projects/RECOVERY.md`
 - Tool: `tools/TOOLS.md`
 - Safety: `tools/SAFETY.md`、`tools/CONTROL.md`
+- Eval: `evals/EVALS.md`、`evals/TRACE.md`
 
 ## 参照順序
 

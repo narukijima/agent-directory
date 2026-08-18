@@ -25,6 +25,8 @@ guarded	tools/validator/*	validator内部checker
 guarded	tools/task.sh	通常入口
 guarded	tools/lib/project-registry.sh	Git rootとOwner解決
 guarded	tools/materialize-project-repositories.sh	Independent Project再現
+guarded	tools/run-evals.py	Core behavioral eval runner
+guarded	evals/*	Core behavioral eval契約・case・fixture・profile
 guarded	projects/AGENTS.md	Project Route入口
 guarded	projects/DOCS.md	Project docs境界
 guarded	projects/LIFECYCLE.md	状態遷移

@@ -215,6 +215,8 @@ meta_files=(
   'projects/REPOSITORIES.md|repository-registry|Independent repository attachment registry'
   'projects/LIFECYCLE.md|project-lifecycle|Projectの状態遷移と削除条件'
   'projects/RECOVERY.md|project-recovery|Projectの目的不一致からの復旧'
+  'evals/EVALS.md|eval-policy|Agent Directory Core behavioral evalの規約'
+  'evals/TRACE.md|trace-contract|Behavioral traceの語彙と信頼境界'
   'tools/TOOLS.md|tool-policy|構造保守Toolの規約'
   'tools/SAFETY.md|safety-invariants|Workspace integrityを守る六つの安全不変条件'
   'tools/CONTROL.md|control-policy|commit・push境界執行と違反処理'
@@ -534,6 +536,7 @@ if [[ "$mode" != 'routing' ]]; then
       projects/*/STATE.md) kind='project-state' ;;
       projects/*/ARCHITECTURE.md) kind='project-architecture' ;;
       projects/*/docs/*) kind='project-doc' ;;
+      evals/cases/*.yaml) kind='eval' ;;
       tools/*) kind='tool' ;;
       *.md|*/*.md) kind='policy-or-document' ;;
     esac

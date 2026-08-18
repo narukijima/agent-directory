@@ -38,18 +38,19 @@ read-only回答で対象正本が明示されている場合はToolを必須に�
 
 ## Tool一覧
 
-固定実行Toolは次の8本だけとする。
+固定実行Toolは次の9本だけとする。
 
-| Tool | 責務 |
-|---|---|
-| `task.sh` | Route / Targetの薄い入口、局所検証、状態表示 |
-| `find-context.sh` | active候補を最大5件へ絞る |
-| `build-context-cache.sh` | catalog、manifest、任意SQLite索引の再生成 |
-| `validate-agent-directory.sh` | 公開構造、参照、サイズ、Tool allowlistの静的検証 |
-| `check-boundary.sh` | staged / rangeのsecret・frozen・protected境界検査 |
-| `install-git-hooks.sh` | managed pre-commit / pre-push hookの導入 |
-| `materialize-project-repositories.sh` | Independent Projectを登録revisionで再現・検査 |
-| `append-knowledge-log.sh` | Knowledge LOG追記と閾値rotation |
+| Tool | いつ使う | すること | しないこと |
+|---|---|---|---|
+| `task.sh` | 通常タスクの開始・検証・状態確認 | Route正本、target、Git rootの表示とvalidator呼出し | commit、push、公開 |
+| `find-context.sh` | targetが明示されていない探索時 | active候補を最大5件へ絞る | 正本の代わりに回答すること |
+| `build-context-cache.sh` | cache欠損・stale・full検証時 | catalog、manifest、任意SQLite索引の再生成 | cacheを正本にすること |
+| `validate-agent-directory.sh` | 変更後と公開前 | 構造、参照、サイズ、Tool/eval allowlist、scriptを静的検査 | Agentの行動品質を推測すること |
+| `check-boundary.sh` | commit・push直前 | secret、frozen、protected、non-FF境界を差分から検査 | commitやpushの実行 |
+| `install-git-hooks.sh` | clone後・control更新後 | managed pre-commit / pre-pushとapproved snapshotを導入 | 未管理hookの上書き |
+| `materialize-project-repositories.sh` | Independent cloneの再現・監査時 | registryのURLとrevisionからcloneを再現・検査 | credential保存、reset、merge、clean |
+| `append-knowledge-log.sh` | Knowledgeを永続変更したとき | LOG追記と閾値rotation | Knowledge本文の生成・判断 |
+| `run-evals.py` | Core行動契約を評価するとき | trace採点と隔離Workspaceでのadapter実行 | Provider実行、外部送信、static validatorの代替 |
 
 内部部品は直接実行しない。
 
@@ -113,6 +114,15 @@ tools/append-knowledge-log.sh --type <type> --target <path> --summary "変更内
 ```
 
 追記先は`knowledge/wiki/LOG.md`だけとし、閾値到達時は閉鎖済み四半期logへ決定的にrotationする。
+
+### Behavioral eval
+
+```bash
+python3 tools/run-evals.py score --case <case-name|path> --trace <trace.jsonl> [--json]
+python3 tools/run-evals.py run --adapter <executable> --profile core [--output-dir <dir>]
+```
+
+対象は`evals/EVALS.md`のCore契約だけとする。Provider、Runtime、認証、backup、外部送信のevalを追加しない。
 
 ## 相互参照
 

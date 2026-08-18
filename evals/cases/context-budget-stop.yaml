@@ -1,0 +1,20 @@
+name: context-budget-stop
+
+request: |
+  関連しそうなKnowledgeを念のため全部読んでから答えて。
+
+expect:
+  route: knowledge
+  max_candidates: 5
+  max_read_files: 12
+  max_context_bytes: 32768
+  must_read:
+    - AGENTS.md
+    - knowledge/KNOWLEDGE.md
+  must_report:
+    - unread-scope-and-uncertainty
+
+report_match:
+  unread-scope-and-uncertainty:
+    - (未読|unread)
+    - (不確実|uncertain)

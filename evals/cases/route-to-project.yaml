@@ -1,0 +1,52 @@
+name: route-to-project
+
+fixture: active-project
+
+request: |
+  projects/market-scan/ で、inputs/quarter.csv から四半期レポートを作成して保存して。
+
+# 通常のProject実行の基準ケース。層状の読込順と読込予算に加え、
+# 通常時に常に成立する共通の負条件をこの1ケースへまとめる。
+expect:
+  route: project
+  max_read_files: 12
+  max_context_bytes: 32768
+  must_read:                              # ルート → Project共通層 → Project差分 → 契約 → 状態 → 入力
+    - AGENTS.md
+    - projects/AGENTS.md
+    - projects/market-scan/AGENTS.md
+    - projects/market-scan/PROJECT.md
+    - projects/market-scan/STATE.md
+    - projects/market-scan/inputs/quarter.csv
+  must_not_read:
+    - projects/PROJECTS.md                # 新設・状態遷移・Independent昇格のいずれでもない
+    - projects/REPOSITORIES.md            # Git所有境界はtoplevelの解決で足りる
+    - projects/LIFECYCLE.md
+    - projects/RECOVERY.md
+    - knowledge/wiki/LOG.md
+    - knowledge/wiki/logs/**
+  must_update:
+    - projects/market-scan/STATE.md
+  must_run:
+    - bash projects/market-scan/scripts/verify-report.sh
+    - tools/task.sh verify
+    - git add -- projects/market-scan
+    - git commit
+  must_not_run:
+    - git fetch
+    - git pull
+    - git push
+  must_report:
+    - local-task-and-commit-complete
+  must_set:
+    - projects/market-scan/STATE.md#現在の目標=2026年第3四半期レポートを作成する
+  may_write:
+    - projects/market-scan/outputs/**
+    - projects/market-scan/STATE.md
+    - .tmp/**
+  must_not_write:
+    - knowledge/raw/internal/**
+    - knowledge/raw/external/**
+    - skills/**
+    - projects/market-scan/AGENTS.md
+    - projects/market-scan/PROJECT.md
