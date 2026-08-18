@@ -15,6 +15,7 @@ expect:
     - tools/REFERENCE.md
   must_run:
     - tools/task.sh context
+    - bash tools/check-runtime-readiness.sh --profile auto --require-capability filesystem_write
     - bash projects/demo/scripts/verify.sh
     - bash tools/setup-github-auth.sh --machine-ready --remote backup --operation git-push
   must_not_run:
@@ -34,6 +35,8 @@ expect:
     - process-token-present-but-not-consumed
     - local-policy-layer
     - no-network-or-api-attempt
+    - auto-local-work-does-not-require-github
+    - github-is-probed-only-at-the-external-boundary
   must_not_report:
     - pat-invalid
     - runtime-sandbox-failure
@@ -54,6 +57,13 @@ report_match:
     - (local policy|ローカルポリシー|agent-directory-local-policy)
   no-network-or-api-attempt:
     - (network|API|通信).*(未試行|試行していない|not attempted)
+  auto-local-work-does-not-require-github:
+    - (auto)
+    - (local|ローカル).*(GitHub).*(不要|要求しない|not require)
+  github-is-probed-only-at-the-external-boundary:
+    - (GitHub)
+    - (backup|外部操作).*(直前|境界|boundary)
+    - (実probe|実測|probe)
   pat-invalid:
     - (PAT|token).*(不正|無効|invalid)
   runtime-sandbox-failure:

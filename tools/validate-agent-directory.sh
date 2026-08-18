@@ -2572,6 +2572,16 @@ if [[ -f "$repo_root/tools/task.sh" ]]; then
 fi
 grep -Fq 'tools/SAFETY.md' "$repo_root/AGENTS.md" || \
   fail 'AGENTS.md does not route normal safety decisions to tools/SAFETY.md'
+for runtime_profile in ask auto full; do
+  grep -Eq "(^|[^[:alnum:]_])${runtime_profile}([^[:alnum:]_]|$)" "$repo_root/OPERATING_PROFILE.md" || \
+    fail "OPERATING_PROFILE.md does not define the $runtime_profile Runtime Profile"
+done
+grep -Fq '推奨default' "$repo_root/OPERATING_PROFILE.md" || \
+  fail 'OPERATING_PROFILE.md must make auto the recommended default without forcing Runtime settings'
+for capability_state in observed declared not-probed unavailable; do
+  grep -Fq "$capability_state" "$repo_root/OPERATING_PROFILE.md" || \
+    fail "OPERATING_PROFILE.md does not distinguish capability state: $capability_state"
+done
 for safety_number in 1 2 3 4 5 6; do
   grep -Eq "^${safety_number}\\. \\*\\*" "$repo_root/tools/SAFETY.md" || \
     fail "tools/SAFETY.md is missing invariant $safety_number"
@@ -2712,7 +2722,8 @@ if [[ "$full" == true && -z "${AGENT_VALIDATOR_NESTED_FIXTURE:-}" ]]; then
   runtime_readiness_status=$?
   set -e
   if (( runtime_readiness_status != 0 )) || \
-    [[ "$runtime_readiness_output" != *'workspace_root=observed filesystem_read=observed filesystem_write=not-probed'* || \
+    [[ "$runtime_readiness_output" != *'runtime_profile=auto runtime_profile_source=recommended-default'* || \
+      "$runtime_readiness_output" != *'workspace_root=observed filesystem_read=observed filesystem_write=not-probed'* || \
       "$runtime_readiness_output" != *'codex_executable=available codex_authentication=authenticated'* || \
       "$runtime_readiness_output" != *'claude_executable=available claude_authentication=authenticated'* || \
       "$runtime_readiness_output" != *'claude_oauth_env=present'* ]]; then
@@ -2734,6 +2745,48 @@ if [[ "$full" == true && -z "${AGENT_VALIDATOR_NESTED_FIXTURE:-}" ]]; then
   fi
 
   set +e
+  runtime_capability_output="$(cd "$runtime_readiness_fixture/work" && \
+    env PATH="$runtime_readiness_fixture/bin:$PATH" \
+      bash tools/check-runtime-readiness.sh --profile auto \
+        --require-capability filesystem_write --require-capability network \
+        --capability-state network=declared 2>&1)"
+  runtime_capability_status=$?
+  set -e
+  if (( runtime_capability_status != 0 )) || \
+    [[ "$runtime_capability_output" != *'runtime_profile=auto runtime_profile_source=explicit'* || \
+      "$runtime_capability_output" != *'required_capabilities=filesystem_write,network'* || \
+      "$runtime_capability_output" != *'filesystem_write=observed network=declared'* ]]; then
+    fail "runtime readiness fixture: explicit profile and capability declaration drifted: $runtime_capability_output"
+  fi
+
+  set +e
+  runtime_unverified_output="$(cd "$runtime_readiness_fixture/work" && \
+    env PATH="$runtime_readiness_fixture/bin:$PATH" \
+      bash tools/check-runtime-readiness.sh --profile ask --require-capability network 2>&1)"
+  runtime_unverified_status=$?
+  set -e
+  if (( runtime_unverified_status != 0 )) || \
+    [[ "$runtime_unverified_output" != *'runtime_profile=ask'* || \
+      "$runtime_unverified_output" != *'network=not-probed'* || \
+      "$runtime_unverified_output" != *'RUNTIME_READINESS_UNVERIFIED capabilities=network'* ]]; then
+    fail "runtime readiness fixture: an unprobed capability was not kept distinct: $runtime_unverified_output"
+  fi
+
+  set +e
+  runtime_unavailable_output="$(cd "$runtime_readiness_fixture/work" && \
+    env PATH="$runtime_readiness_fixture/bin:$PATH" \
+      bash tools/check-runtime-readiness.sh --profile full --require-capability network \
+        --capability-state network=unavailable 2>&1)"
+  runtime_unavailable_status=$?
+  set -e
+  if (( runtime_unavailable_status == 0 )) || \
+    [[ "$runtime_unavailable_output" != *'runtime_profile=full'* || \
+      "$runtime_unavailable_output" != *'network=unavailable'* || \
+      "$runtime_unavailable_output" != *'reason=capability-unavailable layer=runtime capability=network'* ]]; then
+    fail "runtime readiness fixture: a known unavailable capability was not blocked: $runtime_unavailable_output"
+  fi
+
+  set +e
   runtime_readiness_output="$(cd "$runtime_readiness_fixture/work/tools" && \
     env PATH="$runtime_readiness_fixture/bin:$PATH" \
       bash check-runtime-readiness.sh --require-claude 2>&1)"
@@ -2752,7 +2805,7 @@ if [[ "$full" == true && -z "${AGENT_VALIDATOR_NESTED_FIXTURE:-}" ]]; then
   set -e
   if (( runtime_readiness_status == 0 )) || \
     [[ "$runtime_readiness_output" != *'claude_authentication=unavailable'* || \
-      "$runtime_readiness_output" != *'reason=claude-authentication-unavailable'* ]]; then
+      "$runtime_readiness_output" != *'reason=claude-authentication-unavailable layer=external-provider'* ]]; then
     fail "runtime readiness fixture: missing Claude auth was accepted: $runtime_readiness_output"
   fi
 fi

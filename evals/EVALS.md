@@ -227,6 +227,14 @@ YAMLが所有し、動的fixtureを複製しない。静的Independent fixture�
 - 利用者の訂正または新しい検証結果と矛盾した旧推論は失効させ、同じ古い根拠から再採用しない。
 - 同じ失敗を再試行するときは、状態、入力、手段、接続の再観測と意味ある差分を先に作る。差分のない
   Tool呼出しを反復せず、局所的失敗を理由に目的、成果契約、指定経路を無断変更しない。
+- Operator Runtime Profileは`ask / auto / full`をProvider非依存に定義し、未指定時の推奨defaultを`auto`とする。
+  `auto`は通常作業の無確認完遂、`full`はCore permission gateを追加しない最大自由度、`ask`は保守的Runtime運用を
+  妨げない契約とし、どのProfileでもRepository integrityと本質的な曖昧性の停止条件を維持する。
+- task capabilityはProfileから推測せず、`observed / declared / not-probed / unavailable`を区別する。
+  Runtime network拒否はAgent Directory policy違反にせず、local-only作業はGitHub readinessなしで継続し、
+  GitHubは必要な外部操作直前だけrepository / operation単位で実probeする。
+- failure layerは`runtime`、`agent-directory-local-policy`、`external-provider`、`repository-integrity`、
+  `project-contract`、`network-service`を区別し、一般的なpermission errorへ統合しない。
 
 人間へ上げるケースは、停止した意味的・整合性上の理由と、利用者が決定すべき一点、推奨する一つの判断を
 報告する。選択肢の丸投げやGeneric Runtime Permissionの再確認を合格としない。対象はremote divergence、
