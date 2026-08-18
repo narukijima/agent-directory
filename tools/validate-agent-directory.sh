@@ -1285,7 +1285,7 @@ required_files=(
   'tools/setup-local-environment.sh' 'tools/check-runtime-readiness.sh'
   'tools/materialize-project-repositories.sh' 'tools/finalize-task.sh' 'tools/run-evals.py'
   'tools/lib/project-registry.sh' 'tools/validator/check-claude-settings.py'
-  'tools/validator/check-context-meta.sh' '.gitignore'
+  'tools/validator/check-context-meta.sh' 'tools/validator/test-router-boundaries.sh' '.gitignore'
   'tools/UPSTREAM.md' 'tools/report-upstream-issue.sh' 'tools/REFERENCE.md'
   'tools/THREAT_MODEL.md'
   "$knowledge_source_template_path" "$knowledge_topic_template_path"
@@ -1440,139 +1440,10 @@ check_heading_warning "$repo_root/skills/SKILLS.md" 30
 check_heading_warning "$repo_root/projects/PROJECTS.md" 30
 
 if [[ "$full" == true && -z "${AGENT_VALIDATOR_NESTED_FIXTURE:-}" ]]; then
-  # Root router budget fixture: deployment identity may grow without changing the
-  # router metric, while router growth and the whole-file hard limit remain enforced.
-  router_budget_fixture_dir="$(mktemp -d "${TMPDIR:-/tmp}/agent-router-budget.XXXXXX")"
-  cleanup_paths+=("$router_budget_fixture_dir")
-  placeholder_identity="$router_budget_fixture_dir/placeholder-identity.md"
-  deployed_identity="$router_budget_fixture_dir/deployed-identity.md"
-  placeholder_agents="$router_budget_fixture_dir/placeholder-AGENTS.md"
-  deployed_agents="$router_budget_fixture_dir/deployed-AGENTS.md"
-
-  cat > "$placeholder_identity" <<'PLACEHOLDER_IDENTITY'
-## 自己定義
-
-- あなたは`<agent-name>`（役割:`<agent-role>`）。作業領域は本ツリー内。
-- **使命:** `<agent-mission>` **ビジョン:** `<agent-vision>`。明示指示時のみ変更。
-- **運用者応対言語:** `<operator-language>`。運用者への質問、確認、進捗、報告は常にこの言語。
-  資料・Tool出力・作業対象が別言語でも切り替えず、明示指示時のみ変更。
-- 成果物・コード・引用・外部宛て文面の言語は対象Projectの契約に従い、応対言語と分離する。
-- `<...>`は導入時に置換する。
-PLACEHOLDER_IDENTITY
-  cat > "$deployed_identity" <<'DEPLOYED_IDENTITY'
-## 自己定義
-
-- あなたは`調査運用エージェント`（役割:`事業・技術横断の調査、実装、検証、記録を一貫して担う運用担当`）。作業領域は本ツリー内。
-- **使命:** 運用者から受け取った目的を、リポジトリに保存された正本と検証可能な事実へ結び付け、必要な調査、設計、実装、検証、記録までを一つの作業単位として完結する。短期的に回答を返すだけでなく、次回の担当者が同じ判断を再現できる証拠と経路を残し、外部サービスや自動化を扱う場合も承認境界、秘密情報、所有権、復旧可能性を崩さない。
-- **ビジョン:** 日々の小さな依頼から長期プロジェクトまで、Knowledge、Skill、Projectの責務を混ぜずに育て、文脈量が増えても必要な情報だけを正確に取り出せる持続可能なWorkspaceをつくる。人間は目的、優先順位、成果契約、不可逆な判断に集中し、定型的な調査と安全に検証できる実装はエージェントが自律的に完了する協働状態を目指す。
-- **運用者応対言語:** 日本語。運用者への質問、確認、進捗、報告は常に日本語で行う。資料・Tool出力・作業対象が別言語でも切り替えず、明示指示時のみ変更する。
-- 成果物・コード・引用・外部宛て文面の言語は対象Projectの契約に従い、応対言語と分離する。
-DEPLOYED_IDENTITY
-
-  write_router_budget_fixture() {
-    local identity_file="$1" output_file="$2"
-    awk '
-      FNR == NR { identity = identity $0 ORS; next }
-      {
-        heading = $0
-        sub(/\r$/, "", heading)
-        if (heading == "## 自己定義") { printf "%s", identity; skip = 1; next }
-        if (skip && heading ~ /^##[[:space:]]/) skip = 0
-        if (!skip) print
-      }
-    ' "$identity_file" "$repo_root/AGENTS.md" > "$output_file"
-  }
-  write_router_budget_fixture "$placeholder_identity" "$placeholder_agents"
-  write_router_budget_fixture "$deployed_identity" "$deployed_agents"
-
-  deployed_identity_bytes="$(wc -c < "$deployed_identity" | tr -d ' ')"
-  if (( deployed_identity_bytes < 1024 || deployed_identity_bytes > 1536 )); then
-    fail "router budget fixture: realistic Japanese self-definition must stay within 1-1.5KiB, got ${deployed_identity_bytes}B"
-  fi
-  placeholder_router_bytes="$(root_agents_router_bytes "$placeholder_agents")"
-  deployed_router_bytes="$(root_agents_router_bytes "$deployed_agents")"
-  [[ "$placeholder_router_bytes" == "$deployed_router_bytes" ]] || \
-    fail 'router budget fixture: placeholder and deployed self-definitions changed the router byte metric'
-
-  placeholder_budget_probe="$( (
-    warnings=0
-    check_root_agents_router_size_warning "$placeholder_agents" 6144 'root AGENTS.md router'
-    printf 'warnings=%s\n' "$warnings"
-  ) 2>&1 )"
-  deployed_budget_probe="$( (
-    warnings=0
-    check_root_agents_router_size_warning "$deployed_agents" 6144 'root AGENTS.md router'
-    printf 'warnings=%s\n' "$warnings"
-  ) 2>&1 )"
-  printf '%s\n' "$placeholder_budget_probe" | grep -Fqx 'warnings=0' || \
-    fail "router budget fixture: placeholder identity triggered a router warning: $placeholder_budget_probe"
-  printf '%s\n' "$deployed_budget_probe" | grep -Fqx 'warnings=0' || \
-    fail "router budget fixture: realistic deployed identity triggered a router warning: $deployed_budget_probe"
-
-  # Issue #92 regression: an adopter must have room for a small local contract without
-  # rewriting upstream router text merely to stay below the soft budget.
-  adopter_extension_agents="$router_budget_fixture_dir/adopter-extension-AGENTS.md"
-  cp "$placeholder_agents" "$adopter_extension_agents"
-  printf '\n## 導入先固有契約\n\n- 通常の固有契約を一文追加してもrouter warningを発生させない。\n' >> \
-    "$adopter_extension_agents"
-  adopter_extension_probe="$( (
-    warnings=0
-    check_root_agents_router_size_warning "$adopter_extension_agents" 6144 'root AGENTS.md router'
-    printf 'warnings=%s\n' "$warnings"
-  ) 2>&1 )"
-  printf '%s\n' "$adopter_extension_probe" | grep -Fqx 'warnings=0' || \
-    fail "router budget fixture: an adopter-local contract exhausted upstream headroom: $adopter_extension_probe"
-
-  router_overflow_agents="$router_budget_fixture_dir/router-overflow-AGENTS.md"
-  cp "$placeholder_agents" "$router_overflow_agents"
-  awk 'BEGIN { printf "\n## Router overflow\n\n"; for (i = 0; i < 6200; i++) printf "x"; printf "\n" }' \
-    >> "$router_overflow_agents"
-  router_overflow_probe="$( (
-    warnings=0
-    check_root_agents_router_size_warning "$router_overflow_agents" 6144 'root AGENTS.md router'
-    printf 'warnings=%s\n' "$warnings"
-  ) 2>&1 )"
-  printf '%s\n' "$router_overflow_probe" | grep -Fqx 'warnings=1' || \
-    fail "router budget fixture: actual router overflow did not warn: $router_overflow_probe"
-
-  hard_overflow_agents="$router_budget_fixture_dir/hard-overflow-AGENTS.md"
-  cp "$deployed_agents" "$hard_overflow_agents"
-  awk 'BEGIN { for (i = 0; i < 8193; i++) printf "h"; printf "\n" }' >> "$hard_overflow_agents"
-  hard_overflow_probe="$( (
-    failures=0
-    check_size "$hard_overflow_agents" 8192 'root AGENTS.md'
-    printf 'failures=%s\n' "$failures"
-  ) 2>&1 )"
-  printf '%s\n' "$hard_overflow_probe" | grep -Fqx 'failures=1' || \
-    fail "router budget fixture: whole-file hard overflow did not fail: $hard_overflow_probe"
-
-  placeholder_crlf="$router_budget_fixture_dir/placeholder-crlf.md"
-  deployed_crlf="$router_budget_fixture_dir/deployed-crlf.md"
-  awk '{ printf "%s\r\n", $0 }' "$placeholder_agents" > "$placeholder_crlf"
-  awk '{ printf "%s\r\n", $0 }' "$deployed_agents" > "$deployed_crlf"
-  [[ "$(root_agents_router_bytes "$placeholder_crlf")" == "$(root_agents_router_bytes "$deployed_crlf")" ]] || \
-    fail 'router budget fixture: CRLF self-definition boundaries changed the router metric'
-
-  eof_prefix="$router_budget_fixture_dir/eof-prefix.md"
-  eof_identity="$router_budget_fixture_dir/eof-identity.md"
-  printf '# Router\n\n## Route\n\nroute\n\n' > "$eof_prefix"
-  cp "$eof_prefix" "$eof_identity"
-  printf '## 自己定義\n\nidentity at EOF without a following H2' >> "$eof_identity"
-  [[ "$(root_agents_router_bytes "$eof_identity")" == "$(wc -c < "$eof_prefix" | tr -d ' ')" ]] || \
-    fail 'router budget fixture: a self-definition ending at EOF leaked into the router metric'
-
-  state_anchor_fixture="$router_budget_fixture_dir/state-anchor-suffix.md"
-  printf '%s\n' \
-    '## 現在の目標' \
-    '対象契約: `PROJECT.md#PC-01`（週次の公開を継続する）' \
-    '' \
-    '## 検証結果' \
-    '- 対象: `PROJECT.md#PC-01` — 検証済み' \
-    > "$state_anchor_fixture"
-  [[ "$(state_section_targets "$state_anchor_fixture" '## 現在の目標' '対象契約: `PROJECT.md#')" == 'PC-01' ]] || \
-    fail 'STATE anchor fixture: a current-target explanation after the closing backtick hid the contract anchor'
-  [[ "$(state_section_targets "$state_anchor_fixture" '## 検証結果' '- 対象: `PROJECT.md#')" == 'PC-01' ]] || \
-    fail 'STATE anchor fixture: a verification explanation after the closing backtick hid the contract anchor'
+  router_boundaries_output="$(bash "$repo_root/tools/validator/test-router-boundaries.sh" \
+    "$repo_root" 2>&1)" || fail "router boundary fixture failed: $router_boundaries_output"
+  printf '%s\n' "$router_boundaries_output" | grep -Fqx 'ROUTER_BOUNDARIES_OK checks=10' || \
+    fail 'router boundary fixture did not report the complete check set'
 fi
 
 if [[ "$strict" == true ]]; then
