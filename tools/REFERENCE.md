@@ -12,7 +12,7 @@ tools/task.sh finish --route <route> --target <path> --message "変更理由" --
 tools/task.sh status
 ```
 
-通常タスクの薄い入口。`context`はローカルの読込正本とGit Ownerだけを返し、GitHub remote、machine store、
+通常タスクの薄い入口。`context`はローカルの読込正本とGit Ownerだけを返し、GitHub remote、Agent `.env`、
 process tokenの状態では停止しない。GitHub capabilityは外部操作を所有するToolが操作直前に検査する。
 `verify`は`--changed`、`finish`は通常変更の検証・commit・backup、`status`はGit rootと変更件数を扱う。
 protected変更は`protected-change`へ返す。結果は`TASK_CONTEXT v2`または`TASK_OK|BLOCKED|FAILED`である。
@@ -181,25 +181,24 @@ pushせず、`--dry-run`はremoteへ書き込まない。成功とdry-runはstdo
 
 ## GitHub認証Tool
 
-通常localはOS account homeのmachine `github.env`、明示CIはallowlist付きprocess tokenだけを使う。値はisolated childだけへ渡し、
-fallback / login / Keychain / SSH / repairを行わない。保存は[SETUP.md](../SETUP.md#initial-setup)、riskは[threat model](agent-directory-threat-model.md)が所有する。
+通常localは現在のAgent Workspace rootの`.env`だけを使い、明示CIだけprocess tokenを許す。値はisolated childだけへ渡し、
+OS home / machine store / 別Agent / global environment / Keychainへfallbackしない。保存は[SETUP.md](../SETUP.md#initial-setup)、
+riskは[threat model](agent-workspace-env-threat-model.md)が所有する。
 
 ```bash
 bash tools/setup-github-auth.sh --install-token
 bash tools/setup-github-auth.sh --install-from-gh
-bash tools/setup-github-auth.sh --enroll-existing --remote origin --operation pull-requests-write
-bash tools/setup-github-auth.sh --machine-ready
-bash tools/setup-github-auth.sh --machine-ready --remote backup --operation git-push
+bash tools/setup-github-auth.sh --workspace-ready --remote backup --operation git-push
 bash tools/setup-github-auth.sh --check
 bash tools/test-github-auth.sh
 ```
 
-`--enroll-existing`はvalid storeを再入力なしでatomic追加し、GitHub側scopeは変えない。`--machine-ready`はnetworkなしでenrollmentを検査する。
+`--workspace-ready`はnetworkなしでAgent rootの`.env`と必要keyを検査する。
 `--check`はAPI / Gitをprobeし`GITHUB_AUTH_OK`、失敗は`GITHUB_AUTH_BLOCKED`を返す。診断
 `GITHUB_AUTH_DIAGNOSTIC`はsecretなしでlayer、target、transport、source、enrollment、試行面、到達、reason、status、evidenceを持つ。
 
 reasonはRuntime=`runtime-denied|executable-missing|credential-helper-missing|github-dns-failure|github-network-failure|github-timeout`、
-local policy=`github-repository-not-enrolled|github-operation-not-enrolled|github-remote-invalid|auth-store-*`、provider=`github-authentication-failed|github-authorization-failed|git-transport-mismatch`、unknown=`github-unknown-failure`。
+local policy=`agent-env-*|workspace-token-not-fine-grained|github-remote-invalid`、provider=`github-authentication-failed|github-authorization-failed|git-transport-mismatch`、unknown=`github-unknown-failure`。
 401/403以外の一般的な`Permission denied`をPAT拒否へ一般化せず、unknownを到達不能へ丸めない。
 
 ## report-upstream-issue.sh

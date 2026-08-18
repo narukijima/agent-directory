@@ -1,23 +1,23 @@
 #!/usr/bin/env bash
 
 # Shared GitHub authentication resolver for agent-directory Tools.
-# Credential values are kept in shell variables and are passed only to the exact
-# GitHub child process that needs them. Never source the machine credential file.
+# Each Agent Workspace owns its credential in <workspace-root>/.env. The file is
+# parsed without sourcing, and the token is passed only to the exact GitHub child.
 set +x
 
-GITHUB_AUTH_IMPLEMENTATION_VERSION=4
+github_auth_lib_root="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
+. "$github_auth_lib_root/agent-env.sh"
+
+GITHUB_AUTH_IMPLEMENTATION_VERSION=5
 GITHUB_AUTH_SOURCE='none'
 GITHUB_AUTH_REASON=''
 GITHUB_AUTH_LOGIN=''
-GITHUB_AUTH_MACHINE_FILE=''
+GITHUB_AUTH_CREDENTIAL_FILE=''
 GITHUB_AUTH_GIT_REASON=''
 GITHUB_AUTH_TOKEN=''
-GITHUB_AUTH_RESOURCE_OWNER=''
-GITHUB_AUTH_REPOSITORIES=''
-GITHUB_AUTH_OPERATIONS=''
 GITHUB_AUTH_PARSED_VALUE=''
-GITHUB_AUTH_MACHINE_FILE_PRESENT='no'
-GITHUB_AUTH_MACHINE_FILE_VALID='no'
+GITHUB_AUTH_CREDENTIAL_FILE_PRESENT='no'
+GITHUB_AUTH_CREDENTIAL_FILE_VALID='no'
 GITHUB_AUTH_REPOSITORY_ENROLLED='no'
 GITHUB_AUTH_OPERATION_ENROLLED='no'
 GITHUB_AUTH_REMOTE_RESOLVED='no'
@@ -28,42 +28,9 @@ GITHUB_AUTH_LAST_STATUS='0'
 GITHUB_AUTH_OPERATION='unknown'
 GITHUB_AUTH_REPOSITORY='unknown'
 
-github_auth_current_uid() { id -u; }
-
-github_auth_account_home() {
-  local account_home=''
-  if [[ "${AGENT_DIRECTORY_GITHUB_TESTING:-false}" == true &&
-    -n "${AGENT_DIRECTORY_GITHUB_HOME_OVERRIDE:-}" ]]; then
-    account_home="$AGENT_DIRECTORY_GITHUB_HOME_OVERRIDE"
-  elif command -v python3 >/dev/null 2>&1; then
-    account_home="$(python3 -c 'import os, pwd; print(pwd.getpwuid(os.getuid()).pw_dir)' 2>/dev/null || true)"
-  elif command -v getent >/dev/null 2>&1; then
-    account_home="$(getent passwd "$(github_auth_current_uid)" 2>/dev/null | awk -F: 'NR == 1 { print $6 }')"
-  fi
-  [[ -n "$account_home" && "$account_home" == /* ]] || {
-    GITHUB_AUTH_REASON='auth-home-unavailable'
-    return 1
-  }
-  printf '%s' "$account_home"
+github_auth_workspace_file() {
+  agent_env_file "$1" || { GITHUB_AUTH_REASON="$AGENT_ENV_REASON"; return 1; }
 }
-
-github_auth_machine_file() {
-  local account_home
-  account_home="$(github_auth_account_home)" || return 1
-  printf '%s/.config/agent-directory/github.env' "$account_home"
-}
-
-github_auth_stat_field() {
-  local target="$1" bsd_format="$2" gnu_format="$3" value=''
-  value="$(stat -f "$bsd_format" "$target" 2>/dev/null || true)"
-  [[ -n "$value" ]] || value="$(stat -c "$gnu_format" "$target" 2>/dev/null || true)"
-  printf '%s' "$value"
-}
-
-github_auth_stat_mode() { github_auth_stat_field "$1" '%Lp' '%a'; }
-github_auth_stat_uid() { github_auth_stat_field "$1" '%u' '%u'; }
-github_auth_stat_links() { github_auth_stat_field "$1" '%l' '%h'; }
-github_auth_stat_identity() { github_auth_stat_field "$1" '%d:%i' '%d:%i'; }
 
 github_auth_value_valid() {
   local value="$1"
@@ -73,7 +40,7 @@ github_auth_value_valid() {
   esac
 }
 
-github_auth_machine_pat_valid() {
+github_auth_pat_valid() {
   local value="$1"
   github_auth_value_valid "$value" || return 1
   [[ "$value" =~ ^github_pat_[A-Za-z0-9_]{20,}$ ]]
@@ -92,122 +59,19 @@ github_auth_operation_valid() {
   esac
 }
 
-github_auth_csv_valid() {
-  local csv="$1" kind="$2" item old_ifs="$IFS"
-  [[ -n "$csv" ]] || return 1
-  IFS=','
-  for item in $csv; do
-    [[ -n "$item" ]] || { IFS="$old_ifs"; return 1; }
-    case "$kind" in
-      repository) github_auth_repository_valid "$item" || { IFS="$old_ifs"; return 1; } ;;
-      operation) github_auth_operation_valid "$item" || { IFS="$old_ifs"; return 1; } ;;
-      *) IFS="$old_ifs"; return 1 ;;
-    esac
-  done
-  IFS="$old_ifs"
-}
-
-github_auth_repositories_match_owner() {
-  local csv="$1" owner="$2" item old_ifs="$IFS" normalized_owner normalized_item_owner
-  normalized_owner="$(printf '%s' "$owner" | tr '[:upper:]' '[:lower:]')"
-  IFS=','
-  for item in $csv; do
-    normalized_item_owner="$(printf '%s' "${item%%/*}" | tr '[:upper:]' '[:lower:]')"
-    [[ "$normalized_item_owner" == "$normalized_owner" ]] || { IFS="$old_ifs"; return 1; }
-  done
-  IFS="$old_ifs"
-}
-
-github_auth_machine_permissions() {
-  local file="$1" dir config_dir account_home mode uid links current_uid
-  account_home="$(github_auth_account_home)" || return 1
-  config_dir="$account_home/.config"
-  dir="$(dirname "$file")"
-  current_uid="$(github_auth_current_uid)"
-  [[ -d "$account_home" && ! -L "$account_home" ]] || { GITHUB_AUTH_REASON='auth-store-path'; return 1; }
-  [[ -d "$config_dir" && ! -L "$config_dir" ]] || { GITHUB_AUTH_REASON='auth-store-missing'; return 1; }
-  [[ -d "$dir" && ! -L "$dir" ]] || { GITHUB_AUTH_REASON='auth-store-missing'; return 1; }
-  [[ -f "$file" && ! -L "$file" ]] || { GITHUB_AUTH_REASON='auth-store-missing'; return 1; }
-  uid="$(github_auth_stat_uid "$dir")"
-  [[ "$uid" == "$current_uid" ]] || { GITHUB_AUTH_REASON='auth-store-owner'; return 1; }
-  uid="$(github_auth_stat_uid "$file")"
-  [[ "$uid" == "$current_uid" ]] || { GITHUB_AUTH_REASON='auth-store-owner'; return 1; }
-  mode="$(github_auth_stat_mode "$dir")"
-  [[ "$mode" == 700 ]] || { GITHUB_AUTH_REASON='auth-store-permissions'; return 1; }
-  mode="$(github_auth_stat_mode "$file")"
-  [[ "$mode" == 600 ]] || { GITHUB_AUTH_REASON='auth-store-permissions'; return 1; }
-  links="$(github_auth_stat_links "$file")"
-  [[ "$links" == 1 ]] || { GITHUB_AUTH_REASON='auth-store-hardlink'; return 1; }
-}
-
-# Strict v1 format. Any blank, comment, duplicate, unknown, or reordered line is rejected.
-github_auth_read_machine_file() {
-  local file="$1" identity_before identity_after line line_number=0
-  local format='' owner='' repositories='' operations='' token=''
+# Read only GH_TOKEN through the shared Agent-scoped dotenv parser.
+github_auth_read_workspace_file() {
+  local workspace_root="$1"
   GITHUB_AUTH_TOKEN=''
-  GITHUB_AUTH_RESOURCE_OWNER=''
-  GITHUB_AUTH_REPOSITORIES=''
-  GITHUB_AUTH_OPERATIONS=''
-  github_auth_machine_permissions "$file" || return 1
-  identity_before="$(github_auth_stat_identity "$file")"
-  [[ -n "$identity_before" ]] || { GITHUB_AUTH_REASON='auth-store-race'; return 1; }
-  while IFS= read -r line || [[ -n "$line" ]]; do
-    line_number=$((line_number + 1))
-    case "$line_number:$line" in
-      '1:AGENT_DIRECTORY_GITHUB_CREDENTIAL_V1') format=1 ;;
-      2:resource_owner=*) owner="${line#resource_owner=}" ;;
-      3:repositories=*) repositories="${line#repositories=}" ;;
-      4:operations=*) operations="${line#operations=}" ;;
-      5:GH_TOKEN=*) token="${line#GH_TOKEN=}" ;;
-      *) GITHUB_AUTH_REASON='machine-credential-invalid'; return 1 ;;
-    esac
-  done < "$file"
-  identity_after="$(github_auth_stat_identity "$file")"
-  [[ "$identity_before" == "$identity_after" ]] || { GITHUB_AUTH_REASON='auth-store-race'; return 1; }
-  [[ "$line_number" == 5 && "$format" == 1 ]] || { GITHUB_AUTH_REASON='machine-credential-invalid'; return 1; }
-  [[ "$owner" =~ ^[A-Za-z0-9][A-Za-z0-9_.-]*$ ]] || { GITHUB_AUTH_REASON='machine-credential-invalid'; return 1; }
-  github_auth_csv_valid "$repositories" repository || { GITHUB_AUTH_REASON='machine-credential-invalid'; return 1; }
-  github_auth_csv_valid "$operations" operation || { GITHUB_AUTH_REASON='machine-credential-invalid'; return 1; }
-  github_auth_machine_pat_valid "$token" || { GITHUB_AUTH_REASON='machine-token-not-fine-grained'; return 1; }
-  github_auth_repositories_match_owner "$repositories" "$owner" || {
-    GITHUB_AUTH_REASON='machine-credential-invalid'; return 1;
+  agent_env_get "$workspace_root" GH_TOKEN || {
+    GITHUB_AUTH_REASON="$AGENT_ENV_REASON"; return 1;
   }
-  GITHUB_AUTH_RESOURCE_OWNER="$owner"
-  GITHUB_AUTH_REPOSITORIES="$repositories"
-  GITHUB_AUTH_OPERATIONS="$operations"
-  GITHUB_AUTH_TOKEN="$token"
+  github_auth_pat_valid "$AGENT_ENV_VALUE" || {
+    GITHUB_AUTH_REASON='workspace-token-not-fine-grained'; return 1;
+  }
+  GITHUB_AUTH_TOKEN="$AGENT_ENV_VALUE"
+  AGENT_ENV_VALUE=''
   GITHUB_AUTH_REASON=''
-}
-
-github_auth_list_has() {
-  local csv="$1" expected="$2" item old_ifs="$IFS" normalized_item normalized_expected
-  normalized_expected="$(printf '%s' "$expected" | tr '[:upper:]' '[:lower:]')"
-  IFS=','
-  for item in $csv; do
-    normalized_item="$(printf '%s' "$item" | tr '[:upper:]' '[:lower:]')"
-    if [[ "$normalized_item" == "$normalized_expected" ]]; then
-      IFS="$old_ifs"
-      return 0
-    fi
-  done
-  IFS="$old_ifs"
-  return 1
-}
-
-github_auth_require_capability() {
-  local repository="$1" operation="$2"
-  GITHUB_AUTH_REPOSITORY_ENROLLED='no'
-  GITHUB_AUTH_OPERATION_ENROLLED='no'
-  github_auth_repository_valid "$repository" || { GITHUB_AUTH_REASON='github-destination-invalid'; return 1; }
-  github_auth_operation_valid "$operation" || { GITHUB_AUTH_REASON='github-operation-invalid'; return 1; }
-  github_auth_list_has "$GITHUB_AUTH_REPOSITORIES" "$repository" || {
-    GITHUB_AUTH_REASON='github-repository-not-enrolled'; return 1;
-  }
-  GITHUB_AUTH_REPOSITORY_ENROLLED='yes'
-  github_auth_list_has "$GITHUB_AUTH_OPERATIONS" "$operation" || {
-    GITHUB_AUTH_REASON='github-operation-not-enrolled'; return 1;
-  }
-  GITHUB_AUTH_OPERATION_ENROLLED='yes'
 }
 
 github_auth_repository_from_url() {
@@ -225,16 +89,19 @@ github_auth_repository_from_url() {
 github_auth_ci_resolve() {
   local repository="$1" operation="$2" token=''
   [[ "${CI:-false}" == true && "${AGENT_DIRECTORY_GITHUB_CI:-false}" == true ]] || {
-    GITHUB_AUTH_REASON='machine-credential-not-installed'; return 1;
+    GITHUB_AUTH_REASON='agent-env-missing'; return 1;
   }
   token="${GH_TOKEN:-${GITHUB_TOKEN:-}}"
-  github_auth_value_valid "$token" || { GITHUB_AUTH_REASON='github-authentication-failed'; return 1; }
+  github_auth_value_valid "$token" || {
+    GITHUB_AUTH_REASON='github-authentication-failed'; return 1;
+  }
   [[ -n "${GITHUB_REPOSITORY:-}" && "$repository" == "$GITHUB_REPOSITORY" ]] || {
     GITHUB_AUTH_REASON='github-repository-not-enrolled'; return 1;
   }
-  github_auth_list_has "${AGENT_DIRECTORY_GITHUB_CI_OPERATIONS:-metadata-read,git-read}" "$operation" || {
-    GITHUB_AUTH_REASON='github-operation-not-enrolled'; return 1;
-  }
+  case ",${AGENT_DIRECTORY_GITHUB_CI_OPERATIONS:-metadata-read,git-read}," in
+    *,"$operation",*) ;;
+    *) GITHUB_AUTH_REASON='github-operation-not-enrolled'; return 1 ;;
+  esac
   GITHUB_AUTH_TOKEN="$token"
   unset GH_TOKEN GITHUB_TOKEN
   GITHUB_AUTH_SOURCE='ci-process-token'
@@ -243,30 +110,37 @@ github_auth_ci_resolve() {
   GITHUB_AUTH_REASON=''
 }
 
-# Local resolution is machine-only. Process credentials are accepted solely in an
-# explicitly declared CI context with an exact repository and operation allowlist.
+# Normal local resolution is Agent Workspace-only. Ambient process credentials and
+# credentials owned by sibling Workspaces or the OS account are never consumed.
 github_auth_resolve() {
-  local workspace_root="${1:-}" repository="${2:-}" operation="${3:-metadata-read}" machine_file
+  local workspace_root="${1:-}" repository="${2:-}" operation="${3:-metadata-read}" credential_file
   GITHUB_AUTH_SOURCE='none'
   GITHUB_AUTH_REASON=''
   GITHUB_AUTH_TOKEN=''
   GITHUB_AUTH_OPERATION="$operation"
   GITHUB_AUTH_REPOSITORY="$repository"
-  GITHUB_AUTH_MACHINE_FILE_PRESENT='no'
-  GITHUB_AUTH_MACHINE_FILE_VALID='no'
+  GITHUB_AUTH_CREDENTIAL_FILE_PRESENT='no'
+  GITHUB_AUTH_CREDENTIAL_FILE_VALID='no'
   GITHUB_AUTH_REPOSITORY_ENROLLED='no'
   GITHUB_AUTH_OPERATION_ENROLLED='no'
   export GH_HOST='github.com'
   export GH_PROMPT_DISABLED=1
   export GH_NO_UPDATE_NOTIFIER=1
-  machine_file="$(github_auth_machine_file)" || return 1
-  GITHUB_AUTH_MACHINE_FILE="$machine_file"
-  if [[ -e "$machine_file" || -L "$machine_file" ]]; then
-    GITHUB_AUTH_MACHINE_FILE_PRESENT='yes'
-    github_auth_read_machine_file "$machine_file" || return 1
-    GITHUB_AUTH_MACHINE_FILE_VALID='yes'
-    GITHUB_AUTH_SOURCE='machine-file'
-    github_auth_require_capability "$repository" "$operation" || return 1
+  github_auth_repository_valid "$repository" || {
+    GITHUB_AUTH_REASON='github-destination-invalid'; return 1;
+  }
+  github_auth_operation_valid "$operation" || {
+    GITHUB_AUTH_REASON='github-operation-invalid'; return 1;
+  }
+  credential_file="$(github_auth_workspace_file "$workspace_root")" || return 1
+  GITHUB_AUTH_CREDENTIAL_FILE="$credential_file"
+  if [[ -e "$credential_file" || -L "$credential_file" ]]; then
+    GITHUB_AUTH_CREDENTIAL_FILE_PRESENT='yes'
+    github_auth_read_workspace_file "$workspace_root" || return 1
+    GITHUB_AUTH_CREDENTIAL_FILE_VALID='yes'
+    GITHUB_AUTH_SOURCE='workspace-env'
+    GITHUB_AUTH_REPOSITORY_ENROLLED='yes'
+    GITHUB_AUTH_OPERATION_ENROLLED='yes'
     return 0
   fi
   github_auth_ci_resolve "$repository" "$operation"
@@ -288,8 +162,8 @@ github_auth_classify_api_error() {
 
 github_auth_reason_layer() {
   case "$1" in
-    runtime-denied|executable-missing|credential-helper-missing|github-dns-failure|github-network-failure|github-timeout|auth-home-unavailable) printf 'runtime' ;;
-    auth-store-*|machine-*|github-repository-not-enrolled|github-operation-not-enrolled|github-operation-invalid|github-destination-invalid|github-remote-invalid) printf 'agent-directory-local-policy' ;;
+    runtime-denied|executable-missing|credential-helper-missing|github-dns-failure|github-network-failure|github-timeout) printf 'runtime' ;;
+    agent-env-*|workspace-token-not-fine-grained|github-repository-not-enrolled|github-operation-not-enrolled|github-operation-invalid|github-destination-invalid|github-remote-invalid) printf 'agent-directory-local-policy' ;;
     github-authentication-failed|github-authorization-failed|git-transport-mismatch) printf 'external-provider' ;;
     *) printf 'unclassified' ;;
   esac
@@ -334,9 +208,9 @@ github_auth_diagnostic() {
   local operation="${1:-unknown}" repository="${2:-unknown}" remote_name="${3:-none}"
   local transport="${4:-unknown}" status="${5:-$GITHUB_AUTH_LAST_STATUS}"
   local reason="${GITHUB_AUTH_REASON:-github-unknown-failure}"
-  printf 'GITHUB_AUTH_DIAGNOSTIC layer=%s operation=%s repository=%s remote=%s transport=%s credential_source=%s machine_file_present=%s machine_file_valid=%s process_token=%s repository_enrolled=%s operation_enrolled=%s network_attempted=%s api_attempted=%s git_attempted=%s request_reached=%s reason=%s exit_status=%s evidence=%s\n' \
+  printf 'GITHUB_AUTH_DIAGNOSTIC layer=%s operation=%s repository=%s remote=%s transport=%s credential_source=%s credential_file_present=%s credential_file_valid=%s workspace_scoped=yes process_token=%s repository_enrolled=%s operation_enrolled=%s network_attempted=%s api_attempted=%s git_attempted=%s request_reached=%s reason=%s exit_status=%s evidence=%s\n' \
     "$(github_auth_reason_layer "$reason")" "$operation" "$repository" "$remote_name" "$transport" \
-    "$GITHUB_AUTH_SOURCE" "$GITHUB_AUTH_MACHINE_FILE_PRESENT" "$GITHUB_AUTH_MACHINE_FILE_VALID" \
+    "$GITHUB_AUTH_SOURCE" "$GITHUB_AUTH_CREDENTIAL_FILE_PRESENT" "$GITHUB_AUTH_CREDENTIAL_FILE_VALID" \
     "$(github_auth_process_token_state)" "$GITHUB_AUTH_REPOSITORY_ENROLLED" "$GITHUB_AUTH_OPERATION_ENROLLED" \
     "$GITHUB_AUTH_NETWORK_ATTEMPTED" "$GITHUB_AUTH_API_ATTEMPTED" "$GITHUB_AUTH_GIT_ATTEMPTED" \
     "$(github_auth_request_reached "$reason")" "$reason" "$status" "$(github_auth_evidence_category "$reason")"

@@ -34,7 +34,7 @@ control-ordinary-failure-no-penalty
 failure-evidence-boundary
 correction-invalidates-stale-inference
 github-auth-no-token-leak
-github-machine-readiness-before-work
+github-workspace-readiness-at-external-boundary
 github-failure-fingerprint-no-identical-retry
 upstream-issue-privacy
 task-no-durable-delta

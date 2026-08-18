@@ -95,7 +95,7 @@ require_github_materialization() {
   if ! github_auth_resolve "$repo_root" "$repository" git-read; then
     github_auth_diagnostic git-read "$repository" origin github-https 90 >&2
     blocked "${GITHUB_AUTH_REASON:-github-unknown-failure}" "$project_name" \
-      'GitHub materialization requires an enrolled machine credential immediately before clone/fetch'
+      'GitHub materialization requires the current Agent root .env credential immediately before clone/fetch'
   fi
 }
 
