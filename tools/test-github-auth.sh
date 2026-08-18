@@ -285,7 +285,9 @@ for external_operation in issues-write pull-requests-write; do
   gate_status=$?
   set -e
   [[ "$gate_status" != 0 && "$gate_output" == *'reason=github-operation-not-enrolled'* && \
-    "$gate_output" == *"operation=$external_operation"* ]] || \
+    "$gate_output" == *"operation=$external_operation"* && \
+    "$gate_output" == *'credential_source=machine-file'* && \
+    "$gate_output" == *'exit_status=1'* ]] || \
     fail "$external_operation capability gate did not fail closed: $gate_output"
 done
 

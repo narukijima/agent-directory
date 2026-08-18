@@ -7,6 +7,12 @@ repo_root="$(CDPATH= cd -- "$tool_dir/.." && pwd -P)"
 require_codex=false
 require_claude=false
 probe_workspace_write=false
+write_probe=''
+
+cleanup() {
+  [[ -z "$write_probe" ]] || rm -f -- "$write_probe" 2>/dev/null || true
+}
+trap cleanup EXIT HUP INT TERM
 
 usage() {
   printf 'Usage: %s [--require-codex] [--require-claude] [--probe-workspace-write]\n' "${0##*/}" >&2
@@ -43,11 +49,11 @@ current_git_root="$(CDPATH= cd -- "$current_git_root" && pwd -P)"
 [[ -r "$repo_root/AGENTS.md" ]] || blocked 'filesystem-read-denied'
 
 filesystem_write='not-probed'
-write_probe=''
 if [[ "$probe_workspace_write" == true ]]; then
   write_probe="$(mktemp "$repo_root/.runtime-write-probe.XXXXXX" 2>/dev/null)" || \
     blocked 'filesystem-write-denied'
   rm -f -- "$write_probe" || blocked 'filesystem-write-cleanup-failed'
+  write_probe=''
   filesystem_write='observed'
 fi
 
