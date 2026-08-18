@@ -207,8 +207,6 @@ append_adopted_project() {
 meta_files=(
   'AGENTS.md|root-policy|最上位ブートローダー、Route判定、Context Loading'
   'README.md|overview|人間向けの導入と全体像'
-  'OPERATING_PROFILE.md|operating-profile|Provider分離、surface選択、handoff、recovery'
-  'SETUP.md|operator-setup|Runtime、認証、Workspace Trust、machine-local setup'
   'knowledge/KNOWLEDGE.md|knowledge-policy|Knowledge運用規約'
   'skills/SKILLS.md|skill-policy|Skill運用規約'
   'projects/AGENTS.md|project-entry|Project作業共通の入口と読込順序'

@@ -9,12 +9,12 @@ commit・push境界の機械検査、違反の分類と代謝、将来拡張の�
 依存しない層で実行前に拒否すること。判定の正本（policy）と判定器（verifier）はこのリポジトリ内で
 完結し、特定のAIハーネス・モデル・実行環境に依存しない。非ゴール（実装しない）:
 
-- shell、filesystem、network、sandbox、tool approval、Claude / Codex permission modeの許可判定
-- Agent ACL、permission database、Runtime permission matrix、独自sandbox、Provider別permission wrapper
+- shell、filesystem、network、sandbox、tool approval、Provider選択の許可判定
+- Agent ACL、permission database、Runtime permission matrix、独自sandbox
 - 監査用LLM、常駐daemon、Message Bus、Tool Brokerを通常経路へ入れること
 - 数値スコアの通信簿と、それを目的関数としてエージェントへ渡すこと
 - Git hookからのbackup、validator、ネットワーク操作の起動（hookは境界検査だけを行い、
-  `tools/BACKUP.md`の非ゴールを変更しない）
+  remote操作を開始しない）
 - validatorの代替。hookは差分境界の最終防壁であり、構造検証はvalidatorが所有する
 
 ## 執行の三層
@@ -42,7 +42,7 @@ GitHub noreplyと`example.invalid`は安全な既定とし、意図的に公開�
 repository-localな`agent-directory.allowed-public-email`へ明示登録する。
 hostname由来メールや個人home pathを偶発的に含めた履歴へallowlistを使ってはならない。検査導入前の
 未公開commitが原因でrange検査を前進commitでは解除できない場合も、verifierは過去blobを省略せず、
-履歴を自動変更しない。復旧は`tools/BACKUP.md#未公開履歴のprivacy訂正`だけが所有し、訂正後の履歴を
+  履歴を自動変更しない。復旧はOwnerが明示した手順だけで行い、訂正後の履歴を
 同じrange検査へ再投入する。
 合格は`BOUNDARY_OK checked=<n> guarded=<n> contract=<n>`、拒否は`BOUNDARY_BLOCKED reason=<reason>`を
 stdoutへ1行で出して非0で終了する（詳細はstderrの`DETAIL:`）。renameは旧pathの削除と新pathの追加へ
@@ -175,9 +175,8 @@ hookの拒否で実害なく止まった通常の誤操作は、やり直すだ�
 ## 委譲の境界
 
 通常の小さなタスクは単一の推論主体で完結し、利益のないサブエージェント分割を既定にしない。
-一方、同じProvider family内の独立調査、隔離review、読み取り専用並列化等でcapability差が成果へ明確に
-寄与する場合は、final ownerが抱え込まず構造化handoffを使える。Providerをまたぐ委譲は
-`OPERATING_PROFILE.md#cross-provider-handoff`の明示条件を追加で満たす。
+一方、独立調査、隔離review、読み取り専用並列化等でcapability差が成果へ明確に
+寄与する場合は、final ownerが抱え込まず構造化handoffを使える。Providerと実行環境の選択は各Agentが所有する。
 いずれの委譲も次のすべてが成立する場合だけ行う。
 
 - 作業が独立して並列実行でき、対象が読み取り専用か、書込先が衝突しない。
@@ -190,7 +189,7 @@ hookの拒否で実害なく止まった通常の誤操作は、やり直すだ�
 
 ## 導入基準（将来拡張の凍結）
 
-Runtime Permission systemは将来拡張にも含めず、Operator / Runtime側へ委ねる。
+Runtime Permission systemとProvider選択は将来拡張にも含めず、各Agent / Runtimeへ委ねる。
 agent-directory内で将来検討できるのはsemantic safetyとrepository integrityの次の機構だけである。
 導入は場当たりに判断せず、利用者の方針決定に基づいて設計する。
 

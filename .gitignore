@@ -3,11 +3,3 @@
 .env*
 !.env.example
 .DS_Store
-# AIクライアント固有のローカル状態。共有adapterだけ追跡し、個人設定とworktreeは追跡しない。
-.claude/*
-!.claude/settings.json
-.claude/settings.local.json
-.claude/worktrees/
-# .codex/も同じ方針: 共有adapterの environments/ だけ追跡し、hooks.json等のローカル状態は追跡しない。
-.codex/*
-!.codex/environments/

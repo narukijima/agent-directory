@@ -26,8 +26,6 @@ while IFS= read -r required_path; do
 done <<'META_CANON_PATHS'
 AGENTS.md
 README.md
-OPERATING_PROFILE.md
-SETUP.md
 knowledge/KNOWLEDGE.md
 skills/SKILLS.md
 projects/AGENTS.md

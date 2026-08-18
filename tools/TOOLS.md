@@ -53,6 +53,8 @@ backtick除去によるslugを使える。同じProject内でも対象ファイ�
 ## 一時作業と固定化
 
 - 一時コードと中間ファイルは`.tmp/`に置き、正式処理から参照せず、完了時に削除する。
+- 新しいToolは原則追加せず、既存Toolまたは対象Ownerの`scripts/`へ統合する。どうしても固定Toolの新設が
+  必要な場合は、追加前にOwnerへ目的、既存Toolへ統合できない理由、維持・検証方法を示して確認する。
 - 2回目に使う不安定なコードは所有先の`candidates/`へ、3回目の前に固定化を判断する。
 - 固定コードはProjectまたはSkillの`scripts/`、構造保守はこの`tools/`が所有し、実行・検証方法を持つ。
 - 外部共有、本番、金銭、権限、機密へ影響する処理は初回から固定コード相当の品質を要求する。
@@ -157,8 +159,6 @@ Private backup設定済みのroot所有workは`--root-only`、未設定は`not-c
 | `task.sh` | context、変更検証、終端処理の薄い共通入口 | `tools/REFERENCE.md` |
 | `build-context-cache.sh` | catalog・manifest・検索索引の再生成 | `tools/REFERENCE.md` |
 | `find-context.sh` | Route確定後の候補検索（metadata最大5件） | `tools/REFERENCE.md` |
-| `setup-local-environment.sh` | Codex / Claude Code共通のローカル初期化 | `tools/REFERENCE.md` |
-| `check-runtime-readiness.sh` | Runtime Profile、task capability、Workspace / Provider readinessのpreflight | `SETUP.md` / `tools/REFERENCE.md` |
 | `validate-agent-directory.sh` | 構造・境界・サイズの機械検査 | `tools/REFERENCE.md` |
 | `check-boundary.sh` / `install-git-hooks.sh` | commit・push境界検査とhook導入 | `tools/CONTROL.md` |
 

@@ -14,9 +14,6 @@ external-effect-approval-gate
 external-effect-ambiguous-destination
 explicit-file-delete-standing-authorization
 ambiguous-file-delete-refusal
-provider-semantic-authorization-parity
-provider-scoped-operating-profile
-scheduled-trigger-normal-task
 pr-required-remote-completion
 unowned-change-conflict
 backup-auto-after-verified-commit
@@ -34,7 +31,6 @@ control-ordinary-failure-no-penalty
 failure-evidence-boundary
 correction-invalidates-stale-inference
 github-auth-no-token-leak
-github-workspace-readiness-at-external-boundary
 github-failure-fingerprint-no-identical-retry
 upstream-issue-privacy
 task-no-durable-delta

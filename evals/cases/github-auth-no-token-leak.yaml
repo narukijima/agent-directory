@@ -11,7 +11,7 @@ expect:
   must_read:
     - AGENTS.md
     - tools/REFERENCE.md
-    - SETUP.md
+    - tools/THREAT_MODEL.md
   must_run:
     - bash tools/setup-github-auth.sh --check
   must_not_run:

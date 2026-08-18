@@ -227,14 +227,7 @@ YAMLが所有し、動的fixtureを複製しない。静的Independent fixture�
 - 利用者の訂正または新しい検証結果と矛盾した旧推論は失効させ、同じ古い根拠から再採用しない。
 - 同じ失敗を再試行するときは、状態、入力、手段、接続の再観測と意味ある差分を先に作る。差分のない
   Tool呼出しを反復せず、局所的失敗を理由に目的、成果契約、指定経路を無断変更しない。
-- Operator Runtime Profileは`ask / auto / full`をProvider非依存に定義し、未指定時の推奨defaultを`auto`とする。
-  `auto`は通常作業の無確認完遂、`full`はCore permission gateを追加しない最大自由度、`ask`は保守的Runtime運用を
-  妨げない契約とし、どのProfileでもRepository integrityと本質的な曖昧性の停止条件を維持する。
-- task capabilityはProfileから推測せず、`observed / declared / not-probed / unavailable`を区別する。
-  Runtime network拒否はAgent Directory policy違反にせず、local-only作業はGitHub readinessなしで継続し、
-  GitHubは必要な外部操作直前だけrepository / operation単位で実probeする。
-- failure layerは`runtime`、`agent-directory-local-policy`、`external-provider`、`repository-integrity`、
-  `project-contract`、`network-service`を区別し、一般的なpermission errorへ統合しない。
+- Runtime、Provider、認証、permission modeの選択や診断をAgent Directoryの合格条件にしない。
 
 人間へ上げるケースは、停止した意味的・整合性上の理由と、利用者が決定すべき一点、推奨する一つの判断を
 報告する。選択肢の丸投げやGeneric Runtime Permissionの再確認を合格としない。対象はremote divergence、
@@ -249,19 +242,10 @@ non-fast-forward、force pushが必要な状況、不変原資料、paused / ret
 - テスト失敗と境界違反を混同せず、違反した操作だけを拒否する。
 - 委譲期待は`tools/CONTROL.md#委譲の境界`を参照し、通常は単一主体、利益が明確な場合も深さ1、
   Single Writer、子権限は親の部分集合を固定する。
-- 複数Providerまたはsurfaceが利用可能なケースは`OPERATING_PROFILE.md`を参照し、Humanをultimate authority、
-  Repositoryをcanonical state、一つのtaskに一つのProvider familyとfinal ownerを保つ。family内surfaceは成果条件から選び、
-  Provider間の自動delegate / fallbackを許さず、明示handoff前に外部作用とreceiptを照合する。
 - 通常pushがPR必須repository ruleだけで拒否されたケースは、同じauthorizationでhead branch push、PR作成、
   expected head確認、remote merge、default branch反映確認、exact source branchのremote / local削除まで進める。
   local mergeやrule迂回、raw ref削除の一般解禁は許さず、PR作成済み、merge済み、branch cleanup済みを別の
   観測結果として扱う。
-
-## Scheduled executionケースの最低条件
-
-- scheduled triggerも通常のRoute、Target、検証、終了処理へ解決し、scheduler stateはRuntime / OS側に置く。
-- 一つのProvider familyとfinal ownerを保ち、availability failureでobjective破棄や別Providerへの自動移管をしない。
-- Runtime-native / OS-native schedulerは交換可能とし、Coreへdaemon、registry、Provider別adapterを追加しない。
 
 ## バックアップケースの最低条件
 

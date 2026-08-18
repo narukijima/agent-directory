@@ -15,12 +15,6 @@
 新概念より既存Ownerへの統合・削除を選ぶ。事実・推論・未確認を分け、単発失敗を一般化せず、訂正済み判断を
 再利用しない。再試行には状態・入力・手段の意味ある差分を伴わせる。
 
-## Runtime Permissionの責務境界
-
-Generic Runtime PermissionはOperator / Runtimeが所有し、本Coreはsemantic safetyとWorkspace integrityだけを扱う。
-許可済み操作を再承認させず、Provider別permission wrapperを追加しない。Profileは`ask / auto / full`、推奨defaultは`auto`。
-定義、mapping、capability観測は`OPERATING_PROFILE.md`と`SETUP.md`が所有する。
-
 ## Route
 
 依頼・明示パス・成果物からRouteを決めて入口を読む。Routeは話題の語ではなく変更対象で決める。
@@ -41,8 +35,8 @@ Generic Runtime PermissionはOperator / Runtimeが所有し、本Coreはsemantic
 ## 自律実行
 
 通常経路は`Route → Target → Work → Verify`、入口は`tools/task.sh`、書込Git rootはsessionごとに1つ。
-local context / edit / verifyはGitHubに依存させず、GitHubは外部操作直前だけrepository / operation単位で検査する。
-失敗層を分け、同じfingerprintを状態・入力・経路の差分なしに再試行しない。scheduled triggerも同じ通常経路を使う。
+Runtime、Provider、認証、permission mode、schedulerは各AgentとOperatorが所有し、本Coreは選択・設定・診断しない。
+失敗層を分け、同じfingerprintを状態・入力・経路の差分なしに再試行しない。
 
 明示依頼は同じ操作のStanding Authorizationである。target / destinationが一意で契約、secret、divergence、
 Single Writerと衝突しなければ、scope内の通常工程と設定済みbackupを追加承認なしで完了する。Runtimeが許可した
@@ -53,6 +47,8 @@ backup停止条件は`tools/BACKUP.md`が所有する。
 
 意味ある差分だけを永続化し、既定はno-op、`create`より`update / merge / supersede`を選ぶ。AIの推論を
 利用者の決定として保存せず、訂正は`knowledge/KNOWLEDGE.md#訂正の伝播`まで完結する。
+新しいTool、Skill、恒久的な仕組み、抽象化、依存は原則追加しない。既存Ownerへの統合で目的を満たせず、
+新設が必要な場合だけ、追加前にOwnerへ目的、既存へ統合できない理由、維持コストを示して確認する。
 
 ## 人間へ上げる例外
 
@@ -62,11 +58,9 @@ target / destination / credential、目的・契約、不可逆対象、lifecycl
 
 ## 禁止事項
 
-- Agent固有の環境変数・APIキー・token・外部サービス設定の実値はAgent Workspace rootの`.env`だけが所有する。
-  OS home、machine共通store、別Agent rootへ保存・fallbackせず、`.env*`実値はcommitしない。
+- APIキー、token、password、外部サービス設定の実値をcommitしない。保存と注入は各Agent / Runtimeが所有する。
 - GitHubを書込正本にしない。remote、push、divergence、privacy訂正は`tools/BACKUP.md`に従い、local pull / mergeと
   履歴書換えを行わない。repository ruleがPRを必須にする場合のremote mergeは`projects/PROJECTS.md`が所有する。
-- GitHub能力は`tools/setup-github-auth.sh --check`の実probeで判定する。認証詳細は通常経路で再実装しない。
 - 未依頼の機能・抽象化・依存を足さず、未検証を完了報告しない。
 - 一意な削除・移動だけを実行し、paused / retiredとProject削除は`projects/LIFECYCLE.md`に従う。
 - 下位`AGENTS.md`で上位規則・`PROJECT.md`を弱めない。
@@ -77,7 +71,7 @@ target / destination / credential、目的・契約、不可逆対象、lifecycl
 ## 詳細正本
 
 - Project: `projects/PROJECTS.md`、`projects/LIFECYCLE.md`、`projects/RECOVERY.md`
-- Tool: `tools/TOOLS.md`、`tools/REFERENCE.md`、`tools/BACKUP.md`、`tools/UPSTREAM.md`
+- Tool: `tools/TOOLS.md`、`tools/BACKUP.md`、`tools/UPSTREAM.md`
 - Safety / eval: `tools/SAFETY.md`、`tools/CONTROL.md`、`evals/EVALS.md`
 
 ## 参照順序

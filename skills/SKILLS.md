@@ -57,6 +57,8 @@ aliases: [別名]
 
 ## 新規作成・更新
 
+- Skillの新設は既存Skillの更新・統合で目的を満たせない場合だけ候補とし、作成前にOwnerへ確認する。
+  明示的な新規Skill作成依頼はこの確認を満たす。将来使うかもしれないという理由では追加しない。
 - `_template/`をコピーし、frontmatter、発動条件、手順、出力契約、Knowledge参照を置換する。
 - `_template/`自体はSkillではない。`SKILL.md`と`agents/`だけを持ち、空の下位フォルダを常設しない。
 - 利用者向け能力のコードはSkillの`candidates/`または`scripts/`が所有する。

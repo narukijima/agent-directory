@@ -8,7 +8,6 @@ expect:
   must_read:
     - AGENTS.md
     - tools/UPSTREAM.md
-    - SETUP.md
   must_run:
     - bash tools/report-upstream-issue.sh
   must_not_run:

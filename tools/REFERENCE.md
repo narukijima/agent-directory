@@ -75,46 +75,6 @@ backup（none|root-only|workspace|push-policy）のprofileを決定的に返す�
 Conditionalの成立判断はエージェントが行い、読込予算・読込順序の規約は変えない。
 出力は`TASK_CONTEXT v1`のkey=value行と`READ:`/`CONDITIONAL:`/`MISSING:`のpath列。
 
-## setup-local-environment.sh
-
-```bash
-bash tools/setup-local-environment.sh
-```
-
-Codex Desktopの`.codex/environments/agent-directory.toml`とClaude Codeの共有
-`.claude/settings.json`が呼ぶ唯一のローカル初期化Tool。`bash`、`git`、`python3`とGit rootを検査し、
-worktree固有の検索cacheを冪等に生成する。`user.name`は明示override、既存repo-local値、
-`AGENTS.md#自己定義`の推奨Agent名の優先順で扱い、推奨名はlocal値が無い場合だけ既定設定する。
-明示overrideは`--git-author-name <name>`または`AGENT_DIRECTORY_GIT_AUTHOR_NAME`で渡せる。
-emailと既存履歴は変更しない。
-新鮮なcacheはstat指紋のfast pathで再利用する。
-依存packageの追加、`.env*`のコピー、Git hook・remote・
-scheduleの変更、ネットワーク接続は行わない。成功は`LOCAL_ENVIRONMENT_READY`、停止は
-`LOCAL_ENVIRONMENT_BLOCKED reason=<reason>`を返す。
-
-## check-runtime-readiness.sh
-
-```bash
-bash tools/check-runtime-readiness.sh [--profile ask|auto|full]
-  [--require-codex] [--require-claude]
-  [--require-capability <name>]
-  [--capability-state <name>=declared|unavailable]
-  [--probe-workspace-write]
-```
-
-`--profile`はOperatorが選んだProvider非依存の`ask / auto / full`を宣言する。未指定時は`auto`を
-`runtime_profile_source=recommended-default`として表示するだけで、Runtime設定を変更しない。
-`--require-capability`は`filesystem_read`、`filesystem_write`、`network`、`localhost`、`process_spawn`、`git`、
-`github`、`browser`、`api`を反復指定できる。`--capability-state`はRuntimeが知る未実測の`declared`または
-既知の`unavailable`を渡す。filesystem writeは要求時または`--probe-workspace-write`指定時に一時fileで実測する。
-
-現在のcwd、filesystem read、process spawn、Gitを観測し、Codex / Claude Codeのexecutable、version、provider authenticationを
-別fieldでprobeする。未検査capabilityを`ready`とせず`not-probed`で返す。requiredが`not-probed`なら
-`RUNTIME_READINESS_UNVERIFIED`、`unavailable`ならlayer付き`RUNTIME_READINESS_BLOCKED`を返す。
-credential environmentは存在だけを報告し、値や認証commandの出力はstdout / stderrへ転送しない。
-GitHubの実ready判定はrepository / operationが必要なので、外部操作直前のGitHub認証Toolへ委ねる。
-詳細なsetup、Provider mapping、Trust、credential契約は`SETUP.md`が所有する。
-
 ## finalize-task.sh
 
 ```bash
@@ -185,8 +145,8 @@ pushせず、`--dry-run`はremoteへ書き込まない。成功とdry-runはstdo
 ## GitHub認証Tool
 
 通常localは現在のAgent Workspace rootの`.env`だけを使い、明示CIだけprocess tokenを許す。値はisolated childだけへ渡し、
-OS home / machine store / 別Agent / global environment / Keychainへfallbackしない。保存は[SETUP.md](../SETUP.md#initial-setup)、
-riskは[threat model](THREAT_MODEL.md)が所有する。
+OS home / machine store / 別Agent / global environment / Keychainへfallbackしない。riskは
+[threat model](THREAT_MODEL.md)が所有する。
 
 登録済みIndependent Projectでは、現在Git rootが`<agent-root>/projects/<name>`にあり、親registryのnameとremote repositoryが
 完全一致する場合だけ、親Agent rootをcredential ownerとして解決する。childの`.env`は見ず、`--install-token`も
@@ -230,7 +190,7 @@ registryと採用revisionからcloneを再現し、`--check`は整合だけを�
 bash tools/validate-agent-directory.sh [--strict] [--full] [--changed] [--base <ref>] [--bootstrap-status]
 ```
 
-- 通常: 必須構造、`AGENTS.md`/`CLAUDE.md`階層、metadata、Project契約とdocs境界、STATE、
+- 通常: 必須構造、`AGENTS.md`階層、metadata、Project契約とdocs境界、STATE、
   attachmentとroot ownership、サイズ、INDEX/LOG、eval schemaの静的検査
 - `--changed`: Git差分で変更されたProject・Knowledge・Skillだけを検査するFast Path。meta正本
   （tools、evals、領域正本、registry、template）へ及ぶ変更は全体静的検査へ自動fallbackする

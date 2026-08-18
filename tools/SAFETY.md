@@ -3,10 +3,9 @@
 通常作業で常に意識する安全境界はこの6項目だけである。実装詳細は必要時だけ
 `tools/CONTROL.md`、`tools/BACKUP.md`、`projects/LIFECYCLE.md`を読む。
 
-shell、filesystem、network、sandbox、tool approval、Providerのpermission modeはRuntime側が所有し、
-本安全核は許可・拒否しない。本書が扱うのは操作の意味、対象、Repository整合性だけである。
-Runtime拒否、Agent Directory local policy拒否、external provider拒否、Repository integrity拒否は別の発生層として
-報告し、一般的な「権限問題」へ統合しない。ローカル作業は任意の外部capability不足で開始前停止させない。
+shell、filesystem、network、sandbox、tool approval、Provider選択は各Agent / Runtimeが所有し、
+本安全核は設定・診断しない。本書が扱うのは操作の意味、対象、Repository整合性だけである。
+ローカル作業は任意の外部capability不足で開始前停止させない。
 
 ## 六つの不変条件
 
@@ -38,8 +37,8 @@ Runtime拒否、Agent Directory local policy拒否、external provider拒否、R
 | Write Root | `tools/lib/project-registry.sh`、validator | `projects/PROJECTS.md` |
 | Lifecycle | validator、Project契約 | `projects/LIFECYCLE.md` |
 | Secrets | `tools/check-boundary.sh`、validator | `tools/CONTROL.md` |
-| Standing Authorization | 対象固有Toolとallowlist | `AGENTS.md`、`tools/UPSTREAM.md`、各Project契約 |
-| Remote Integrity | backup / push Tool | `tools/BACKUP.md` |
+| Standing Authorization | 対象固有契約 | `AGENTS.md`、各Project契約 |
+| Remote Integrity | Gitと対象Project契約 | `tools/BACKUP.md` |
 | Control Integrity | `tools/control-policy.tsv`、managed hooks | `tools/CONTROL.md` |
 
 通常タスクは`tools/task.sh`を入口にし、この表の実装詳細を再推論しない。境界で停止した場合だけ

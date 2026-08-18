@@ -14,13 +14,13 @@ Knowledge、Skill、Projectを正本として育てながら、1タスクの読�
 本製品の継続的使命は、一体のAgentごとに検証可能で移植可能なdurable Agent Workspace仕様と決定的Toolを
 提供することである。公開製品として次を安定した合格条件とする。
 
-- Workspaceのidentity、Knowledge、Skill、Project、Runtime Permissionの責務境界が正本と実装で一致する。
+- Workspaceのidentity、Knowledge、Skill、Projectの責務境界が正本と実装で一致する。
 - 通常検証と対象変更のtestが、外部AIやHosted CIを必須にせず決定的に合格する。
 - 利用者がテンプレートからAgentを導入し、一般Projectを`PROJECT.md` / `STATE.md`で管理できる。
 - Independent repositoryを別Git・別remoteのままmaterializeし、固定revisionで再現・検証できる。
 
-本製品は複数製品のmonorepo、Runtime独自のsandbox / approval database、Provider別permission wrapper、
-Scheduler Engineを所有しない。公開仕様、テンプレート、validator、test、fixture、互換性契約、利用者向け文書を
+本製品は複数製品のmonorepo、Runtime設定、Provider選択、認証、permission system、Scheduler Engineを所有しない。
+公開仕様、テンプレート、validator、test、fixture、互換性契約、利用者向け文書を
 このrepositoryが所有し、特定Owner Agentの現在目標、優先順位、次の一手、長い運用履歴は所有しない。
 
 ## 利用開始
@@ -30,7 +30,7 @@ Scheduler Engineを所有しない。公開仕様、テンプレート、validat
    Agent名・役割はbacktickを保ったまま置換する。自己定義の名乗り行（`- あなたは…`）のbacktick語だけが
    上流報告の匿名化遮断語になり、応対言語・使命・ビジョンは遮断語にならない。
 3. `skills/_template/`または`projects/_template/`を、明示された必要に応じてコピーする。
-4. [SETUP.md](SETUP.md)に従ってmachine-localなruntime、認証、Workspace Trust、preflightを準備する。
+4. 利用するRuntime、Provider、認証、permissionをそのAgentの環境で設定する。
 5. `bash tools/install-git-hooks.sh --install`でcommit・push境界の検査hookを導入する。
 6. `bash tools/validate-agent-directory.sh --strict --full`を実行する。
 7. `tools/find-context.sh --route <route> --limit 5 -- "検索語"`で対象候補を絞って運用する。
@@ -43,14 +43,15 @@ Scheduler Engineを所有しない。公開仕様、テンプレート、validat
 - 常時守る安全境界は[tools/SAFETY.md](tools/SAFETY.md)の6項目だけとし、実装詳細は条件付きで読む。
 - 明示依頼を同じ操作のStanding Authorizationとして扱う。target / destinationが一意でsemantic safetyを
   満たす公開、送信、通常push、削除は追加承認なしで完了し、曖昧性と整合性の不足だけを人間へ確認する。
-- Provider非依存のOperator Runtime Profileは`ask / auto / full`とし、通常の推奨defaultは`auto`にする。
-  ProfileはRuntime設定を強制せず、task別capabilityの`observed / declared / not-probed / unavailable`と分離する。
+- RuntimeとProviderは各Agent / Operatorが選び、本テンプレートは特定製品の設定や運用フローを固定しない。
 - リポジトリ内の正本を会話記憶、製品側AIメモリ、検索結果より優先する。
 - `raw/internal/`と`raw/external/`の既存原資料は同じ強さで保護し、変更・削除しない。
 - 完了・停止・廃止を物理archiveで表さず、frontmatterの状態で検索から除外する。
 - 全件台帳をLLMへ渡さず、状態付きの決定的検索で候補を絞る。
 - 派生catalogと自動生成DBは削除・再生成可能とし、恒久参照先にしない。
 - ベクトルDB、常駐サービス、CI、外部課金は既定で導入しない。
+- 新しいTool、Skill、恒久的仕組み、抽象化、依存は原則追加しない。既存Ownerへ統合できず新設が必要な場合は、
+  目的、統合できない理由、維持コストを示してOwnerへ事前確認する。
 
 ## Route
 
@@ -71,11 +72,6 @@ Routeの区分と対象は[AGENTS.md](AGENTS.md#route)が正本である。本�
 ```text
 agent-directory/
 ├── AGENTS.md                     # ブートローダー兼ルーター兼目次
-├── CLAUDE.md                     # @AGENTS.md
-├── SETUP.md                      # Operator / machine側setupの正本
-├── OPERATING_PROFILE.md          # Provider分離とOpenAI surface選択の推奨運用モデル
-├── .codex/environments/          # Codex DesktopのLocal Environment
-├── .claude/settings.json         # Claude Codeの共有project hook
 ├── .agent-cache/                 # Git管理外の派生物
 ├── knowledge/
 │   ├── KNOWLEDGE.md
@@ -92,7 +88,6 @@ agent-directory/
 │   └── _template/                # SKILL.mdとagents/だけ
 ├── projects/
 │   ├── AGENTS.md                 # Project作業共通の薄い入口
-│   ├── CLAUDE.md                 # @AGENTS.md
 │   ├── PROJECTS.md               # Projectシステムの詳細正本。条件付きで読む
 │   ├── REPOSITORIES.md           # Independent Projectのattachment registry
 │   ├── .gitignore                # registryから導出するignore projection
@@ -104,40 +99,11 @@ agent-directory/
 └── tools/                        # task.sh、SAFETY.md、THREAT_MODEL.mdほかTool正本
 ```
 
-## ローカル実行環境
+## RuntimeとProvider
 
-`AGENTS.md`を共通の判断規約、`tools/`を決定的処理の正本とし、AIクライアント固有設定は薄いadapterにする。
-
-| 層 | 共有入口 | 責務 |
-|---|---|---|
-| 共通 | `AGENTS.md` / `tools/setup-local-environment.sh` | 規約と冪等な初期化 |
-| Codex Desktop | `.codex/environments/agent-directory.toml` | worktree作成時のSetupと共通Actions |
-| Claude Code | `.claude/settings.json` | 新規`SessionStart`から同じSetupを呼ぶ |
-
-setup、認証、Workspace Trust、runtime preflightの詳細は[SETUP.md](SETUP.md)が所有する。共通Setupは
-`bash`、`git`、`python3`とGit rootを確認し、Git管理外の検索cacheを生成する。
-`--git-author-name`または`AGENT_DIRECTORY_GIT_AUTHOR_NAME`の明示overrideがあれば適用し、なければ既存の
-repo-local `user.name`を保持する。local値も未設定のときだけ`AGENTS.md#自己定義`の推奨Agent名を
-既定値にする。emailと既存履歴は変更しない。既存cacheが新鮮なら本文を再読しないfast pathを使う。
-`.env*`のコピー、package追加、
-Git hook・remote・scheduleの変更、ネットワーク接続は行わない。Git hookと、設定済みGitHub backupを持つ
-Workspaceのmachine認証Gateは[SETUP.md](SETUP.md#initial-setup)の明示コマンドとして分離する。CodexのActionsは限定検証、full検証、hook状態確認を
-既存Toolへ直接つなぎ、GitHub認証状態は既存の`tools/setup-github-auth.sh --check`へ明示的に接続する。
-GitHub認証Actionは実APIと実remoteを検査するが、共通local Setupからは呼ばない。初回machine setupでは
-GitHub backup構成に限って正本手順から実行し、判定ロジックをadapterへ複製しない。
-Claude Codeの`.worktreeinclude`も既定では置かず、
-`.env*`などGit管理外ファイルをworktreeへ複製する必要が確認されたWorkspaceだけで個別に設計する。
-
-### Provider-Scoped Operating Profile
-
-一つのtaskは原則として一つのProvider familyと一人のfinal ownerが完了まで所有する。OpenAIを主対象とし、
-Chatは対話・ワンショット、ChatGPT Workは複数工程とreview可能な完成成果物、Codexはsoftware・repository・
-technical workを初期判断とする。ただし製品名による硬い禁止表にはせず、Humanの明示指定、Project契約、
-primary deliverable、必要capability、acceptance criteriaからAgent自身がsurfaceを選ぶ。
-
-Anthropicを選んだtaskはAnthropic family内で完結させる。OpenAIとAnthropicを固定分業させず、Providerをまたぐ
-自動delegateと自動fallbackを行わない。明示handoff、Single Owner、partial executionの照合、Scheduled Execution、
-Runtime-native coordinationの境界は[OPERATING_PROFILE.md](OPERATING_PROFILE.md)が所有する。
+Runtime、Provider、認証、permission、machine-local setupは各Agent / Operatorが所有する。
+本テンプレートは固有adapter、推奨Profile、Provider間の分業、fallback、認証設定を提供しない。
+必要な設定は利用する製品の公式手順と対象Agentの契約に従って追加する。
 
 ## Attachment境界
 
@@ -196,15 +162,8 @@ tools/task.sh context --route project --target projects/<name>
 tools/task.sh context --route meta --target tools/TOOLS.md
 ```
 
-`context`とローカル探索・編集・検証は、設定済みGitHub remoteやcredentialの状態から独立して開始する。
-Agent固有の環境変数・secret・API token・外部サービス設定はすべてAgent Workspace rootの`.env`が所有し、OS home、
-machine共通store、Keychain、別Workspace、global process environmentを正本にしない。各Toolは
-`tools/lib/agent-env.sh`で必要なkeyだけを非実行parseし、`.env`全体をsourceしない。GitHub操作は同じrootの
-`GH_TOKEN`だけを子processへ限定注入し、別Agentのcredentialへfallbackしない。登録済みIndependent Projectでは
-Project Git rootとcredential ownerを分け、`projects/REPOSITORIES.md`で完全一致した親Agent rootの`.env`を使う。
-導入と実probeは
-`setup-github-auth.sh --install-token` / `--workspace-ready` / `--check`を使う。境界は
-[Agent-scoped environment threat model](tools/THREAT_MODEL.md)を参照する。
+`context`とローカル探索・編集・検証は、remoteやcredentialの状態から独立して開始する。
+secretの保存と外部サービス認証は各Agent / Runtimeが所有し、実値をrepositoryへcommitしない。
 
 明示パスと正本の明示参照を最優先とし、検索結果は候補として扱う。選択後に正本を読む。
 `.agent-cache/`は正本から再生成され、検索のstale回復はrouting catalogだけを一度作り直す。
@@ -223,7 +182,7 @@ bash tools/validate-agent-directory.sh --full --base main
 python3 tools/run-evals.py score --case <case> --trace <trace.jsonl>
 ```
 
-validatorは構造、`AGENTS.md`と`CLAUDE.md`の三層、frontmatter、Project契約、状態、Project docsの境界と
+validatorは構造、`AGENTS.md`階層、frontmatter、Project契約、状態、Project docsの境界と
 命名、参照上限、サイズ、INDEX、LOG、eval schema、派生cacheの決定的再生成、禁止されたGit追跡を検査する。
 `--changed`は変更されたProject・Knowledge・Skillだけを検査し、baseline未指定ならHEAD、タスク開始SHAが
 あるなら`--base <sha>`で開始点からworking treeまでを検査する。不変原資料・閉鎖済みlogの編集や削除、
@@ -251,8 +210,7 @@ behavioral eval、上流Issue報告はOptional capabilityであり、該当機�
 定期実行が必要なら、第一選択として利用中Productの`Runtime-native scheduler`、fallbackとして
 `launchd` / `systemd timer` / `cron`をOperatorまたは対象Projectが設定する。scheduled triggerは通常taskを
 起動するだけで、別Route、別Executor、別commit lifecycleを作らない。このrepositoryは既定scheduleや
-Scheduler Engineを持たない。詳細と交換可能なcurrent mappingは
-[OPERATING_PROFILE.md](OPERATING_PROFILE.md#scheduled-execution)が所有する。
+Scheduler Engineを持たない。具体的な設定は各Agent / Operatorが所有する。
 
 ## ローカル正本とGitHubバックアップ
 
@@ -273,7 +231,6 @@ Toolは前提違反ならremoteを変更せず停止する。backup失敗は検�
 | 正本 | 所有する内容 |
 |---|---|
 | [AGENTS.md](AGENTS.md) | 自己定義、共通判断原則、Route判定、Context Loading、自律実行と例外、禁止事項、目次 |
-| [OPERATING_PROFILE.md](OPERATING_PROFILE.md) | Provider分離、OpenAI surface選択、明示handoff、Single Owner、recovery、Scheduled Execution |
 | [knowledge/KNOWLEDGE.md](knowledge/KNOWLEDGE.md) | 四層構造、保存先、不変規則、命名、限定取得、INDEX、LOG |
 | [skills/SKILLS.md](skills/SKILLS.md) | Skillの選択、frontmatter、Knowledge参照、構造 |
 | [projects/AGENTS.md](projects/AGENTS.md) | Project作業共通の着手・実行・完了手順 |

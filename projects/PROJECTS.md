@@ -47,7 +47,6 @@ projects/<project-name>/
 ├── PROJECT.md
 ├── STATE.md
 ├── AGENTS.md         # 任意。作業差分がある場合だけ
-├── CLAUDE.md         # AGENTS.mdがあるときのブリッジ（@AGENTS.md）
 ├── ARCHITECTURE.md   # 任意。Project全体の構造地図
 ├── docs/             # 任意。Domain Canonと詳細文書（構成は次節）
 ├── inputs/           # Project固有の入力
@@ -86,7 +85,7 @@ root Gitがそのpath配下を追跡しているかの三つで行う。
 
 ### Canonical Ownership
 
-Independentでは`projects/<name>/**`のすべて（契約、状態、個別`AGENTS.md`と`CLAUDE.md`、docs、入出力、
+Independentでは`projects/<name>/**`のすべて（契約、状態、個別`AGENTS.md`、docs、入出力、
 コード、Git履歴）をProject固有Gitが所有し、root Gitは内部ファイルを一つも追跡しない。root側へ
 `PROJECT.md`や`STATE.md`のコピーを残さず、同じ契約と状態を二つのGitへ複製しない。
 

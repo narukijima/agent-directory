@@ -439,19 +439,6 @@ check_root_agents_router_size_warning() {
   fi
 }
 
-# CLAUDE.md is a bridge holding only @AGENTS.md and must not own any rules of its own.
-validate_claude_bridge() {
-  local agents_file="$1"
-  local claude_file="${agents_file%/AGENTS.md}/CLAUDE.md"
-  if [[ ! -f "$claude_file" ]]; then
-    fail "$(relative_path "$agents_file") requires a sibling CLAUDE.md importing @AGENTS.md"
-    return 0
-  fi
-  if ! printf '@AGENTS.md\n' | cmp -s - "$claude_file"; then
-    fail "$(relative_path "$claude_file") must contain only @AGENTS.md and own no rules"
-  fi
-}
-
 # A per-Project delta file must not own the deliverable contract or the current state.
 validate_project_agents_file() {
   local agents_file="$1"
@@ -504,7 +491,6 @@ validate_project_agents_file() {
     esac
   fi
 
-  validate_claude_bridge "$agents_file"
 }
 
 # Extract from the Project Docs Route section only the read targets that form a valid conditional reference.
@@ -595,7 +581,7 @@ validate_project_docs() {
 
   if [[ "$has_docs" == 'true' || -f "$architecture_file" ]]; then
     if [[ ! -f "$agents_file" ]]; then
-      fail "$rel_project has docs/ or ARCHITECTURE.md and therefore requires $rel_project/AGENTS.md carrying the conditional Project Docs Route (and a sibling CLAUDE.md containing only @AGENTS.md)"
+      fail "$rel_project has docs/ or ARCHITECTURE.md and therefore requires $rel_project/AGENTS.md carrying the conditional Project Docs Route"
       return 0
     fi
     if ! grep -Fqx '## Project Docs Route' "$agents_file"; then
@@ -1158,7 +1144,7 @@ if [[ "$changed" == true && "$full" != true ]]; then
   while IFS= read -r changed_path; do
     [[ -n "$changed_path" ]] || continue
     case "$changed_path" in
-      projects/_template/*|projects/AGENTS.md|projects/CLAUDE.md|projects/PROJECTS.md|projects/DOCS.md|\
+      projects/_template/*|projects/AGENTS.md|projects/PROJECTS.md|projects/DOCS.md|\
 projects/LIFECYCLE.md|projects/RECOVERY.md|projects/REPOSITORIES.md|projects/.gitignore)
         scope_supported=false; break ;;
       projects/*/*)
@@ -1249,8 +1235,6 @@ projects/LIFECYCLE.md|projects/RECOVERY.md|projects/REPOSITORIES.md|projects/.gi
       validate_project_docs "$scoped_dir"
       if [[ -f "$scoped_dir/AGENTS.md" ]]; then
         validate_project_agents_file "$scoped_dir/AGENTS.md"
-      elif [[ -f "$scoped_dir/CLAUDE.md" ]]; then
-        fail "projects/$scoped_name/CLAUDE.md exists without a sibling AGENTS.md to import"
       fi
     done <<< "$scoped_projects"
     while IFS= read -r changed_path; do
@@ -1271,9 +1255,8 @@ projects/LIFECYCLE.md|projects/RECOVERY.md|projects/REPOSITORIES.md|projects/.gi
 fi
 
 required_files=(
-  'AGENTS.md' 'CLAUDE.md' 'projects/AGENTS.md' 'projects/CLAUDE.md'
-  '.codex/environments/agent-directory.toml' '.claude/settings.json'
-  'README.md' 'SETUP.md' 'OPERATING_PROFILE.md' 'knowledge/KNOWLEDGE.md' "$knowledge_index_path" "$knowledge_log_path"
+  'AGENTS.md' 'projects/AGENTS.md'
+  'README.md' 'knowledge/KNOWLEDGE.md' "$knowledge_index_path" "$knowledge_log_path"
   'skills/SKILLS.md' 'skills/_template/SKILL.md' 'projects/PROJECTS.md' 'projects/DOCS.md' 'projects/LIFECYCLE.md' 'projects/RECOVERY.md'
   "$registry_path" "$ignore_path"
   'projects/_template/PROJECT.md' 'projects/_template/STATE.md' 'evals/EVALS.md'
@@ -1282,9 +1265,8 @@ required_files=(
   'tools/BACKUP.md' 'tools/BACKUP-RECOVERY.md'
   'tools/build-context-cache.sh' 'tools/find-context.sh' 'tools/prepare-context.sh'
   'tools/append-knowledge-log.sh' 'tools/backup-to-github.sh' 'tools/validate-agent-directory.sh'
-  'tools/setup-local-environment.sh' 'tools/check-runtime-readiness.sh'
   'tools/materialize-project-repositories.sh' 'tools/finalize-task.sh' 'tools/run-evals.py'
-  'tools/lib/project-registry.sh' 'tools/validator/check-claude-settings.py'
+  'tools/lib/project-registry.sh'
   'tools/validator/check-context-meta.sh' 'tools/validator/test-router-boundaries.sh' '.gitignore'
   'tools/UPSTREAM.md' 'tools/report-upstream-issue.sh' 'tools/REFERENCE.md'
   'tools/THREAT_MODEL.md'
@@ -1300,57 +1282,6 @@ if LC_ALL=C grep -q $'\r' "$repo_root/tools/validate-agent-directory.sh"; then
 fi
 if grep -Fq 'cat-file blob "$blob" |' "$repo_root/tools/check-boundary.sh"; then
   fail 'tools/check-boundary.sh must materialize a blob before quiet grep checks; cat-file pipelines race under pipefail'
-fi
-
-# AIクライアント固有設定は共通Toolを呼ぶ薄いadapterに固定し、ロジックや秘密情報を複製しない。
-codex_environment="$repo_root/.codex/environments/agent-directory.toml"
-grep -Fqx 'version = 1' "$codex_environment" || fail 'Codex Local Environment must declare version = 1'
-grep -Fqx 'name = "agent-directory"' "$codex_environment" || fail 'Codex Local Environment name must be agent-directory'
-grep -Fqx 'script = "bash tools/setup-local-environment.sh"' "$codex_environment" || \
-  fail 'Codex Local Environment setup must call tools/setup-local-environment.sh'
-for codex_action in \
-  'command = "bash tools/validate-agent-directory.sh --changed"' \
-  'command = "bash tools/validate-agent-directory.sh --full"' \
-  'command = "bash tools/install-git-hooks.sh --status"' \
-  'command = "bash tools/setup-github-auth.sh --check"' \
-  'command = "bash tools/check-runtime-readiness.sh"'; do
-  grep -Fqx "$codex_action" "$codex_environment" || \
-    fail "Codex Local Environment lost its pinned action: $codex_action"
-done
-if grep -Fq -- '--expected-login' "$codex_environment"; then
-  fail 'Codex Local Environment must not pin a user-specific GitHub login'
-fi
-
-claude_settings_checker="$repo_root/tools/validator/check-claude-settings.py"
-validate_claude_settings_file() {
-  local settings_path="$1"
-  python3 "$claude_settings_checker" "$settings_path" || return 1
-  ! grep -Eq '\.env|GH_TOKEN|GITHUB_TOKEN|API_KEY' "$settings_path"
-}
-
-validate_claude_settings_file "$repo_root/.claude/settings.json" || \
-  fail 'Claude Code settings must keep the exact pinned SessionStart setup hook without secret-bearing settings'
-
-claude_settings_fixture_dir="$repo_root/evals/fixtures/claude-settings"
-for accepted_settings in \
-  pass-permissions.json pass-permissions-allow.json pass-unrelated-top-level.json \
-  pass-other-hook-event.json; do
-  require_file "$claude_settings_fixture_dir/$accepted_settings"
-  validate_claude_settings_file "$claude_settings_fixture_dir/$accepted_settings" || \
-    fail "Claude settings fixture must accept Runtime-owned settings: $accepted_settings"
-done
-for rejected_settings in \
-  fail-missing-session-start.json fail-command-changed.json fail-matcher-changed.json \
-  fail-extra-session-hook.json fail-secret-setting.json \
-  fail-secret-setting-unicode-escaped.json; do
-  require_file "$claude_settings_fixture_dir/$rejected_settings"
-  if validate_claude_settings_file "$claude_settings_fixture_dir/$rejected_settings"; then
-    fail "Claude settings fixture must reject a changed pinned hook or secret setting: $rejected_settings"
-  fi
-done
-
-if grep -Eq '\.env|GH_TOKEN|GITHUB_TOKEN|API_KEY' "$codex_environment"; then
-  fail 'local environment adapters must not copy or name secret-bearing files and variables'
 fi
 
 # Immutable source material has exactly two areas, internal/external, both protected with the same strength.
@@ -1410,7 +1341,7 @@ done < <(find "$repo_root" \
   -type f -path '*/projects/*/docs/README.md' -print0)
 
 # Do not permanently ship docs/, ARCHITECTURE.md, or AGENTS.md in the Project template.
-for template_entry in AGENTS.md CLAUDE.md ARCHITECTURE.md docs; do
+for template_entry in AGENTS.md ARCHITECTURE.md docs; do
   [[ ! -e "$repo_root/projects/_template/$template_entry" ]] || \
     fail "projects/_template must not ship $template_entry; only the Project that needs it creates it"
 done
@@ -1477,8 +1408,6 @@ if [[ -d "$repo_root/projects/_archive" ]]; then
 fi
 
 # The root is both bootloader and router; it holds the Route table and entry files as references that must exist.
-validate_claude_bridge "$repo_root/AGENTS.md"
-validate_claude_bridge "$repo_root/projects/AGENTS.md"
 if [[ -f "$repo_root/AGENTS.md" ]]; then
   for route_token in knowledge skill project meta none; do
     grep -Eq "^\| *\`$route_token\` *\|" "$repo_root/AGENTS.md" || \
@@ -1508,13 +1437,6 @@ while IFS= read -r -d '' project_agents_file; do
   validate_project_agents_file "$project_agents_file"
 done < <(find "$repo_root/projects" "$repo_root/evals/fixtures" \
   \( "${repository_prune[@]}" \) -prune -o -type f -name 'AGENTS.md' -print0)
-
-while IFS= read -r -d '' orphan_claude_file; do
-  [[ -f "$(dirname "$orphan_claude_file")/PROJECT.md" ]] || continue
-  [[ -f "$(dirname "$orphan_claude_file")/AGENTS.md" ]] || \
-    fail "$(relative_path "$orphan_claude_file") exists without a sibling AGENTS.md to import"
-done < <(find "$repo_root/projects" "$repo_root/evals/fixtures" \
-  \( "${repository_prune[@]}" \) -prune -o -type f -name 'CLAUDE.md' -print0)
 
 while IFS= read -r -d '' nested_git; do
   fail "nested Git repository is forbidden unless it is a registered Independent Project clone: $(relative_path "$nested_git")"
@@ -1631,11 +1553,6 @@ if command -v git >/dev/null 2>&1 && git -C "$repo_root" rev-parse --show-toplev
       fail "$guarded_path must never be ignored by the root repository"
     fi
   done
-  for shared_adapter in '.codex/environments/agent-directory.toml' '.claude/settings.json'; do
-    if git -C "$repo_root" check-ignore -q -- "$shared_adapter" 2>/dev/null; then
-      fail "$shared_adapter is a shared adapter and must not be ignored by the root repository"
-    fi
-  done
   for embedded_contract in "$repo_root"/projects/*/PROJECT.md; do
     [[ -f "$embedded_contract" ]] || continue
     embedded_name="$(basename "$(dirname "$embedded_contract")")"
@@ -1712,27 +1629,26 @@ required_cases=(
   router-size-overflow-delegation independent-push-policy-gated
   external-effect-approval-gate external-effect-ambiguous-destination
   explicit-file-delete-standing-authorization ambiguous-file-delete-refusal
-  provider-semantic-authorization-parity canon-conflict-escalation unowned-change-conflict
+  canon-conflict-escalation unowned-change-conflict
   independent-promotion-session-boundary independent-repository-materialization
   independent-remote-update-handoff root-clean-independent-repository-safety
   public-foundation-owner-state-boundary general-project-state-contract-retained
   root-agents-router-scope project-agents-optional project-agents-diff-only
-  project-agents-no-contract-copy project-agents-claude-bridge
+  project-agents-no-contract-copy
   knowledge-internal-record-storage knowledge-external-source-storage
   research-question-to-project research-method-to-skill project-research-knowledge-promotion
   project-docs-route-required project-docs-design-entry project-architecture-entry
   project-domain-sense-not-spec project-docs-readme-forbidden independent-root-content-boundary
   canonical-area-entry-names
-  scheduled-trigger-normal-task
   control-policy-tamper control-mixed-scope-commit-split control-ordinary-failure-no-penalty
   failure-evidence-boundary correction-invalidates-stale-inference
-  delegation-default-off delegation-depth-one provider-scoped-operating-profile
+  delegation-default-off delegation-depth-one
   pr-required-remote-completion
   upstream-issue-privacy upstream-issue-preapproved-send upstream-issue-fixed-destination
   upstream-issue-allowlisted-destination
   github-auth-env-absence-is-not-failure github-auth-workspace-credential
   github-auth-real-capability-probe github-auth-no-token-leak upstream-drafted-is-not-success
-  github-workspace-readiness-at-external-boundary github-failure-fingerprint-no-identical-retry
+  github-failure-fingerprint-no-identical-retry
   upstream-auth-no-runtime-repair backup-shared-github-auth backup-https-credential-helper
   backup-ssh-does-not-require-token
   decay-knowledge-current-clean decay-knowledge-current-aged
@@ -1769,7 +1685,7 @@ if [[ -f "$core_profile" ]]; then
     protect-immutable-records protect-paused-project \
     external-effect-approval-gate external-effect-ambiguous-destination \
     explicit-file-delete-standing-authorization ambiguous-file-delete-refusal \
-    provider-semantic-authorization-parity unowned-change-conflict \
+    unowned-change-conflict \
     backup-auto-after-verified-commit \
     explicit-backup-current-project-work explicit-backup-unowned-current-work \
     backup-divergence-refusal \
@@ -1991,14 +1907,6 @@ for git_child_control in 'core.hooksPath=/dev/null' 'credential.helper=' \
   grep -Fq "$git_child_control" "$github_auth_lib" || \
     fail "GitHub child Git is missing isolation control: $git_child_control"
 done
-github_workspace_case="$repo_root/evals/cases/github-workspace-readiness-at-external-boundary.yaml"
-for forbidden_workspace_command in 'gh auth login' 'git credential-osxkeychain get' \
-  'security find-internet-password' 'security find-generic-password'; do
-  grep -Fqx "    - $forbidden_workspace_command" "$github_workspace_case" || \
-    fail "github-workspace-readiness-at-external-boundary must reject auth divergence: $forbidden_workspace_command"
-done
-grep -Fq -- '--operation git-push' "$github_workspace_case" || \
-  fail 'github-workspace-readiness-at-external-boundary must defer the capability gate until backup'
 grep -Fq 'github-failure-fingerprint-no-identical-retry' \
   "$repo_root/evals/cases/github-failure-fingerprint-no-identical-retry.yaml" || \
   fail 'Core evals must reject identical GitHub retries without a meaningful delta'
@@ -2341,73 +2249,6 @@ grep -Fq 'matching-local-source-branch-deleted-after-checkout-moved-safely' \
   fail 'PR-required remote eval does not require safe local source branch cleanup'
 grep -Fq 'PR必須rule時の限定remote merge' "$repo_root/tools/BACKUP.md" || \
   fail 'tools/BACKUP.md does not classify PR-required remote merge'
-grep -Fq 'OPERATING_PROFILE.md' "$repo_root/README.md" || \
-  fail 'README.md does not register OPERATING_PROFILE.md'
-grep -Fq '[SETUP.md](SETUP.md)' "$repo_root/README.md" || \
-  fail 'README.md does not route initial setup to SETUP.md'
-for setup_heading in '## Supported runtimes' '## Initial setup' '## Workspace root' \
-  '## Claude authentication' '## Provider-specific setup' '## Preflight checks' \
-  '## Scheduled / unattended execution' '## Provider isolation and recovery' '## Machine-local secrets' \
-  '## Multi-machine notes' '## Troubleshooting' '## Verification'; do
-  grep -Fqx -- "$setup_heading" "$repo_root/SETUP.md" || \
-    fail "SETUP.md is missing its setup boundary: $setup_heading"
-done
-for setup_contract in 'claude setup-token' 'CLAUDE_CODE_OAUTH_TOKEN' 'claude auth status' \
-  'https://code.claude.com/docs/en/authentication' 'https://code.claude.com/docs/en/security' \
-  '実際に作業するAgent Workspace / Git rootをworking directoryとして起動' \
-  '内部fieldを直接patchする方法はCore recommendationにしない' \
-  '両Providerを導入していてもtask ownerを共有させない' \
-  '別Providerを自動worker、reviewer、fallbackにしない'; do
-  grep -Fq -- "$setup_contract" "$repo_root/SETUP.md" || \
-    fail "SETUP.md lost a required runtime setup contract: $setup_contract"
-done
-for profile_heading in '## 適用と優先順位' '## Core契約' '## Providerの選択と分離' \
-  '## 自律的なSurface選択' '## OpenAI Provider Profile' '## 複合タスクとSingle Owner' \
-  '## Anthropic Provider Profile' '## Cross-provider Handoff' '## AvailabilityとRecovery' \
-  '## Deterministic Execution Layer' '## Repository State' '## Scheduled Execution' '## 変更耐性'; do
-  grep -Fqx -- "$profile_heading" "$repo_root/OPERATING_PROFILE.md" || \
-    fail "OPERATING_PROFILE.md is missing its responsibility boundary: $profile_heading"
-done
-# Guard Provider isolation, autonomous surface judgment, and durable Core invariants.
-grep -Fq 'Reference Architecture' "$repo_root/OPERATING_PROFILE.md" || \
-  fail 'OPERATING_PROFILE.md must identify itself as a non-mandatory Reference Architecture'
-grep -Fq 'Human / Operatorはultimate authority' "$repo_root/OPERATING_PROFILE.md" || \
-  fail 'OPERATING_PROFILE.md must preserve Human / Operator authority'
-grep -Fq 'one task → one provider family → one final owner' "$repo_root/OPERATING_PROFILE.md" || \
-  fail 'OPERATING_PROFILE.md must preserve one Provider family and final owner per task'
-grep -Fq '本テンプレートはOpenAIを主対象' "$repo_root/OPERATING_PROFILE.md" || \
-  fail 'OPERATING_PROFILE.md must identify OpenAI as the primary concrete profile'
-for openai_surface in '| Chat |' '| ChatGPT Work |' '| Codex |'; do
-  grep -Fq "$openai_surface" "$repo_root/OPERATING_PROFILE.md" || \
-    fail "OPERATING_PROFILE.md lost its OpenAI surface guidance: $openai_surface"
-done
-grep -Fq 'surface mappingは硬い禁止表ではない' "$repo_root/OPERATING_PROFILE.md" || \
-  fail 'OPERATING_PROFILE.md must preserve autonomous non-rigid surface selection'
-grep -Fq 'Providerをまたぐ自動delegateと自動fallbackを行わない' "$repo_root/OPERATING_PROFILE.md" || \
-  fail 'OPERATING_PROFILE.md must reject automatic cross-Provider delegation and fallback'
-grep -Fq '直接起動できないsurfaceへ仕事を送った、開始した、完了したと推測してはならない' \
-  "$repo_root/OPERATING_PROFILE.md" || \
-  fail 'OPERATING_PROFILE.md must not invent unsupported cross-surface dispatch'
-grep -Fq 'Anthropicを選んだtaskは、Claude、Claude Code、Anthropic API等のAnthropic family内で完了' \
-  "$repo_root/OPERATING_PROFILE.md" || \
-  fail 'OPERATING_PROFILE.md must keep Anthropic tasks inside the Anthropic family'
-grep -Fq 'Repositoryのtracked canonical state' "$repo_root/OPERATING_PROFILE.md" || \
-  fail 'OPERATING_PROFILE.md must preserve repository canonical state'
-grep -Fq '`Runtime-native scheduler`' "$repo_root/OPERATING_PROFILE.md" || \
-  fail 'OPERATING_PROFILE.md must keep scheduled execution in the Runtime capability boundary'
-grep -Fq '`Route → Target → Work → Verify → Finish`' "$repo_root/OPERATING_PROFILE.md" || \
-  fail 'OPERATING_PROFILE.md must route scheduled triggers through the normal task lifecycle'
-grep -Fq 'Scheduler Engine、daemon、schedule registry' "$repo_root/OPERATING_PROFILE.md" || \
-  fail 'OPERATING_PROFILE.md must refuse an agent-owned scheduler subsystem'
-grep -Fq 'file changes、Git state、生成output、external' "$repo_root/OPERATING_PROFILE.md" || \
-  fail 'OPERATING_PROFILE.md must reconcile partial execution before handoff or recovery'
-grep -Fq '別Providerへ自動fallbackしない' "$repo_root/OPERATING_PROFILE.md" || \
-  fail 'OPERATING_PROFILE.md must stop instead of automatically changing Provider families'
-grep -Fq '独自Provider router、workflow engine、queue、RPC、daemonをCoreへ追加しない' \
-  "$repo_root/OPERATING_PROFILE.md" || \
-  fail 'OPERATING_PROFILE.md must refuse a Core-owned Provider orchestration subsystem'
-grep -Fqx '## Scheduled executionケースの最低条件' "$repo_root/evals/EVALS.md" || \
-  fail 'evals/EVALS.md does not own the scheduled execution case minimum conditions'
 # The operator interaction language contract is presence-checked like the other bootloader
 # contracts: deleting the three lines must fail even outside --strict (#28).
 grep -Fq '運用者応対言語' "$repo_root/AGENTS.md" || \
@@ -2458,16 +2299,6 @@ if [[ -f "$repo_root/tools/task.sh" ]]; then
 fi
 grep -Fq 'tools/SAFETY.md' "$repo_root/AGENTS.md" || \
   fail 'AGENTS.md does not route normal safety decisions to tools/SAFETY.md'
-for runtime_profile in ask auto full; do
-  grep -Eq "(^|[^[:alnum:]_])${runtime_profile}([^[:alnum:]_]|$)" "$repo_root/OPERATING_PROFILE.md" || \
-    fail "OPERATING_PROFILE.md does not define the $runtime_profile Runtime Profile"
-done
-grep -Fq '推奨default' "$repo_root/OPERATING_PROFILE.md" || \
-  fail 'OPERATING_PROFILE.md must make auto the recommended default without forcing Runtime settings'
-for capability_state in observed declared not-probed unavailable; do
-  grep -Fq "$capability_state" "$repo_root/OPERATING_PROFILE.md" || \
-    fail "OPERATING_PROFILE.md does not distinguish capability state: $capability_state"
-done
 for safety_number in 1 2 3 4 5 6; do
   grep -Eq "^${safety_number}\\. \\*\\*" "$repo_root/tools/SAFETY.md" || \
     fail "tools/SAFETY.md is missing invariant $safety_number"
@@ -2478,28 +2309,13 @@ if [[ -f "$repo_root/tools/prepare-context.sh" ]]; then
   "$syntax_bash" -n "$repo_root/tools/prepare-context.sh" 2>/dev/null || \
     fail 'tools/prepare-context.sh fails bash -n'
 fi
-grep -Fq 'setup-local-environment.sh' "$repo_root/tools/TOOLS.md" || \
-  fail 'tools/TOOLS.md does not register setup-local-environment.sh'
-if [[ -f "$repo_root/tools/setup-local-environment.sh" ]]; then
-  [[ -x "$repo_root/tools/setup-local-environment.sh" ]] || \
-    fail 'tools/setup-local-environment.sh is not executable'
-  "$syntax_bash" -n "$repo_root/tools/setup-local-environment.sh" 2>/dev/null || \
-    fail 'tools/setup-local-environment.sh fails bash -n'
-fi
-grep -Fq 'check-runtime-readiness.sh' "$repo_root/tools/TOOLS.md" || \
-  fail 'tools/TOOLS.md does not register check-runtime-readiness.sh'
-if [[ -f "$repo_root/tools/check-runtime-readiness.sh" ]]; then
-  [[ -x "$repo_root/tools/check-runtime-readiness.sh" ]] || \
-    fail 'tools/check-runtime-readiness.sh is not executable'
-  "$syntax_bash" -n "$repo_root/tools/check-runtime-readiness.sh" 2>/dev/null || \
-    fail 'tools/check-runtime-readiness.sh fails bash -n'
-fi
 for github_auth_consumer in tools/backup-to-github.sh tools/report-upstream-issue.sh; do
   grep -Fq 'expected_login="${AGENT_DIRECTORY_GITHUB_EXPECTED_LOGIN:-}"' \
     "$repo_root/$github_auth_consumer" || \
     fail "$github_auth_consumer must not carry a user-specific default GitHub login"
 done
-if [[ "$full" == true && -z "${AGENT_VALIDATOR_NESTED_FIXTURE:-}" ]]; then
+if [[ "$full" == true && -f "$repo_root/tools/setup-local-environment.sh" && \
+  -z "${AGENT_VALIDATOR_NESTED_FIXTURE:-}" ]]; then
   local_environment_fixture="$(mktemp -d "${TMPDIR:-/tmp}/agent-validator-local-environment.XXXXXX")"
   cleanup_paths+=("$local_environment_fixture")
   mkdir -p "$local_environment_fixture/work/tools"
@@ -2732,14 +2548,14 @@ if [[ -f "$repo_root/tools/control-policy.tsv" ]]; then
   fi
   # Pin the load-bearing rows so the policy is not silently weakened.
   for pinned_policy in 'forbidden:.env*' 'frozen:knowledge/raw/*' 'frozen:knowledge/wiki/logs/*' \
-    'guarded:AGENTS.md' 'guarded:.codex/*' 'guarded:.claude/*' \
+    'guarded:AGENTS.md' \
     'guarded:tools/SAFETY.md' 'guarded:tools/CONTROL.md' 'guarded:tools/control-policy.tsv' \
     'guarded:tools/check-boundary.sh' 'guarded:tools/install-git-hooks.sh' \
     'guarded:tools/validate-agent-directory.sh' 'guarded:tools/task.sh' \
     'guarded:tools/finalize-task.sh' 'guarded:tools/backup-to-github.sh' \
     'guarded:tools/report-upstream-issue.sh' 'guarded:tools/lib/github-auth.sh' \
     'guarded:tools/lib/project-registry.sh' 'guarded:tools/materialize-project-repositories.sh' \
-    'guarded:tools/setup-local-environment.sh' 'guarded:tools/setup-github-auth.sh' \
+    'guarded:tools/setup-github-auth.sh' \
     'guarded:tools/run-evals.py' \
     'guarded:evals/EVALS.md' 'guarded:evals/profiles/core.txt' \
     'guarded:projects/AGENTS.md' \
@@ -2779,20 +2595,21 @@ grep -Fq 'tools/CONTROL.md' "$repo_root/AGENTS.md" || \
 grep -Fq 'backup' "$repo_root/tools/CONTROL.md" || \
   fail 'tools/CONTROL.md does not scope git hooks against the backup non-goal'
 
-# --- Verify semantic authorization and Runtime responsibility boundaries ----------
+# --- Verify semantic authorization and extension boundaries -----------------------
 
-# The root owns Provider-independent semantic authorization; each Owner holds detailed integrity conditions.
 for autonomy_heading in '## 自律実行' '## 人間へ上げる例外'; do
   grep -Fqx -- "$autonomy_heading" "$repo_root/AGENTS.md" || \
     fail "AGENTS.md must carry the semantic authorization section: $autonomy_heading"
 done
 
-grep -Fqx -- '## Runtime Permissionの責務境界' "$repo_root/AGENTS.md" || \
-  fail 'AGENTS.md must separate Generic Runtime Permission from agent-directory responsibilities'
 grep -Fq 'Standing Authorization' "$repo_root/AGENTS.md" || \
   fail 'AGENTS.md must treat explicit user instructions as Standing Authorization'
-grep -Fq 'Provider別permission wrapperを追加しない' "$repo_root/AGENTS.md" || \
-  fail 'AGENTS.md must reject Provider-specific permission wrappers'
+grep -Fq '新しいTool、Skill、恒久的な仕組み、抽象化、依存は原則追加しない' "$repo_root/AGENTS.md" || \
+  fail 'AGENTS.md must keep new permanent mechanisms owner-gated'
+grep -Fq 'Skillの新設は既存Skillの更新・統合で目的を満たせない場合だけ候補' \
+  "$repo_root/skills/SKILLS.md" || fail 'skills/SKILLS.md must keep new Skills owner-gated'
+grep -Fq '新しいToolは原則追加せず' "$repo_root/tools/TOOLS.md" || \
+  fail 'tools/TOOLS.md must keep new Tools owner-gated'
 
 # Each of the four escalation categories routes to the canon that owns its details.
 for exception_owner in projects/LIFECYCLE.md projects/PROJECTS.md tools/BACKUP.md tools/TOOLS.md; do
@@ -2869,7 +2686,7 @@ fi
 context_meta_output="$(bash "$repo_root/tools/validator/check-context-meta.sh" \
   "$cache_test_dir/catalog.tsv" 2>&1)" || \
   fail "context meta catalog coverage failed: $context_meta_output"
-printf '%s\n' "$context_meta_output" | grep -Fq 'CONTEXT_META_OK checked=22' || \
+printf '%s\n' "$context_meta_output" | grep -Fq 'CONTEXT_META_OK checked=20' || \
   fail 'context meta catalog coverage did not verify the complete canon set'
 if grep -Eq '^head=' "$cache_test_dir/cache.meta"; then
   fail 'cache.meta must not use Git HEAD as a freshness input'

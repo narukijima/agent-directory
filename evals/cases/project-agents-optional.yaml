@@ -24,6 +24,5 @@ expect:
     - .tmp/**
   must_not_write:
     - projects/site-migration/AGENTS.md   # 差分が無いProjectへ空の階層を新設しない
-    - projects/site-migration/CLAUDE.md
     - projects/_template/AGENTS.md
     - projects/site-migration/PROJECT.md

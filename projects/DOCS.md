@@ -55,7 +55,7 @@ Project rootに置く任意の全体地図である。所有するのは、Proje
 ## 個別ProjectのAGENTS.md
 
 Project固有の作業差分だけを持ち、差分があるときだけ置く。`ARCHITECTURE.md`または`docs/`が存在する場合は、
-同Projectの`AGENTS.md`と`CLAUDE.md`を必須とし、段階的開示の入口にする。
+同Projectの`AGENTS.md`を必須とし、段階的開示の入口にする。
 
 置いてよい内容:
 
@@ -74,7 +74,7 @@ Project固有の作業差分だけを持ち、差分があるときだけ置く�
 見出しは`## Project Docs Route`と正確に一致させ、存在する`ARCHITECTURE.md`と`docs/`直下の各Domain
 Canonを条件付き項目として列挙する。項目は「条件」と「読む正本」を持つ表の行、または`条件:`と
 `参照:`の対とする。本文中の言及、単なるファイル一覧、禁止文への登場は条件付き参照として数えない。
-`PROJECT.md`と`STATE.md`を正本として参照し、同階層に`@AGENTS.md`だけを持つ`CLAUDE.md`を必ず置く。
+`PROJECT.md`と`STATE.md`を正本として参照する。
 サイズ予算（2KiB）を拡大せず、短いRoute表として収める。
 
 ## 研究文書とKnowledge昇格
