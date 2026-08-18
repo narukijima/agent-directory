@@ -3,6 +3,9 @@ set -euo pipefail
 
 tool_root="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
 repo_root="$(cd "${AGENT_DIRECTORY_ROOT:-$tool_root/..}" 2>/dev/null && pwd -P)" || repo_root=''
+credential_root="$repo_root"
+fixed_child="${AGENT_BACKUP_FIXED_CHILD:-false}"
+unset AGENT_BACKUP_FIXED_CHILD
 . "$tool_root/lib/project-registry.sh"
 . "$tool_root/lib/github-auth.sh"
 cache_dir="${AGENT_CACHE_DIR:-$repo_root/.agent-cache}"
@@ -48,6 +51,39 @@ note() {
   printf 'DETAIL: %s\n' "$1" >&2
 }
 
+resolve_fixed_child_credential_root() {
+  local marker='' owner_root='' recorded_commit='' owner_top='' mode='' uid='' links=''
+  [[ "$fixed_child" == false ]] && return 0
+  [[ "$fixed_child" == true ]] || blocked 'fixed-child-control-invalid' \
+    'the internal fixed-snapshot control flag must be true or absent'
+
+  marker="$(git -C "$repo_root" rev-parse --git-path agent-backup-fixed-owner 2>/dev/null || true)"
+  case "$marker" in /*) ;; *) marker="$repo_root/$marker" ;; esac
+  [[ -f "$marker" && ! -L "$marker" ]] || blocked 'fixed-child-marker-invalid' \
+    'the isolated fixed-commit snapshot has no valid owner marker'
+  mode="$(agent_env_stat_mode "$marker")"
+  uid="$(agent_env_stat_uid "$marker")"
+  links="$(agent_env_stat_links "$marker")"
+  [[ "$mode" == 600 && "$uid" == "$(agent_env_current_uid)" && "$links" == 1 ]] || \
+    blocked 'fixed-child-marker-invalid' 'the isolated fixed-commit owner marker is not private and unique'
+  [[ "$(grep -c '^owner_root=' "$marker" 2>/dev/null || true)" == 1 && \
+    "$(grep -c '^commit=' "$marker" 2>/dev/null || true)" == 1 ]] || \
+    blocked 'fixed-child-marker-invalid' 'the isolated fixed-commit owner marker is malformed'
+  owner_root="$(sed -n 's/^owner_root=//p' "$marker")"
+  recorded_commit="$(sed -n 's/^commit=//p' "$marker")"
+  [[ "$owner_root" == /* && -d "$owner_root" && ! -L "$owner_root" ]] || \
+    blocked 'fixed-child-owner-invalid' 'the fixed-commit caller Agent root is unavailable'
+  owner_root="$(cd "$owner_root" && pwd -P)"
+  owner_top="$(git -C "$owner_root" rev-parse --show-toplevel 2>/dev/null || true)"
+  [[ "$owner_top" == "$owner_root" && "$owner_root" != "$repo_root" && \
+    -f "$owner_root/AGENTS.md" && -f "$owner_root/tools/validate-agent-directory.sh" ]] || \
+    blocked 'fixed-child-owner-invalid' 'the fixed-commit credential owner is not the caller Agent root'
+  [[ "$recorded_commit" == "$local_head" ]] || blocked 'fixed-child-commit-mismatch' \
+    'the fixed-commit owner marker does not match the isolated snapshot HEAD'
+  credential_root="$owner_root"
+  note 'fixed commit credential owner: caller Agent root preserved without copying .env'
+}
+
 ensure_github_remote_auth() {
   local workspace_root="$1" remote_name="$2" remote_url_value="$3" repository reason
   [[ "$(github_auth_remote_kind "$remote_url_value")" == 'github-https' ]] || return 0
@@ -61,7 +97,7 @@ ensure_github_remote_auth() {
   reason="${GITHUB_AUTH_REASON:-github-unknown-failure}"
   github_auth_diagnostic "${GITHUB_AUTH_OPERATION:-git-push}" "$repository" "$remote_name" github-https \
     "${GITHUB_AUTH_LAST_STATUS:-1}" >&2
-  blocked "$reason" 'machine setup and normal tasks are separate; run the documented Operator setup/check without starting an interactive login or fallback'
+  blocked "$reason" 'Agent workspace credential setup and normal tasks are separate; run the documented Operator setup/check without starting an interactive login or fallback'
 }
 
 backup_remote_failure_reason() {
@@ -381,15 +417,15 @@ verify_independent_revision() {
   git init --bare -q "$verify_repo" || blocked 'independent-remote-unreachable' \
     "could not initialize the verification repository for $project_dir"
 
-  ensure_github_remote_auth "$repo_root" "$repository_url" "$repository_url"
-  if ! fetch_output="$(github_git_run "$repo_root" "$repository_url" git-read -C "$verify_repo" \
+  ensure_github_remote_auth "$credential_root" "$repository_url" "$repository_url"
+  if ! fetch_output="$(github_git_run "$credential_root" "$repository_url" git-read -C "$verify_repo" \
     fetch --quiet "$repository_url" \
     "+refs/heads/*:refs/remotes/upstream/*" "+refs/tags/*:refs/tags/*" 2>&1)"; then
     blocked "$(backup_remote_failure_reason "$fetch_output" independent-remote-unreachable "$repository_url")" \
       "$project_dir declared remote is unreachable: $(redact_repository_url "$repository_url")" \
       'the authenticated remote read failed'
   fi
-  if ! fetch_output="$(github_git_run "$repo_root" "$repository_url" git-read -C "$verify_repo" \
+  if ! fetch_output="$(github_git_run "$credential_root" "$repository_url" git-read -C "$verify_repo" \
     fetch --quiet --no-tags "$repository_url" "$state_revision" 2>&1)"; then
     blocked 'independent-revision-unavailable' \
       "$project_dir adopted revision is not fetchable from its declared remote: $state_revision" \
@@ -412,7 +448,7 @@ verify_local_refs_backed_up() {
   local target="$repo_root/$project_dir"
   local fetch_output branch_ref branch_sha tag_ref tag_sha remote_tag_sha unpublished
 
-  if ! fetch_output="$(github_git_run "$repo_root" "$target" git-read -C "$verify_repo" fetch --quiet --no-tags "$target" \
+  if ! fetch_output="$(github_git_run "$credential_root" "$target" git-read -C "$verify_repo" fetch --quiet --no-tags "$target" \
     "+refs/heads/*:refs/remotes/child/*" "+refs/tags/*:refs/childtags/*" "+HEAD:refs/childhead" 2>&1)"; then
     blocked 'independent-unreachable-local-branch' \
       "could not read local refs from $project_dir" "$fetch_output"
@@ -554,6 +590,7 @@ remote_url=''
 if ! remote_url="$(git -C "$repo_root" config --get "remote.$remote.url" 2>/dev/null)"; then
   blocked 'missing-remote' "remote is not configured: $remote"
 fi
+resolve_fixed_child_credential_root
 
 # A normal raw backup continues to require a clean repository. The standard finish path
 # may, however, have committed one verified target while another separable target remains
@@ -581,6 +618,12 @@ if [[ -n "$fixed_commit" ]]; then
       'the isolated snapshot does not resolve to the finish-bound commit'
   fi
   git -C "$fixed_snapshot_root" config "remote.$remote.url" "$remote_url"
+  umask 077
+  {
+    printf 'owner_root=%s\n' "$repo_root"
+    printf 'commit=%s\n' "$fixed_commit"
+  } > "$fixed_snapshot_root/.git/agent-backup-fixed-owner"
+  chmod 600 "$fixed_snapshot_root/.git/agent-backup-fixed-owner"
 
   original_checkpoint="$(checkpoint_path)"
   snapshot_cache="$fixed_snapshot_root/.agent-cache"
@@ -594,7 +637,7 @@ if [[ -n "$fixed_commit" ]]; then
   fixed_args=( --remote "$remote" --branch "$branch" --root-only )
   [[ "$dry_run" != true ]] || fixed_args+=( --dry-run )
   set +e
-  AGENT_DIRECTORY_ROOT="$fixed_snapshot_root" AGENT_CACHE_DIR="$snapshot_cache" \
+  AGENT_BACKUP_FIXED_CHILD=true AGENT_DIRECTORY_ROOT="$fixed_snapshot_root" AGENT_CACHE_DIR="$snapshot_cache" \
     bash "$fixed_snapshot_root/tools/backup-to-github.sh" "${fixed_args[@]}"
   fixed_status=$?
   set -e
@@ -706,7 +749,7 @@ validate_root_repository_ownership
 
 # --- 8. audit Independent repositories when in workspace scope --------------------
 
-ensure_github_remote_auth "$repo_root" "$remote" "$remote_url"
+ensure_github_remote_auth "$credential_root" "$remote" "$remote_url"
 
 if [[ "$root_only" == true ]]; then
   note "root-only scope: $independent_count registered Independent repository(ies) were not audited"
@@ -736,7 +779,7 @@ fi
 
 if [[ "$dry_run" == true ]]; then
   remote_listing=''
-  if ! remote_listing="$(github_git_run "$repo_root" "$remote_url" git-read -C "$repo_root" \
+  if ! remote_listing="$(github_git_run "$credential_root" "$remote_url" git-read -C "$repo_root" \
     ls-remote --heads "$remote_url" "refs/heads/$branch" 2>&1)"; then
     blocked "$(github_auth_classify_git_error "$remote_listing")" \
       "cannot read refs/heads/$branch from $remote"
@@ -775,7 +818,7 @@ fi
 classify_push_failure() {
   local push_detail="$1"
   local failure_listing failure_sha
-  if ! failure_listing="$(github_git_run "$repo_root" "$remote_url" git-read -C "$repo_root" \
+  if ! failure_listing="$(github_git_run "$credential_root" "$remote_url" git-read -C "$repo_root" \
     ls-remote --heads "$remote_url" "refs/heads/$branch" 2>&1)"; then
     blocked "$(github_auth_classify_git_error "$failure_listing")" \
       "cannot read refs/heads/$branch from $remote"
@@ -796,7 +839,7 @@ classify_push_failure() {
 
 push_output=''
 ensure_root_head_unchanged
-if ! push_output="$(github_git_run "$repo_root" "$remote_url" git-push -C "$repo_root" \
+if ! push_output="$(github_git_run "$credential_root" "$remote_url" git-push -C "$repo_root" \
   push --porcelain "$remote_url" "$local_head:refs/heads/$branch" 2>&1)"; then
   classify_push_failure "$push_output"
 fi
@@ -805,7 +848,7 @@ note "$(printf '%s\n' "$push_output" | tr '\n' ' ')"
 # --- 11. re-verify the remote SHA -----------------------------------------------------
 
 verify_listing=''
-if ! verify_listing="$(github_git_run "$repo_root" "$remote_url" git-read -C "$repo_root" \
+if ! verify_listing="$(github_git_run "$credential_root" "$remote_url" git-read -C "$repo_root" \
   ls-remote --heads "$remote_url" "refs/heads/$branch" 2>&1)"; then
   blocked "$(github_auth_classify_git_error "$verify_listing")" \
     "cannot re-read refs/heads/$branch from $remote"

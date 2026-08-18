@@ -2345,6 +2345,15 @@ if [[ -f "$backup_tool" ]]; then
     fail 'tools/backup-to-github.sh must use the shared GitHub authentication resolver'
   grep -Fq 'github_git_run' "$backup_tool" || \
     fail 'tools/backup-to-github.sh must route remote Git operations through github_git_run'
+  if grep -Fq 'github_git_run "$repo_root"' "$backup_tool" || \
+    grep -Fq 'ensure_github_remote_auth "$repo_root"' "$backup_tool"; then
+    fail 'fixed-commit backup must keep Git audit root separate from the caller Agent credential root'
+  fi
+  grep -Fq 'fixed commit credential owner: caller Agent root preserved without copying .env' "$backup_tool" || \
+    fail 'fixed-commit backup does not preserve the caller Agent credential owner without copying .env'
+  if grep -Eq 'cp[^#]*(/|\$)[^[:space:]]*\.env([[:space:]]|$)' "$backup_tool"; then
+    fail 'fixed-commit backup must not copy an Agent .env into its audit snapshot'
+  fi
 fi
 
 materialize_tool="$repo_root/tools/materialize-project-repositories.sh"
@@ -4052,10 +4061,21 @@ if [[ -f "$backup_tool" ]] && command -v git >/dev/null 2>&1; then
   fixed_index_before="$(backup_git write-tree)"
   fixed_stash_before="$(backup_git rev-parse refs/stash)"
 
+  set +e
+  backup_output="$(env "${backup_env[@]}" AGENT_BACKUP_FIXED_CHILD=true \
+    AGENT_DIRECTORY_ROOT="$backup_work" bash "$backup_tool" --root-only 2>&1)"
+  backup_status=$?
+  set -e
+  backup_expect_blocked 'fixed-child-marker-invalid' \
+    'an external fixed-child flag without a parent-created owner marker'
+
   backup_run --root-only --fixed-commit "$fixed_backup_head"
   backup_expect_line \
     "ROOT_BACKUP_OK remote=backup branch=main sha=$fixed_backup_head scope=root-only" \
     'finish-bound fixed commit with unrelated caller work'
+  printf '%s\n' "$backup_output" | grep -Fq \
+    'fixed commit credential owner: caller Agent root preserved without copying .env' || \
+    fail 'backup fixture: fixed commit mode did not preserve the caller Agent credential root'
   [[ "$(backup_remote_sha)" == "$fixed_backup_head" ]] || \
     fail 'backup fixture: fixed commit mode did not push the requested HEAD commit'
   [[ "$(backup_git status --porcelain=v1)" == "$fixed_status_before" ]] || \
