@@ -12,7 +12,7 @@ wiki = 根拠へ遡れる現在のKnowledge
 ```
 
 `internal / external`と`sources / topics`は保存先を決める下位分類であり、Knowledge Routeの入口で
-毎回再判断しない。INDEX、LOG、検索cacheは本文の代替ではなく、必要時だけ使う索引・運用記録である。
+毎回再判断しない。INDEXとLOGは本文の代替ではなく、必要時だけ使う索引・運用記録である。
 
 ```text
 knowledge/
@@ -30,7 +30,7 @@ knowledge/
 ```
 
 `raw/internal`、`raw/external`、`sources`、`topics`はいずれも正本である。sources/topicsには要約、判断、推論が
-含まれ、原資料から同一内容を再生成できない。検索TSV、DB、snippet、製品側AIメモリだけが再生成可能な派生物である。
+含まれ、原資料から同一内容を再生成できない。Runtimeの検索index、snippet、製品側AIメモリは任意の派生cacheである。
 `knowledge/`直下と`wiki/`配下に領域説明用の`README.md`を置かない。構造の意味はこのファイルが所有する。
 
 ## 保存先
@@ -82,12 +82,12 @@ Root Knowledgeとして扱わない。昇格条件と昇格時の責務は`proje
 
 ## 候補探索と読込
 
-- 照会・取り込み前に`tools/find-context.sh --route knowledge --limit 5 -- <query>`で候補を得る。
+- target未指定の照会だけ、Runtime標準のファイル検索で`sources/`と`topics/`からactive候補を最大5件得る。
 - 通常検索は`status: active`だけを対象にし、最初は上位3ページ、追加後も最大6ページまでとする。
   追加は不足する根拠を具体化できる場合だけ1件ずつ行う。
 - 取り込みは既存候補を最大5件確認し、新規作成、既存更新、統合、supersedeのいずれかを選ぶ。
   重複確認のための全件読込をしない。
-- `INDEX.md`や派生catalogの全件読込を候補選択に使わない。
+- `INDEX.md`やRuntime検索indexの全件読込を候補選択に使わない。
 - `superseded`、`archived`、`retired`を通常判断に使わない。旧ページを明示された場合は
   `superseded_by`が示すactiveページを優先する。
 - `LOG.md`、`logs/`、Git履歴は、監査、復旧、過去判断の確認、利用者の明示依頼を除き読まない。
@@ -190,7 +190,7 @@ Wikiでは次を混ぜずに書く。
 3. 変更した正本のpathを参照する正本をpath検索で決定的に列挙し、直接依存だけを確認する。
    意味的に影響する依存だけを更新し、全Knowledgeを読み直さない。
 4. peer正本同士で結論が割れたら自動統合せず、`AGENTS.md#人間へ上げる例外`として上げる。
-5. 参照整合を検証し、`tools/append-knowledge-log.sh`で記録する。派生cacheは再生成に委ねる。
+5. 参照整合を検証し、`tools/append-knowledge-log.sh`で記録する。Runtime側cacheは正本からの派生に限定する。
 
 伝播を終えるまで訂正タスクを完了と報告しない。
 
@@ -199,7 +199,7 @@ Wikiでは次を混ぜずに書く。
 `wiki/INDEX.md`は全件台帳ではなく、主要分野、hub、重要なactiveページへの人間向け入口である。
 
 - 1項目1行、最大50項目、8KiB以内とする。
-- `raw/`配下や全Wikiを個別登録しない。全件一覧は`.agent-cache/catalog.tsv`へ再生成する。
+- `raw/`配下や全WikiをINDEXへ個別登録しない。全件探索はRuntime標準のファイル検索を使う。
 - 項目追加・削除は入口としての価値が変わる場合だけ行う。
 
 ## LOG
@@ -220,5 +220,5 @@ Wikiでは次を混ぜずに書く。
 
 ## lint
 
-`bash tools/validate-agent-directory.sh --full`でmetadata、状態、参照、サイズ、log、派生catalog再生成を検査する。
+`bash tools/validate-agent-directory.sh --full`でmetadata、状態、参照、サイズ、logを検査する。
 意味的な重複は自動削除しない。統合先が一意なら非破壊のsupersedeで統合し、一意でなければ候補として報告する。

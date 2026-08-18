@@ -75,7 +75,9 @@ Project root、実装root、通常の作業cwdは、attachmentによらず`proje
 - **Embedded** — Git top-levelはAgent Workspace root。`projects/<name>/**`をroot Gitが所有する。
 - **Independent** — Git top-levelは`projects/<name>/`自身。直下に実`.git/`を持つ通常cloneである。
 
-worktree、submodule、symlink、`.git` file、外部配置、`repository/`のような下位repo階層を使わない。
+Projectの恒久attachment、registry、recovery単位としてworktree、submodule、symlink、`.git` file、外部配置、
+`repository/`のような下位repo階層を使わない。RuntimeがWorkspaceやProject repositoryを一時worktreeへcheckoutし、
+session isolationや並列作業に使うことは妨げない。そのworktree自体をregistry entryや採用revisionの正本にしない。
 すべてのProjectはEmbeddedで開始し、独立したremote identityが必要な場合だけIndependentへ昇格する。
 
 `PROJECT.md`はattachmentを宣言しない。`repository_mode`等の旧repository frontmatterと
@@ -118,50 +120,10 @@ registryとignore projectionだけを書き、本体を変更するsessionはroo
 
 ### Remote操作の境界
 
-Agent Directoryはremote操作Toolを持たない。Independentの`origin`はCI、deploy、release、Webhook、
-外部共同編集、公開のような外部影響を持ちうるため、対象Projectの契約で扱う。
-
-#### push policy
-
-Projectごとに一度決め、以後push可否を質問しない。値は`auto`と`gated`だけとし、判定は次の優先順で
-一意に定める。
-
-1. **宣言** — `projects/<name>/AGENTS.md`の`## Push Policy`が`auto`か`gated`を1語で持つ。
-2. **観測** — repository内にCI、deploy、release、publish、Webhookを起動する設定がある場合は`gated`。
-3. **既定** — `repository_reason`が`automation`、`distribution`、`access`なら`gated`、
-   `collaboration`、`identity`、`upstream`、`retention`なら`auto`。
-
-- `auto` — 検証済みcommitを`origin`へ通常pushし、remoteにSHAが存在することまでAIが自律確認する。
-- `gated` — pushにStanding Authorizationを必要とする。現在の依頼が`pushして`まで明示していれば
-  それで充足し、追加承認なしで通常pushとremote SHA確認まで行う。authorizationがなければpushだけを止め、
-  検証済みローカルcommitを取り消さない。
-
-通常pushがrepository ruleによって「Pull Request必須」という理由だけで拒否された場合は失敗終端にしない。
-検証済みcommitをhead branchへ通常pushし、同じauthorizationの範囲でPR作成、expected head SHA確認、
-remote platform上のmerge、default branchがそのSHAを含むことの確認まで完了する。PR作成だけをmerge完了として
-報告せず、別理由の拒否、check失敗、head移動、divergenceは既存の停止条件として扱う。local checkoutへ
-pull / merge / rebaseせず、remote ruleを迂回しない。
-
-default branch反映を確認した後は、PR metadataのhead branch名とexpected head SHAが一致し、対象がdefault branchで
-ないことを再確認して、そのsource branchだけをremote platform上で削除し、remote不在を確認する。raw
-`git push --delete`の一般解禁やwildcard / pruneは行わない。working treeがcleanなlocal checkoutでは、先に
-検証済みremote default branch tipへcheckoutを退避し、local source branch tipがexpected head SHAと一致する場合だけ
-そのbranchも削除する。local pull / merge / rebaseでmainを更新せず、branch名・SHA・merge状態の不一致では削除を止める。
-PR merge済みでもremoteまたはlocal source branchが残っていれば、この限定経路の完了とは報告しない。
-
-三段で一意にならない場合だけ一度確認し、決まった値を`## Push Policy`へ記録する。判定のための
-新しいregistry fieldやfrontmatterを追加しない。
-
-policyによらず、force push、force-with-lease、mirror push、local pull・merge・rebaseによる自動統合、検証前の
-push、root sessionからのIndependent remote操作、remote divergenceの自動解消を行わない。
-
-通常のIndependent更新は次の順で進み、安全条件を満たす限り確認を挟まない。
-
-1. `projects/<name>/`のsessionで`projects/AGENTS.md`の手順どおり読込、変更、検証、commitする。
-2. push policyに従って`origin`へpushする。PR必須ruleなら上記限定経路でdefault branch反映とsource branch削除まで完了する。
-3. branch SHA、default branch反映、remote / local source branch不在、検証結果、未完了をhandoffする。
-4. 別のroot sessionが`projects/REPOSITORIES.md`の`revision`だけを更新する。
-5. root validatorとcacheを実行してroot Gitへcommitする。
+Agent Directoryはpush、PR、merge、branch cleanup、remote platform APIの実行Toolやworkflowを持たない。
+対象ProjectとRuntimeがremote操作を完了した後、Independent sessionは確定commit SHAだけをhandoffし、別のroot sessionが
+`projects/REPOSITORIES.md`の`revision`とignore projectionを更新する。Coreはlocal Git ownership、登録URL、採用revision、
+materialization整合を検証し、remote操作方法やapproval modeを規定しない。
 
 ### Materialization境界
 
@@ -268,6 +230,5 @@ repositoryの接続不一致を検出した場合だけ[projects/RECOVERY.md](RE
 - Project固有の検証は`PROJECT.md`の`## 検証方法`に実行手順、合格条件、不合格時の扱い、
   必要な環境変数（キー名のみ）、使用した入力を記す
   （コードの置き場は`tools/TOOLS.md#一時作業`）。
-- 外部公開、本番反映、送信、課金、権限変更、`gated`なpushはStanding Authorizationと一意なdestinationを
-  必要とする。利用者が同じ操作を明示依頼済みなら追加承認なしで実行する。destination等が曖昧なら
-  その不足だけを確認し、内部で完結する検証と修正は止めない。
+- 外部公開、本番反映、送信、課金、権限変更、remote操作の実行契約は対象Project、Runtime、Operatorが所有する。
+  Agent Directoryは成果契約と検証結果だけを正本として保持する。
