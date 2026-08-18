@@ -76,6 +76,7 @@ guarded	evals/cases/control-ordinary-failure-no-penalty.yaml	Core recovery invar
 guarded	evals/cases/failure-evidence-boundary.yaml	Core evidence boundary invariant
 guarded	evals/cases/correction-invalidates-stale-inference.yaml	Core correction recovery invariant
 guarded	evals/cases/github-auth-no-token-leak.yaml	Core secret invariant
+guarded	evals/cases/github-auth-workspace-credential.yaml	Core Agent credential ownership invariant
 guarded	evals/cases/github-workspace-readiness-at-external-boundary.yaml	Core Agent-scoped capability gate invariant
 guarded	evals/cases/github-failure-fingerprint-no-identical-retry.yaml	Core no-identical-retry invariant
 guarded	evals/cases/upstream-issue-privacy.yaml	Core privacy invariant
