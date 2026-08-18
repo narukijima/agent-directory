@@ -263,3 +263,5 @@ commit・push境界のPortable Verifierと、managed hook・承認済みsnapshot
 - `tools/validator/check-context-meta.sh` — routeableなmeta正本のcatalog登録漏れとretired path混入を検査する。
 - `tools/validator/check-markdown-references.sh` — Markdown参照・anchor整合検査の実体。validatorと
   receipt発行が呼ぶ。
+- `tools/validator/test-router-boundaries.sh` — 自己定義を除くrouter予算、CRLF / EOF境界、STATE anchorを
+  full検証から独立してfixture検査する。
