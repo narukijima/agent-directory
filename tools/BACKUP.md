@@ -72,7 +72,10 @@ workspace全体の成功として報告しない。タスク分類との対応�
 正規finishはcommit直後のfull SHAを内部option `--fixed-commit <full-sha>`で渡す。`--root-only`専用で、
 指定SHA=現在HEAD、到達不能local branchなし、処理中のHEAD不変を要求する。隔離commit snapshotへ通常の
 root検査を行うため、別targetに残るindex、worktree、untracked、stashを保持・除外できる。raw実行と
-workspace scopeのcleanlinessは緩めない。
+workspace scopeのcleanlinessは緩めない。隔離snapshotはaudit rootであってcredential ownerではない。
+GitHub認証はsnapshotを作成した呼出元Agent rootの`.env`へ固定し、snapshotへ`.env`をcopy、link、exportしない。
+内部owner markerは呼出元root pathと固定commit SHAだけを一時snapshotの`.git/`へmode `0600`で保持し、
+owner、hardlink、Git root、commit一致を検査する。通常呼出しや親directory探索から別Agent rootを選択しない。
 
 | scope | 成功（終了コード0） | dry-run成功 |
 |---|---|---|
