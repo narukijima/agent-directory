@@ -29,19 +29,19 @@
 
 ## Context Loading
 
-明示targetを優先し、探索時だけ`tools/find-context.sh`を使う。台帳、履歴、`runs/`、`docs/**`、`.agent-cache/`を
-一括読込せず、24KiB超は節で絞る。32KiB・12ファイル到達時は停止報告する。
+明示targetを優先する。target未指定のKnowledge照会だけ、Runtime標準のファイル検索で
+`knowledge/wiki/{sources,topics}/`からactive候補を最大5件へ絞る。SkillはRuntimeの標準Skill discovery、
+Projectは明示pathと`projects/`の直下構造を使い、Core独自の検索Runtimeを通さない。台帳、履歴、`runs/`、
+`docs/**`を一括読込せず、24KiB超は節で絞る。32KiB・12ファイル到達時は未読範囲を報告して停止する。
 
 ## 自律実行
 
-通常経路は`Route → Target → Work → Verify`、入口は`tools/task.sh`、書込Git rootはsessionごとに1つ。
+通常経路は`Route → Target → Work → Verify`、書込Git rootはsessionごとに1つ。
 Runtime、Provider、認証、permission mode、schedulerは各AgentとOperatorが所有し、本Coreは選択・設定・診断しない。
 失敗層を分け、同じfingerprintを状態・入力・経路の差分なしに再試行しない。
 
-明示依頼は同じ操作のStanding Authorizationである。target / destinationが一意で契約、secret、divergence、
-Single Writerと衝突しなければ、scope内の通常工程を追加承認なしで完了する。Runtimeが許可した
-read / edit / build / test / network / API / Git / deploy等をTool call単位へ再分解しない。外部操作の詳細は
-各Agent、Operator、対象Projectが所有する。
+実行許可、approval、外部操作の手順はRuntime、Operator、対象Projectが所有する。Coreはそれらを再包装せず、
+Project成果契約、Git ownership、secret、不変原資料、protected変更の構造的境界だけを検証する。
 
 ## 差分判定
 

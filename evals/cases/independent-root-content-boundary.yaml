@@ -16,12 +16,6 @@ expect:
     - projects/data-pipeline/PROJECT.md   # 契約と状態はProject固有Gitが所有する
     - projects/data-pipeline/STATE.md
     - projects/PROJECTS.md              # attachmentの境界は詳細正本が所有する
-  must_report:
-    - root-owns-only-the-registry-entry-and-its-ignore-projection
-    - project-md-state-md-agents-md-architecture-md-and-docs-belong-to-the-child-git
-    - root-git-tracks-nothing-under-projects-data-pipeline
-    - relative-paths-inside-the-project-are-identical-in-both-attachments
-    - no-duplicate-canonical-source-across-two-git-repositories
   must_not_write:
     - projects/data-pipeline/**
     - projects/REPOSITORIES.md

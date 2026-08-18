@@ -250,7 +250,7 @@ while (( entry_index < registry_count )); do
       "$project_dir/.git must be a real directory, not a symlink"
     if [[ -e "$target/.git" && ! -d "$target/.git" ]]; then
       blocked 'repository-gitfile-unsupported' "$project_name" \
-        "$project_dir/.git must be a real directory; .git files and worktrees are unsupported"
+        "$project_dir/.git must be a real directory for a registered Project attachment; Runtime worktrees are allowed only as temporary execution environments"
     fi
     if [[ ! -d "$target/.git" ]]; then
       if [[ -n "$(find "$target" -mindepth 1 -maxdepth 1 -print -quit 2>/dev/null)" ]]; then

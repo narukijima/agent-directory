@@ -3,15 +3,16 @@ name: route-to-skill
 fixture: active-skill
 
 request: |
-  literature-reviewを使って、手元の資料群を同じ観点で読み比べて。
+  literature-reviewの再利用手順を、このWorkspaceのPortable Skill sourceとして更新して。
 
 expect:
   route: skill
   must_read:
     - AGENTS.md
     - skills/SKILLS.md
-    - skills/literature-review/SKILL.md    # catalogやdescriptionだけで実行しない
+    - skills/literature-review/SKILL.md    # descriptionだけでsource更新を判断しない
   may_write:
+    - skills/literature-review/**
     - .tmp/**
   must_not_write:
     - knowledge/raw/internal/**

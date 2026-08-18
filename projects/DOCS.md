@@ -62,7 +62,7 @@ Project固有の作業差分だけを持ち、差分があるときだけ置く�
 - 条件付きのProject Docs Route（本文を複製せず、条件と読む正本だけを列挙する）
 - Project固有のbuild、test、lintコマンドと検証順序
 - 特定パスの編集禁止、既存成果物の上書き禁止、使用するruntime
-- 本番送信、公開、課金、権限変更のauthorization条件、`## Push Policy`、Project固有の生成物配置
+- Project固有の外部作用契約と生成物配置。Runtimeのapproval方式やGitHub操作手順は置かない
 
 置いてはいけない内容:
 

@@ -35,7 +35,7 @@ verifierは次を検査する。
 - frozen領域の変更・削除・改名
 - guarded / contract変更のack
 - staged差分のmixed-scope
-- push対象のref削除とnon-fast-forward
+- push対象commit内のforbidden / frozen違反
 
 値そのものは診断へ出力しない。networkへ接続しない。
 
@@ -82,11 +82,9 @@ Independent Projectはroot validatorを持たないため、external snapshotの
 
 ## Push境界
 
-pre-pushはref削除とnon-fast-forwardを拒否し、送信予定blobをapproved policyで再検査する。
-新規remote refでは、同じremoteのtracking refからlocal SHAの最も近いancestorを選ぶ。
-ancestorを証明できなければempty treeから全履歴を検査する。
-
-remote側のPR必須、FF-only、branch protection、merge policyは対象Repositoryが所有する。
+pre-pushはpushを実行せず、送信予定commitをapproved policyで再検査する。remote SHAがlocal objectとして
+存在する場合はその差分、新規refまたはbaseを解決できない場合はempty treeからlocal SHAまでを検査する。
+ref削除、fast-forward、branch protection、PR、merge policyはGit、対象Repository、Runtimeが所有する。
 
 ## 違反と回復
 
@@ -101,11 +99,6 @@ remote側のPR必須、FF-only、branch protection、merge policyは対象Reposi
 
 hookが通常の誤操作を実害前に拒否しただけなら、正しい手順でやり直す。正本やvalidatorの欠陥が原因なら、
 既存validatorへ最小の再発防止検査を統合する。新しいevalやfixture fileを自動追加しない。
-
-## 委譲
-
-通常は単一主体で完結する。独立した読み取り調査など、分割利益が明確な場合だけ委譲する。
-同一Git rootのWriterは常に1つ、委譲の深さは1段、final ownerも1つとする。
 
 ## 将来拡張
 

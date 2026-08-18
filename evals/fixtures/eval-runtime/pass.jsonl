@@ -1,7 +1,7 @@
 {"event":"trace","source":"harness","case":"eval-runtime-fixture","coverage":["route","search","read","run","write","final_response","metrics"]}
 {"event":"phase","name":"resolve","duration_ms":100}
 {"event":"route","route":"meta"}
-{"event":"search","command":"tools/find-context.sh","status":"active","returned":2,"duration_ms":50}
+{"event":"search","command":"rg","status":"active","returned":2,"duration_ms":50}
 {"event":"read","path":"AGENTS.md","bytes":200}
 {"event":"read","path":"tools/TOOLS.md","bytes":300}
 {"event":"run","command":"bash tools/validate-agent-directory.sh --changed","exit_code":0,"duration_ms":400}
