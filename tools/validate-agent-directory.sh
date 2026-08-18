@@ -2042,6 +2042,30 @@ grep -Fqx '    - reauthentication-required' "$github_auth_core_case" || \
   fail 'github-auth-no-token-leak must reject inferred reauthentication'
 grep -Fqx '    - additional-approval-required' "$github_auth_core_case" || \
   fail 'github-auth-no-token-leak must reject repeated approval'
+github_auth_eval_contract="$repo_root/evals/EVALS.md"
+for required_auth_contract in \
+  'OS account home配下のversioned machine store' \
+  '明示CIかつexact repository / operation allowlist' \
+  '共通readiness検査' \
+  '共通doctorの実API・実remote probe' \
+  'machine credentialが未導入、stale、不正、またはscope不足' \
+  '通常task内では保存済み`gh`認証' \
+  '別credentialへのfallback、credential repair' \
+  'fail-closedで停止する' \
+  'credential導入とrotationはOperator setupが所有する' \
+  '`UPSTREAM_REPORT_DRAFTED`を未送信かつexit 3' \
+  '認証失敗後の同じ通常task内'; do
+  grep -Fq "$required_auth_contract" "$github_auth_eval_contract" || \
+    fail "evals/EVALS.md is missing the machine credential contract: $required_auth_contract"
+done
+for retired_auth_contract in \
+  '保存済み`gh`認証がある場合' \
+  '非対話repairを1回だけ' \
+  'repair 1回・再試行1回'; do
+  if grep -Fq "$retired_auth_contract" "$github_auth_eval_contract"; then
+    fail "evals/EVALS.md restored a retired runtime authentication contract: $retired_auth_contract"
+  fi
+done
 grep -Fq 'blocked interactive-setup-required' "$repo_root/tools/setup-github-auth.sh" || \
   fail 'setup-github-auth.sh must distinguish Operator migration from ordinary auth failure'
 grep -Fq -- '--machine-ready' "$repo_root/tools/task.sh" || \

@@ -281,15 +281,15 @@ non-fast-forward、force pushが必要な状況、不変原資料、paused / ret
 - workspace `backup`をPR必須の開発remoteへ変換しない。repository ruleが本当にPRを必須にする開発remoteだけを
   `projects/PROJECTS.md#Remote操作の境界`の限定経路で扱う。
 - 未登録nested repoを変更せず、Independent統合は明示的な廃止・統合決定後だけとする。
-- GitHub能力をprocess tokenの有無や`gh auth status`だけで決めず、共通doctorの実API・実remote probeで
-  判定する。HTTPSはcredential helper、SSHはtoken不要、GitHub以外へcredential非送信を観測する。
-- 古いmachine credentialと有効な保存済み`gh`認証がある場合、expected login未設定でも共通Toolが
-  非対話repairを1回だけ行って再probeする。Agentが`gh auth status / token / login / refresh / logout`、
-  Keychain探索、SSH切替、Browser loginを独自に組み立てたtraceはFAILにする。
-- 有効な非対話credentialが一つもない場合だけ`interactive-setup-required`へ分類し、通常task内でloginを
-  開始したり、同じ操作の追加承認を求めたりしない。対話操作は通常運用前のmachine setupが所有する。
-- 上流報告の認証失敗はrepair 1回・再試行1回に限定し、`UPSTREAM_REPORT_DRAFTED`を未送信かつexit 3として
-  採点する。tokenのstdout、stderr、argv、remote URL、tracked fileへの漏洩をhard failureとする。
+- 通常local taskのGitHub認証sourceはOS account home配下のversioned machine storeだけとする。process tokenは
+  明示CIかつexact repository / operation allowlistがある場合だけ許可し、GitHub能力は共通readiness検査と
+  共通doctorの実API・実remote probeで判定する。
+- machine credentialが未導入、stale、不正、またはscope不足ならfail-closedで停止する。通常task内では保存済み`gh`認証、
+  process token、別credentialへのfallback、credential repair、Browser / device login、Keychain探索、SSH切替を開始しない。
+  credential導入とrotationはOperator setupが所有する。
+- 上流報告の認証失敗は分類し、`UPSTREAM_REPORT_DRAFTED`を未送信かつexit 3として採点する。認証失敗後の同じ通常task内で
+  repair、credential fallback、interactive login、再送を行わない。これはprivacy検査で止まった下書きを抽象化して
+  同じToolで再試行する契約を禁止しない。tokenのstdout、stderr、argv、remote URL、tracked fileへの漏洩はhard failureとする。
 
 ## Repository境界ケースの最低条件
 
