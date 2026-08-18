@@ -7,12 +7,15 @@ set +x
 
 github_auth_lib_root="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
 . "$github_auth_lib_root/agent-env.sh"
+. "$github_auth_lib_root/project-registry.sh"
 
-GITHUB_AUTH_IMPLEMENTATION_VERSION=5
+GITHUB_AUTH_IMPLEMENTATION_VERSION=6
 GITHUB_AUTH_SOURCE='none'
 GITHUB_AUTH_REASON=''
 GITHUB_AUTH_LOGIN=''
 GITHUB_AUTH_CREDENTIAL_FILE=''
+GITHUB_AUTH_CREDENTIAL_ROOT=''
+GITHUB_AUTH_CREDENTIAL_OWNER='workspace-root'
 GITHUB_AUTH_GIT_REASON=''
 GITHUB_AUTH_TOKEN=''
 GITHUB_AUTH_PARSED_VALUE=''
@@ -86,6 +89,64 @@ github_auth_repository_from_url() {
   printf '%s' "$path"
 }
 
+github_auth_registry_repository_from_url() {
+  local url="$1" path
+  case "$url" in
+    https://github.com/*) path="${url#https://github.com/}" ;;
+    git@github.com:*) path="${url#git@github.com:}" ;;
+    ssh://git@github.com/*) path="${url#ssh://git@github.com/}" ;;
+    ssh://github.com/*) path="${url#ssh://github.com/}" ;;
+    *) return 1 ;;
+  esac
+  path="${path%.git}"
+  github_auth_repository_valid "$path" || return 1
+  printf '%s' "$path"
+}
+
+# A registered Independent Project keeps its own Git root but belongs to the
+# enclosing Agent Workspace. Resolve only that exact <agent-root>/projects/<name>
+# attachment; never scan arbitrary parents, siblings, OS stores, or another Agent.
+github_auth_registered_agent_root() {
+  local workspace_root="$1" repository="$2"
+  local canonical_workspace projects_root owner_root workspace_top owner_top
+  local project_name registry record_kind entry_name entry_url entry_reason
+  local entry_revision entry_role registered_repository matches=0
+
+  canonical_workspace="$(cd "$workspace_root" 2>/dev/null && pwd -P)" || return 1
+  project_name="${canonical_workspace##*/}"
+  projects_root="${canonical_workspace%/*}"
+  [[ "${projects_root##*/}" == 'projects' ]] || return 1
+  owner_root="${projects_root%/*}"
+  [[ -d "$owner_root" && ! -L "$owner_root" ]] || return 1
+  workspace_top="$(git -C "$canonical_workspace" rev-parse --show-toplevel 2>/dev/null || true)"
+  owner_top="$(git -C "$owner_root" rev-parse --show-toplevel 2>/dev/null || true)"
+  [[ "$workspace_top" == "$canonical_workspace" && "$owner_top" == "$owner_root" ]] || return 1
+  [[ "$(cd "$owner_root/projects/$project_name" 2>/dev/null && pwd -P)" == "$canonical_workspace" ]] || return 1
+  registry="$owner_root/projects/REPOSITORIES.md"
+  [[ -f "$registry" && ! -L "$registry" ]] || return 1
+
+  while IFS=$'\t' read -r record_kind entry_name entry_url entry_reason entry_revision entry_role; do
+    [[ "$record_kind" == 'R' ]] || return 1
+    [[ "$entry_name" == "$project_name" ]] || continue
+    registered_repository="$(github_auth_registry_repository_from_url "$entry_url" 2>/dev/null || true)"
+    [[ "$registered_repository" == "$repository" ]] || continue
+    matches=$((matches + 1))
+  done < <(agent_registry_records "$registry")
+  (( matches == 1 )) || return 1
+  printf '%s' "$owner_root"
+}
+
+github_auth_select_credential_root() {
+  local workspace_root="$1" repository="$2" registered_root=''
+  GITHUB_AUTH_CREDENTIAL_ROOT="$workspace_root"
+  GITHUB_AUTH_CREDENTIAL_OWNER='workspace-root'
+  registered_root="$(github_auth_registered_agent_root "$workspace_root" "$repository" 2>/dev/null || true)"
+  if [[ -n "$registered_root" ]]; then
+    GITHUB_AUTH_CREDENTIAL_ROOT="$registered_root"
+    GITHUB_AUTH_CREDENTIAL_OWNER='registered-agent-root'
+  fi
+}
+
 github_auth_ci_resolve() {
   local repository="$1" operation="$2" token=''
   [[ "${CI:-false}" == true && "${AGENT_DIRECTORY_GITHUB_CI:-false}" == true ]] || {
@@ -119,6 +180,8 @@ github_auth_resolve() {
   GITHUB_AUTH_TOKEN=''
   GITHUB_AUTH_OPERATION="$operation"
   GITHUB_AUTH_REPOSITORY="$repository"
+  GITHUB_AUTH_CREDENTIAL_ROOT="$workspace_root"
+  GITHUB_AUTH_CREDENTIAL_OWNER='workspace-root'
   GITHUB_AUTH_CREDENTIAL_FILE_PRESENT='no'
   GITHUB_AUTH_CREDENTIAL_FILE_VALID='no'
   GITHUB_AUTH_REPOSITORY_ENROLLED='no'
@@ -132,11 +195,12 @@ github_auth_resolve() {
   github_auth_operation_valid "$operation" || {
     GITHUB_AUTH_REASON='github-operation-invalid'; return 1;
   }
-  credential_file="$(github_auth_workspace_file "$workspace_root")" || return 1
+  github_auth_select_credential_root "$workspace_root" "$repository"
+  credential_file="$(github_auth_workspace_file "$GITHUB_AUTH_CREDENTIAL_ROOT")" || return 1
   GITHUB_AUTH_CREDENTIAL_FILE="$credential_file"
   if [[ -e "$credential_file" || -L "$credential_file" ]]; then
     GITHUB_AUTH_CREDENTIAL_FILE_PRESENT='yes'
-    github_auth_read_workspace_file "$workspace_root" || return 1
+    github_auth_read_workspace_file "$GITHUB_AUTH_CREDENTIAL_ROOT" || return 1
     GITHUB_AUTH_CREDENTIAL_FILE_VALID='yes'
     GITHUB_AUTH_SOURCE='workspace-env'
     GITHUB_AUTH_REPOSITORY_ENROLLED='yes'
@@ -163,7 +227,7 @@ github_auth_classify_api_error() {
 github_auth_reason_layer() {
   case "$1" in
     runtime-denied|executable-missing|credential-helper-missing|github-dns-failure|github-network-failure|github-timeout) printf 'runtime' ;;
-    agent-env-*|workspace-token-not-fine-grained|github-repository-not-enrolled|github-operation-not-enrolled|github-operation-invalid|github-destination-invalid|github-remote-invalid) printf 'agent-directory-local-policy' ;;
+    agent-env-*|workspace-token-not-fine-grained|credential-owned-by-agent-root|github-repository-not-enrolled|github-operation-not-enrolled|github-operation-invalid|github-destination-invalid|github-remote-invalid) printf 'agent-directory-local-policy' ;;
     github-authentication-failed|github-authorization-failed|git-transport-mismatch) printf 'external-provider' ;;
     *) printf 'unclassified' ;;
   esac
@@ -208,9 +272,9 @@ github_auth_diagnostic() {
   local operation="${1:-unknown}" repository="${2:-unknown}" remote_name="${3:-none}"
   local transport="${4:-unknown}" status="${5:-$GITHUB_AUTH_LAST_STATUS}"
   local reason="${GITHUB_AUTH_REASON:-github-unknown-failure}"
-  printf 'GITHUB_AUTH_DIAGNOSTIC layer=%s operation=%s repository=%s remote=%s transport=%s credential_source=%s credential_file_present=%s credential_file_valid=%s workspace_scoped=yes process_token=%s repository_enrolled=%s operation_enrolled=%s network_attempted=%s api_attempted=%s git_attempted=%s request_reached=%s reason=%s exit_status=%s evidence=%s\n' \
+  printf 'GITHUB_AUTH_DIAGNOSTIC layer=%s operation=%s repository=%s remote=%s transport=%s credential_source=%s credential_owner=%s credential_file_present=%s credential_file_valid=%s workspace_scoped=yes process_token=%s repository_enrolled=%s operation_enrolled=%s network_attempted=%s api_attempted=%s git_attempted=%s request_reached=%s reason=%s exit_status=%s evidence=%s\n' \
     "$(github_auth_reason_layer "$reason")" "$operation" "$repository" "$remote_name" "$transport" \
-    "$GITHUB_AUTH_SOURCE" "$GITHUB_AUTH_CREDENTIAL_FILE_PRESENT" "$GITHUB_AUTH_CREDENTIAL_FILE_VALID" \
+    "$GITHUB_AUTH_SOURCE" "$GITHUB_AUTH_CREDENTIAL_OWNER" "$GITHUB_AUTH_CREDENTIAL_FILE_PRESENT" "$GITHUB_AUTH_CREDENTIAL_FILE_VALID" \
     "$(github_auth_process_token_state)" "$GITHUB_AUTH_REPOSITORY_ENROLLED" "$GITHUB_AUTH_OPERATION_ENROLLED" \
     "$GITHUB_AUTH_NETWORK_ATTEMPTED" "$GITHUB_AUTH_API_ATTEMPTED" "$GITHUB_AUTH_GIT_ATTEMPTED" \
     "$(github_auth_request_reached "$reason")" "$reason" "$status" "$(github_auth_evidence_category "$reason")"
