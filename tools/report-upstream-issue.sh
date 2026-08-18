@@ -102,16 +102,16 @@ ensure_github_ready() {
 
 github_unready_hint() {
   case "$github_unready_reason" in
-    machine-credential-not-installed|auth-store-missing|github-authentication-failed)
-      printf 'complete the Operator-only machine setup in SETUP.md, then run tools/setup-github-auth.sh --check; normal tasks do not repair or start login' ;;
-    auth-store-permissions)
-      printf 'the machine credential store must be directory mode 700 and file mode 600' ;;
+    agent-env-missing|agent-env-key-missing|github-authentication-failed)
+      printf 'set GH_TOKEN in the current Agent root .env, then run tools/setup-github-auth.sh --check; normal tasks do not read another Agent credential or start login' ;;
+    agent-env-permissions|agent-env-owner|agent-env-hardlink)
+      printf 'the current Agent root .env must be an owned regular file with mode 600' ;;
     account-mismatch)
       printf 'the active credential does not match the configured expected GitHub login' ;;
     github-authorization-failed)
       printf 'the credential reaches the API but lacks permission; grant the fine-grained PAT Issues: Read and write on the allowlisted repositories (tools/UPSTREAM.md#認証)' ;;
     github-repository-not-enrolled|github-operation-not-enrolled)
-      printf 'the machine credential is valid but the target repository or Issues operation is not enrolled in the local allowlist' ;;
+      printf 'the current Agent root .env or required GH_TOKEN key is unavailable' ;;
     github-dns-failure|github-network-failure|github-timeout)
       printf 'the credential was selected, but the runtime could not reach GitHub; inspect the reported runtime/network category before retrying' ;;
     runtime-denied)

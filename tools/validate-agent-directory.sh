@@ -1856,9 +1856,9 @@ required_cases=(
   pr-required-remote-completion
   upstream-issue-privacy upstream-issue-preapproved-send upstream-issue-fixed-destination
   upstream-issue-allowlisted-destination
-  github-auth-env-absence-is-not-failure github-auth-machine-credential
+  github-auth-env-absence-is-not-failure github-auth-workspace-credential
   github-auth-real-capability-probe github-auth-no-token-leak upstream-drafted-is-not-success
-  github-machine-readiness-before-work github-failure-fingerprint-no-identical-retry
+  github-workspace-readiness-at-external-boundary github-failure-fingerprint-no-identical-retry
   upstream-auth-no-runtime-repair backup-shared-github-auth backup-https-credential-helper
   backup-ssh-does-not-require-token
   decay-knowledge-current-clean decay-knowledge-current-aged
@@ -2052,21 +2052,19 @@ grep -Fqx '    - additional-approval-required' "$github_auth_core_case" || \
   fail 'github-auth-no-token-leak must reject repeated approval'
 github_auth_eval_contract="$repo_root/evals/EVALS.md"
 for required_auth_contract in \
-  'OS account home配下のversioned machine store' \
-  '明示CIかつexact repository / operation allowlist' \
-  '共通readiness検査' \
+  'Agent Workspace rootの`.env`' \
+  'process tokenは明示CIだけ' \
+  'workspace readiness検査' \
   '共通doctorの実API・実remote probe' \
-  'machine credentialが未導入、stale、不正、またはscope不足' \
-  '通常task内では保存済み`gh`認証' \
-  '別credentialへのfallback、credential repair' \
+  'OS home、machine store、別Agent' \
+  'credential導入とrotationは各Agent rootが所有する' \
   'GitHub外部操作だけをfail-closedで停止' \
   '`context`、ローカル探索・編集・検証は' \
   '同じfailure fingerprint' \
-  'credential導入とrotationはOperator setupが所有する' \
   '`UPSTREAM_REPORT_DRAFTED`を未送信かつexit 3' \
   '認証失敗後の同じ通常task内'; do
   grep -Fq "$required_auth_contract" "$github_auth_eval_contract" || \
-    fail "evals/EVALS.md is missing the machine credential contract: $required_auth_contract"
+    fail "evals/EVALS.md is missing the Agent-scoped credential contract: $required_auth_contract"
 done
 for retired_auth_contract in \
   '保存済み`gh`認証がある場合' \
@@ -2081,21 +2079,26 @@ grep -Fq 'blocked interactive-setup-required' "$repo_root/tools/setup-github-aut
 if grep -Fq -- '--machine-ready' "$repo_root/tools/task.sh"; then
   fail 'task.sh context must not require optional GitHub readiness before local work'
 fi
-grep -Fq 'blocked machine-credential-not-installed' "$repo_root/tools/setup-github-auth.sh" || \
-  fail 'setup-github-auth.sh must classify a missing cross-process machine credential'
 grep -Fq -- '--install-token' "$repo_root/tools/setup-github-auth.sh" || \
-  fail 'setup-github-auth.sh must support direct machine PAT installation'
-grep -Fq -- '--enroll-existing' "$repo_root/tools/setup-github-auth.sh" || \
-  fail 'setup-github-auth.sh must atomically align a valid existing local enrollment without token re-entry'
+  fail 'setup-github-auth.sh must support direct Agent root PAT installation'
+grep -Fq -- '--workspace-ready' "$repo_root/tools/setup-github-auth.sh" || \
+  fail 'setup-github-auth.sh must verify the current Agent root credential without network access'
 github_auth_lib="$repo_root/tools/lib/github-auth.sh"
-grep -Fq 'pwd.getpwuid(os.getuid()).pw_dir' "$github_auth_lib" || \
-  fail 'GitHub resolver must derive one store from the OS account rather than process HOME/XDG values'
-grep -Fq 'AGENT_DIRECTORY_GITHUB_CREDENTIAL_V1' "$github_auth_lib" || \
-  fail 'GitHub resolver must require the strict versioned machine credential format'
-grep -Fq 'machine-token-not-fine-grained' "$github_auth_lib" || \
-  fail 'GitHub resolver must reject non-fine-grained machine tokens'
+agent_env_lib="$repo_root/tools/lib/agent-env.sh"
+require_file "$agent_env_lib"
+grep -Fq 'agent_env_get' "$github_auth_lib" || \
+  fail 'GitHub resolver must read GH_TOKEN through the Agent-scoped dotenv parser'
+grep -Fq "printf '%s/.env'" "$agent_env_lib" || \
+  fail 'Agent environment resolver must fix ownership at the current Agent root .env'
+grep -Fq 'workspace-token-not-fine-grained' "$github_auth_lib" || \
+  fail 'GitHub resolver must reject non-fine-grained Agent tokens'
 grep -Fq 'AGENT_DIRECTORY_GITHUB_CI' "$github_auth_lib" || \
   fail 'process token fallback must require an explicit CI context'
+for forbidden_shared_credential in '.config/agent-directory' 'pwd.getpwuid' 'github_auth_account_home' 'github_auth_machine_file'; do
+  if grep -Fq "$forbidden_shared_credential" "$github_auth_lib" "$repo_root/tools/setup-github-auth.sh"; then
+    fail "GitHub credential ownership returned to an OS or machine shared path: $forbidden_shared_credential"
+  fi
+done
 for diagnostic_contract in GITHUB_AUTH_DIAGNOSTIC github-authentication-failed \
   github-authorization-failed github-repository-not-enrolled github-operation-not-enrolled \
   github-dns-failure github-network-failure github-timeout runtime-denied \
@@ -2103,7 +2106,7 @@ for diagnostic_contract in GITHUB_AUTH_DIAGNOSTIC github-authentication-failed \
   grep -Fq "$diagnostic_contract" "$github_auth_lib" || \
     fail "GitHub resolver is missing diagnostic contract: $diagnostic_contract"
 done
-for forbidden_resolver_fallback in 'workspace-env' 'gh-stored' 'repair-from-gh'; do
+for forbidden_resolver_fallback in 'machine-file' 'gh-stored' 'repair-from-gh'; do
   if grep -Fq "$forbidden_resolver_fallback" "$github_auth_lib" \
     "$repo_root/tools/backup-to-github.sh" "$repo_root/tools/report-upstream-issue.sh"; then
     fail "normal GitHub authentication must not use implicit fallback: $forbidden_resolver_fallback"
@@ -2114,14 +2117,14 @@ for git_child_control in 'core.hooksPath=/dev/null' 'credential.helper=' \
   grep -Fq "$git_child_control" "$github_auth_lib" || \
     fail "GitHub child Git is missing isolation control: $git_child_control"
 done
-github_machine_case="$repo_root/evals/cases/github-machine-readiness-before-work.yaml"
-for forbidden_machine_command in 'gh auth login' 'git credential-osxkeychain get' \
+github_workspace_case="$repo_root/evals/cases/github-workspace-readiness-at-external-boundary.yaml"
+for forbidden_workspace_command in 'gh auth login' 'git credential-osxkeychain get' \
   'security find-internet-password' 'security find-generic-password'; do
-  grep -Fqx "    - $forbidden_machine_command" "$github_machine_case" || \
-    fail "github-machine-readiness-before-work must reject auth divergence: $forbidden_machine_command"
+  grep -Fqx "    - $forbidden_workspace_command" "$github_workspace_case" || \
+    fail "github-workspace-readiness-at-external-boundary must reject auth divergence: $forbidden_workspace_command"
 done
-grep -Fq -- '--operation git-push' "$github_machine_case" || \
-  fail 'github-machine-readiness-before-work must defer the capability gate until backup'
+grep -Fq -- '--operation git-push' "$github_workspace_case" || \
+  fail 'github-workspace-readiness-at-external-boundary must defer the capability gate until backup'
 grep -Fq 'github-failure-fingerprint-no-identical-retry' \
   "$repo_root/evals/cases/github-failure-fingerprint-no-identical-retry.yaml" || \
   fail 'Core evals must reject identical GitHub retries without a meaningful delta'
@@ -3690,6 +3693,7 @@ if [[ -f "$materialize_tool" ]] && command -v git >/dev/null 2>&1; then
   printf '%s\n' '# Owner active state' > "$foundation_root/STATE.md"
   printf '#!/usr/bin/env bash\nexit 0\n' > "$foundation_root/tools/validate-agent-directory.sh"
   cp "$repo_root/tools/lib/project-registry.sh" "$foundation_root/tools/lib/"
+  cp "$repo_root/tools/lib/agent-env.sh" "$foundation_root/tools/lib/"
   cp "$repo_root/tools/lib/github-auth.sh" "$foundation_root/tools/lib/"
   cp "$repo_root/tools/materialize-project-repositories.sh" "$foundation_root/tools/"
   cp "$repo_root/tools/prepare-context.sh" "$foundation_root/tools/"
@@ -3881,7 +3885,8 @@ if [[ -f "$backup_tool" ]] && command -v git >/dev/null 2>&1; then
     > "$backup_work/.gitignore"
   printf '#!/usr/bin/env bash\nexit 0\n' > "$backup_work/tools/validate-agent-directory.sh"
   cp "$backup_tool" "$backup_work/tools/backup-to-github.sh"
-  cp "$repo_root/tools/lib/project-registry.sh" "$repo_root/tools/lib/github-auth.sh" \
+  cp "$repo_root/tools/lib/project-registry.sh" "$repo_root/tools/lib/agent-env.sh" \
+    "$repo_root/tools/lib/github-auth.sh" \
     "$backup_work/tools/lib/"
   # An Embedded Project is tracked wholesale by the root Git and never enters the ignore projection.
   mkdir -p "$backup_work/projects/embedded-project"

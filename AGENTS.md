@@ -62,7 +62,8 @@ target / destination / credential、目的・契約、不可逆対象、lifecycl
 
 ## 禁止事項
 
-- APIキー・パスワード等を保存・コミットしない（実値は`.env*`のみ）。
+- Agent固有の環境変数・APIキー・token・外部サービス設定の実値はAgent Workspace rootの`.env`だけが所有する。
+  OS home、machine共通store、別Agent rootへ保存・fallbackせず、`.env*`実値はcommitしない。
 - GitHubを書込正本にしない。remote、push、divergence、privacy訂正は`tools/BACKUP.md`に従い、local pull / mergeと
   履歴書換えを行わない。repository ruleがPRを必須にする場合のremote mergeは`projects/PROJECTS.md`が所有する。
 - GitHub能力は`tools/setup-github-auth.sh --check`の実probeで判定する。認証詳細は通常経路で再実装しない。

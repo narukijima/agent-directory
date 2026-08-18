@@ -269,12 +269,12 @@ non-fast-forward、force pushが必要な状況、不変原資料、paused / ret
   正規finishから追加承認なくpush・remote SHA照合まで行い、workspace / root-only / Independentを混同しない。
 - 現在作業のbackupはOwner・Single Writer・secret・対象差分を検査して`task.sh finish --current-work`へ合流する。
   所有者不明、別Writer、secret、target外差分、divergenceではcommit / pushせず、local完了とremote結果を分ける。
-- `context`、ローカル探索・編集・検証はGitHub readinessなしで進める。通常local sourceはOS account home配下のversioned machine store、
-  process tokenは明示CIかつexact repository / operation allowlistだけとし、外部操作直前の共通readiness検査と
+- `context`、ローカル探索・編集・検証はGitHub readinessなしで進める。通常local sourceはAgent Workspace rootの`.env`、
+  process tokenは明示CIだけとし、外部操作直前のworkspace readiness検査と
   共通doctorの実API・実remote probeで判定する。
-- machine credentialが未導入、stale、不正、またはscope不足ならGitHub外部操作だけをfail-closedで停止する。
-  通常task内では保存済み`gh`認証、process token、別credentialへのfallback、credential repair、login、Keychain、SSH切替を使わず、
-  credential導入とrotationはOperator setupが所有する。
+- Agent rootの`.env`または必要keyが未導入・不正ならGitHub外部操作だけをfail-closedで停止する。
+  通常task内ではOS home、machine store、別Agent、保存済み`gh`認証、process token、Keychainへfallbackせず、
+  credential導入とrotationは各Agent rootが所有する。
 - GitHub失敗はRuntime / local policy / provider / Repository integrity、試行面、request到達を分ける。401/403以外を
   PAT拒否へ一般化せず、unknownを到達不能へ丸めない。同じfailure fingerprintは意味ある差分なしに再試行しない。
 - 上流認証失敗は`UPSTREAM_REPORT_DRAFTED`を未送信かつexit 3とし、認証失敗後の同じ通常task内でrepair・再送しない。
