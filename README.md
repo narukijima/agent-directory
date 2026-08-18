@@ -101,7 +101,7 @@ agent-directory/
 │   ├── _template/                # PROJECT.mdとSTATE.mdだけ
 │   └── <project-name>/           # PROJECT.md、STATE.md、任意のAGENTS.md・docs/・inputs/・outputs/
 ├── evals/                        # EVALS.md、TRACE.md、cases/、fixtures/、profiles/
-└── tools/                        # task.sh、SAFETY.mdほかTool正本、固定ToolとOptional capability
+└── tools/                        # task.sh、SAFETY.md、THREAT_MODEL.mdほかTool正本
 ```
 
 ## ローカル実行環境
@@ -202,7 +202,7 @@ machine共通store、Keychain、別Workspace、global process environmentを正�
 `tools/lib/agent-env.sh`で必要なkeyだけを非実行parseし、`.env`全体をsourceしない。GitHub操作は同じrootの
 `GH_TOKEN`だけを子processへ限定注入し、別Agentのcredentialへfallbackしない。導入と実probeは
 `setup-github-auth.sh --install-token` / `--workspace-ready` / `--check`を使う。境界は
-[Agent-scoped environment threat model](tools/agent-workspace-env-threat-model.md)を参照する。
+[Agent-scoped environment threat model](tools/THREAT_MODEL.md)を参照する。
 
 明示パスと正本の明示参照を最優先とし、検索結果は候補として扱う。選択後に正本を読む。
 `.agent-cache/`は正本から再生成され、検索のstale回復はrouting catalogだけを一度作り直す。

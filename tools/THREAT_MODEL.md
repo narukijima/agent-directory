@@ -1,4 +1,4 @@
-# Agent Workspace Environment Threat Model
+# THREAT_MODEL.md — Agent Workspace Environment Threat Model
 
 ## Scope
 

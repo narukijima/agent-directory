@@ -47,6 +47,9 @@ routeable正本を再計算して比較する（Git HEADは鮮度入力にしな
 既定導入は行わない。閾値上書き（`AGENT_SQLITE_*_THRESHOLD`）はfixture検証専用。
 `AGENT_DIRECTORY_ROOT`は各Toolの対象root、`AGENT_CACHE_DIR`はcache出力先を差し替える（既定値運用）。
 
+検索backendはlexical catalog、必要時のSQLite FTS5、`rg` / `grep` fallbackの三経路で閉じる。
+新しいbackendは、実測された検索欠落または性能上限と、既存経路では満たせない合格条件がある場合だけ追加する。
+
 ## find-context.sh
 
 ```bash
@@ -183,7 +186,7 @@ pushせず、`--dry-run`はremoteへ書き込まない。成功とdry-runはstdo
 
 通常localは現在のAgent Workspace rootの`.env`だけを使い、明示CIだけprocess tokenを許す。値はisolated childだけへ渡し、
 OS home / machine store / 別Agent / global environment / Keychainへfallbackしない。保存は[SETUP.md](../SETUP.md#initial-setup)、
-riskは[threat model](agent-workspace-env-threat-model.md)が所有する。
+riskは[threat model](THREAT_MODEL.md)が所有する。
 
 ```bash
 bash tools/setup-github-auth.sh --install-token
@@ -257,5 +260,6 @@ commit・push境界のPortable Verifierと、managed hook・承認済みsnapshot
 - `tools/lib/project-registry.sh` — `projects/REPOSITORIES.md` registryの正規parseを単一実装として
   提供し、validator・boundary検査・materializerが共有する。
 - `tools/lib/github-auth.sh` — GitHub認証の共有実装（契約は`#GitHub認証Tool`）。
+- `tools/validator/check-context-meta.sh` — routeableなmeta正本のcatalog登録漏れとretired path混入を検査する。
 - `tools/validator/check-markdown-references.sh` — Markdown参照・anchor整合検査の実体。validatorと
   receipt発行が呼ぶ。
