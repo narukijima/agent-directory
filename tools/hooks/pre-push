@@ -2,7 +2,7 @@
 # agent-directory managed hook v3 — pre-push
 # ref削除と非fast-forward push（force push相当）を拒否し、さらに送信対象のcommit内容を
 # 承認済みsnapshot（.git/agent-control/）のpolicyで再検査する。pre-commitを迂回して作られた
-# forbidden / frozen違反もremoteへ出る前に止める。backupを起動しない（tools/CONTROL.md）。
+# forbidden / frozen違反もremoteへ出る前に止める。外部操作は起動しない（tools/CONTROL.md）。
 # stdin: "<local ref> <local sha> <remote ref> <remote sha>" を1 pushed refごとに1行受け取る。
 set -euo pipefail
 
@@ -52,17 +52,12 @@ status=0
 
 nearest_remote_ancestor() {
   # New remote refs report an all-zero remote SHA. Exclude history already represented by
-  # this named remote's tracking refs. An initial push to the canonical private backup may
-  # also exclude ancestry already published by the fetched template remote; only downstream
-  # commits are newly leaving the workspace. Retain a full-history fallback when neither
-  # source proves an ancestor.
+  # this named remote's tracking refs and retain a full-history fallback when no source
+  # proves an ancestor.
   local local_sha="$1" candidate distance best='' best_distance='' namespace
   local tracking_namespaces=()
   [[ -n "$remote_name" ]] && git remote get-url "$remote_name" >/dev/null 2>&1 || return 1
   tracking_namespaces+=("refs/remotes/$remote_name/")
-  if [[ "$remote_name" == 'backup' ]] && git remote get-url template >/dev/null 2>&1; then
-    tracking_namespaces+=("refs/remotes/template/")
-  fi
   for namespace in "${tracking_namespaces[@]}"; do
     while IFS= read -r candidate; do
       [[ -n "$candidate" ]] || continue

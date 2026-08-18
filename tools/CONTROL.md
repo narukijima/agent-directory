@@ -1,203 +1,113 @@
-# CONTROL.md — 境界執行と違反処理
+# CONTROL.md — Git境界
 
-commit・push境界の機械検査、違反の分類と代謝、将来拡張の導入基準を扱うときに読む。
-通常のKnowledge・Skill・Project作業では読まず、設定済みhooksの検査を受けるだけなら読込は不要である。
+commit・push境界の機械検査、protected変更のreceipt、違反時の処理を扱うときだけ読む。
+通常のKnowledge・Skill・Project作業では、導入済みhookの検査を受けるだけでよい。
 
 ## 目的と非ゴール
 
-目的は、`AGENTS.md`と各正本が定める境界のうち機械判定できるものを、エージェントの自己申告に
-依存しない層で実行前に拒否すること。判定の正本（policy）と判定器（verifier）はこのリポジトリ内で
-完結し、特定のAIハーネス・モデル・実行環境に依存しない。非ゴール（実装しない）:
+目的は、`AGENTS.md`と各正本が定める境界のうち機械判定できるものを、実行前に拒否することである。
+判定は特定のAI、Provider、Runtime、外部サービスに依存しない。
 
-- shell、filesystem、network、sandbox、tool approval、Provider選択の許可判定
-- Agent ACL、permission database、Runtime permission matrix、独自sandbox
-- 監査用LLM、常駐daemon、Message Bus、Tool Brokerを通常経路へ入れること
-- 数値スコアの通信簿と、それを目的関数としてエージェントへ渡すこと
-- Git hookからのbackup、validator、ネットワーク操作の起動（hookは境界検査だけを行い、
-  remote操作を開始しない）
-- validatorの代替。hookは差分境界の最終防壁であり、構造検証はvalidatorが所有する
+本層は次を実装しない。
 
-## 執行の三層
+- Runtime permission、sandbox、network、Provider、認証の設定・診断
+- commit、push、backup、公開、Issue / PR、deployの実行
+- 常駐daemon、ACL database、Tool broker、外部監査LLM
+- validatorの代替
+
+## 三層
 
 ```text
-第1層 Policy Canon   tools/control-policy.tsv   何が境界かの機械可読正本
-第2層 Verifier       tools/check-boundary.sh    差分をpolicyへ照らす決定的Tool
-第3層 Adapter        git hooks ほか             判定を強制する環境側の接続点
+Policy    tools/control-policy.tsv
+Verifier  tools/check-boundary.sh
+Adapter   tools/hooks/pre-commit / pre-push
 ```
 
-判定は第1層・第2層だけで完結し、どの環境でも同一である。第3層はverifierを呼ぶ数行に限定し、
-判定ロジックをadapterへ複製しない。git hooksの導入は`tools/install-git-hooks.sh`で行う。
-
-### 執行Toolの契約
-
 ```bash
-tools/check-boundary.sh [--staged | --base <ref> | --range <old> <new>] [--policy <file>] [--path-prefix <prefix>]
+tools/check-boundary.sh [--staged | --base <ref> | --range <old> <new>]
 bash tools/install-git-hooks.sh --install|--status|--remove
 ```
 
-verifierは差分をpolicy（既定は`tools/control-policy.tsv`、執行時はhookが渡すsnapshot）へ照らし、
-stage済み・送信予定の不変Git blobに含まれる実メール、個人home path、credential、private key、
-authorization・cookie・secret代入と、commitのauthor / committerメールを検査する。実値は出力しない。
-GitHub noreplyと`example.invalid`は安全な既定とし、意図的に公開する直接メールだけは
-repository-localな`agent-directory.allowed-public-email`へ明示登録する。
-hostname由来メールや個人home pathを偶発的に含めた履歴へallowlistを使ってはならない。検査導入前の
-未公開commitが原因でrange検査を前進commitでは解除できない場合も、verifierは過去blobを省略せず、
-  履歴を自動変更しない。復旧はOwnerが明示した手順だけで行い、訂正後の履歴を
-同じrange検査へ再投入する。
-合格は`BOUNDARY_OK checked=<n> guarded=<n> contract=<n>`、拒否は`BOUNDARY_BLOCKED reason=<reason>`を
-stdoutへ1行で出して非0で終了する（詳細はstderrの`DETAIL:`）。renameは旧pathの削除と新pathの追加へ
-分解し、`--range`（push再検査）はforbidden / frozenだけを執行する。環境変数rootと実Git rootの
-食い違いは`root-mismatch`で拒否する。ネットワークへ接続しない。
+verifierは次を検査する。
 
-installerはmanaged hook（pre-commit=snapshot verifier実行とreceipt検査、pre-push=ref削除・
-非fast-forward拒否と送信内容再検査）と承認済みsnapshotを、workspace rootとmaterialize済み全
-Independent repositoryへ冪等に導入する（導入元は下記のとおりHEAD blob）。marker行のない既存hookへは
-触れず`HOOKS_BLOCKED`で停止し、`--remove`もmanaged hookだけを除去する。出力は
-`HOOKS_INSTALLED|HOOKS_STATUS|HOOKS_REMOVED|HOOKS_BLOCKED`の1行（independent数を含む）。
+- tracked secret、credential、private key、authorization / cookie、秘密値代入
+- 個人home pathと未許可の直接メール
+- frozen領域の変更・削除・改名
+- guarded / contract変更のack
+- staged差分のmixed-scope
+- push対象のref削除とnon-fast-forward
 
-pre-pushで新規remote refのSHAが全ゼロの場合は、同じnamed remoteのtracking refからlocal SHAの最も近い
-ancestorを選び、それ以後の送信commitだけを再検査する。canonicalな`backup` remoteへの初回pushに限り、
-取得済み`template` remote-tracking refも、すでに公開済みの履歴を示す候補に含める。`template`の候補も
-local SHAのancestorであることをGitで証明し、downstream commitはすべて検査する。ancestorを証明できなければ
-empty treeからの全履歴検査へfallbackする。既存remote refは通知されたremote SHAをbaseとするため、
-この補完を使わない。
+値そのものは診断へ出力しない。networkへ接続しない。
 
-### 承認済みsnapshot
+## 承認済みsnapshot
 
-hookはworking treeのverifier・policyを実行しない。実行するのは`.git/agent-control/`の
-承認済みsnapshotであり、その更新元は**HEADのblob（Gateを通過してcommitされた版）だけ**である。
-installerもHEAD blobから導入し、working tree版を導入元にしない。これにより、未stage・未commitの
-改変で判定者や判定基準を差し替える迂回は構造的に判定へ入らない。hookは実行時に
-`AGENT_DIRECTORY_ROOT`を現在のGit rootへ固定し、verifier自身もrootの食い違いを
-`root-mismatch`で拒否する（判定の別リポジトリへの転送を塞ぐ）。
+hookはworking treeのverifier・policyを実行しない。`.git/agent-control/`に置いた承認済みsnapshotを使う。
+workspace rootではHEAD blobだけから更新し、未commitのpolicy変更で判定を差し替えられないようにする。
 
-### Independent repositoryへの適用
+materialize済みIndependent Projectには同じsnapshotをpath prefix付きで配る。control正本を更新したら、
+workspace rootでinstallerを再実行する。
 
-installerはworkspace rootに加え、materialize済みの全Independent repository
-（`projects/<name>/.git/`）へ同じhookとexternal snapshotを導入する。判定pathは
-`projects/<name>/`のpath-prefixでworkspace相対へ正規化し、同じpolicyで判定する。
-external snapshotはHEAD追従を持たないため、control正本の変更後はworkspace rootで
-installerを再実行して配り直す。Independent側はfull validatorを持たないため、下記のreceiptは
-適用されず、明示ackだけが要求される（既知の限界）。
+## Policy
 
-### 拘束力の限界
-
-この執行は改ざん検知・拒否であり、絶対拘束ではない。残る迂回経路は次で、いずれも使用自体を
-境界違反（制御系違反）として扱う。
-
-- `git commit --no-verify` — pre-commitを飛ばせる。ただしforbidden / frozen違反はpre-pushの
-  送信内容再検査で止まる。guarded / contractのack・receiptはcommit時の性質であり、
-  push時には再要求しない（ackの常用を要求しない設計）。
-- `git push --no-verify` — pre-pushも飛ばせる。remote側の保護（PR必須等）が最後の防壁になる。
-- shellによる`.git/`直接操作 — snapshot・receiptは同一OSユーザーのshellからは書換可能である。
-  OS権限分離はStrict Mode（導入基準参照）まで導入しない。
-
-`AGENT_GUARDED_COMMIT` / `AGENT_CONTRACT_COMMIT`の常用・自動付与・環境への恒久設定も
-境界違反である。唯一の迂回不能な拘束は資格情報の不在である（backup remoteへの書込を
-`tools/backup-to-github.sh`だけに置く、remote側でPRとFF-onlyを強制する等）。
-
-## control-policy.tsv
-
-tab区切り3列`tier	pattern	note`。`#`開始行と空行は無視し、上から先勝ちで判定する。
-patternはリポジトリ相対pathへのshell globである。
+`tools/control-policy.tsv`はtab区切りの`tier pattern note`で、上から先勝ちとする。
 
 | tier | 意味 |
 |---|---|
-| `exempt` | 以降の行を適用しない明示的な例外 |
-| `forbidden` | 追加を含め、Git追跡・stagingを常に拒否する |
-| `frozen` | 追記専用領域。新規追加だけを許し、変更・削除・改名を拒否する |
-| `guarded` | 6つの安全不変条件を定義・執行する正本とTool。`AGENT_GUARDED_COMMIT=true`の明示がない変更を拒否する |
-| `contract` | Project成果契約。人間の決定事項であり、`AGENT_CONTRACT_COMMIT=true`の明示がない変更を拒否する |
+| `exempt` | 後続規則を適用しない明示例外 |
+| `forbidden` | 追跡・stagingを常に拒否 |
+| `frozen` | 新規追加だけを許し、既存blobの変更・削除・改名を拒否 |
+| `guarded` | 安全核と構造を執行する正本・Tool |
+| `contract` | Humanが決定するProject成果契約 |
 
-`guarded`は`tools/SAFETY.md`の不変条件を執行する実装（Tool、hook、validator、policy、Core eval）と、
-lifecycle・attachment・Routeの状態遷移正本の最小集合とする。大型の詳細正本（`projects/PROJECTS.md`、
-`tools/BACKUP.md`等）はordinaryのままとし、その不変条件はTool側guardが執行する。説明文書、テンプレート、
-非Core eval、外部作用を持たない補助Toolを「metaだから」という理由だけでguardedにしない。
-validator `--changed`は品質確認のため、guardedより広いmeta変更でfull staticへfallbackしてよい。
-policyの緩和・行削除はそれ自体がguarded変更であり、下記のエスカレーション条件と`--full`検証を要求する。
+`guarded`は[SAFETY.md](SAFETY.md)の不変条件を直接定義・執行する最小集合だけにする。
+説明文書や「重要そうなもの」を一律にguardedへ入れない。Tool allowlistの新設・拡張は、
+[TOOLS.md](TOOLS.md#追加禁止)のOwner確認を先に満たす。
 
-## 明示エスカレーション
+## Protected commit
 
-`AGENT_GUARDED_COMMIT=true`（guarded）と`AGENT_CONTRACT_COMMIT=true`（contract。対応する
-利用者の決定が先に存在すること）は、該当正本を変更するcommitへの明示的なRepository integrity記録であり、
-次をすべて満たす1回のcommitだけへ付与する。
+`guarded`変更は`AGENT_GUARDED_COMMIT=true`、`contract`変更は
+`AGENT_CONTRACT_COMMIT=true`を、その1回のcommitだけへ付与する。現在の明示依頼が該当変更を含む場合、
+追加確認は不要である。
 
-- task classが`boundary`、またはmeta Routeのwork/stateであり、`--full`検証を同じ作業内で実行する。
-- 変更が依頼範囲内であり、`AGENTS.md#人間へ上げる例外`の不足・衝突がない
-  （contractは利用者の決定が済んでいる場合だけ）。
-- validatorやevalを通すことだけを目的にpolicy、採点基準、size budgetを弱める変更を含まない。
+workspace rootではackに加えて、stage済みindex treeへ束縛したfull-validation receiptを要求する。
 
-現在の明示依頼がguarded / contract変更を含むなら、その依頼がこの記録のauthorizationを満たす。
-環境変数を付けるための追加承認は求めない。これはRuntime Permissionや操作権限の付与ではない。
+```text
+stage protected paths only
+→ bash tools/validate-agent-directory.sh --full
+→ AGENT_GUARDED_COMMIT=true git commit ...
+```
 
-ackは自己申告であり、それ単独では通らない。workspace rootでは次の機械的な束縛が加わる。
+receipt後にindexを変更すると無効になる。protectedとordinaryを同じcommitへ混ぜない。
+Independent Projectはroot validatorを持たないため、external snapshotのackだけを使う。
 
-- **mixed-scope拒否** — guarded / contractの変更と通常の成果を同じcommitへstageしたら、
-  ackの有無にかかわらず`mixed-scope`で拒否する。stage済みpolicyでは新たにguarded / contractとなるpathが
-  HEAD由来snapshotではordinaryの場合、DETAILがそのpathとsnapshot差を明示する。stage済みpolicyは診断に
-  だけ使い、判定を変更しない。policy変更だけを先にcommitし、新HEADからmanaged hookを再導入してから
-  残りをcommitする。hookやsnapshotを迂回しない。
-- **full検証receipt** — guarded / contractのcommitは、stage済みindex tree（`git write-tree`）へ
-  束縛された一回限りのreceiptを要求する。receiptは`--full`validatorがPASS時に
-  `.git/agent-control/receipts/<tree>`へ発行し、pre-commitが消費する。手順は
-  `stage → bash tools/validate-agent-directory.sh --full → commit`の順とする
-  （検証後にstageを変えるとtreeが変わり、receiptは無効になる）。
+## Push境界
 
-## 違反の分類
+pre-pushはref削除とnon-fast-forwardを拒否し、送信予定blobをapproved policyで再検査する。
+新規remote refでは、同じremoteのtracking refからlocal SHAの最も近いancestorを選ぶ。
+ancestorを証明できなければempty treeから全履歴を検査する。
 
-普通の失敗と境界違反を混同しない。失敗は再計画の入力であり、ペナルティの対象ではない。
+remote側のPR必須、FF-only、branch protection、merge policyは対象Repositoryが所有する。
 
-| 事象 | 分類 | 処理 |
-|---|---|---|
-| テスト・検証の失敗 | 能力・品質の失敗 | `tools/TOOLS.md#自己修復と停止`で再試行。権限・範囲を縮めない |
-| 予算・読込上限への到達 | 運用停止 | 停止して事実を報告する。ペナルティなし |
-| forbidden / frozen違反 | 境界違反 | commitを拒否し、違反部分を除いてやり直す |
-| ackなしのguarded変更 | 境界違反 | commitを拒否し、classとエスカレーション条件を再判定する |
-| 承認なしのcontract変更 | 境界違反 | commitを拒否し、`方針・契約`の決定を人間から先に得る |
-| mixed-scope / receipt欠落 | 境界違反 | commitを拒否し、分割または`--full`検証からやり直す |
-| verifier・policy・hooksの迂回、弱体化、無効化 | 制御系違反 | 停止し`安全性・衝突`例外として人間へ上げる |
+## 違反と回復
 
-境界違反は違反した操作だけを拒否し、無関係な能力（読込、分析、別領域の作業）を制限しない。
-一方向に権限を失い続ける設計を採らず、拒否 → 修正 → 再実行を通常の回復経路とする。
+| 事象 | 処理 |
+|---|---|
+| validator失敗 | 原因を直し、同じ検証を再実行 |
+| forbidden / frozen | 違反差分を除去 |
+| ack不足 | task classと明示依頼を確認して正しいackを1回だけ付与 |
+| mixed-scope | protectedとordinaryを別commitへ分割 |
+| receipt不足 | stageを固定してfull validatorを再実行 |
+| verifier / hook迂回 | 制御系違反として停止 |
 
-## 違反の代謝
+hookが通常の誤操作を実害前に拒否しただけなら、正しい手順でやり直す。正本やvalidatorの欠陥が原因なら、
+既存validatorへ最小の再発防止検査を統合する。新しいevalやfixture fileを自動追加しない。
 
-sessionは使い捨てであり、永続する唯一の再発防止は正本へのcommitである。実際に境界違反・
-制御系違反が発生したら、同じ作業内で次を完結する。
+## 委譲
 
-1. 原因（誤認したtask class、欠けたpolicy行、曖昧な正本記述）を特定する。
-2. 原因がpolicy・正本の欠陥なら、該当正本を修正する。
-3. 同じ違反を再現するevalケースまたはvalidator fixtureを追加する。
-4. `--full`検証の合格後にcommitし、違反・原因・追加した再発防止を報告する。
+通常は単一主体で完結する。独立した読み取り調査など、分割利益が明確な場合だけ委譲する。
+同一Git rootのWriterは常に1つ、委譲の深さは1段、final ownerも1つとする。
 
-hookの拒否で実害なく止まった通常の誤操作は、やり直すだけでよく、代謝を要求しない。
+## 将来拡張
 
-## 委譲の境界
-
-通常の小さなタスクは単一の推論主体で完結し、利益のないサブエージェント分割を既定にしない。
-一方、独立調査、隔離review、読み取り専用並列化等でcapability差が成果へ明確に
-寄与する場合は、final ownerが抱え込まず構造化handoffを使える。Providerと実行環境の選択は各Agentが所有する。
-いずれの委譲も次のすべてが成立する場合だけ行う。
-
-- 作業が独立して並列実行でき、対象が読み取り専用か、書込先が衝突しない。
-- 出力を既存の検証方法で確認できる。
-- 並列化・隔離・独立評価の利益が、contextの受け渡しと統合のコストを上回る。
-
-委譲の深さは1段まで（子の再委譲を禁止）。同一Git rootのWriterは常に1つであり
-（`tools/BACKUP.md#Single Writer`）、final gateと責任ごとのprimary ownerも1つにする。子には親が持つ
-権限の部分集合だけを渡し、objective、constraints、target、required output、evaluation criteriaを明示する。
-
-## 導入基準（将来拡張の凍結）
-
-Runtime Permission systemとProvider選択は将来拡張にも含めず、各Agent / Runtimeへ委ねる。
-agent-directory内で将来検討できるのはsemantic safetyとrepository integrityの次の機構だけである。
-導入は場当たりに判断せず、利用者の方針決定に基づいて設計する。
-
-- **Capability State永続化と復権プロトコル** — 外部作用（公開、送信、本番反映、課金）を持つ
-  unattended taskが稼働し、人間が全commitを目視しなくなったとき。
-- **資格情報のsemantic boundary** — 本番・金銭・公開のcredentialについて、秘密保護とdestination固定を
-  強化する必要が生じたとき。credentialの利用可否そのものはRuntime側が所有する。
-- **Repository hook adapter** — 利用ハーネスが固定され、commit差分の追加防壁が設定保守コストを
-  上回るとき。adapterは`tools/check-boundary.sh`を呼ぶだけとし、permission判定を持たない。
-
-いずれを導入する場合も、判定の正本は第1層・第2層に置いたまま動かさない。
+Runtime permission、Provider router、credential manager、backup、外部送信ToolはCoreへ戻さない。
+新しいsemantic safety機構が必要になった場合も、Ownerの明示決定後に既存Policy / Verifierへ統合する。

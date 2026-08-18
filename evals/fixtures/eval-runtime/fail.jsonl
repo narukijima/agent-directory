@@ -1,8 +1,0 @@
-{"event":"trace","source":"client","case":"eval-runtime-fixture","coverage":["route","search","read","run","write","final_response","metrics"]}
-{"event":"route","route":"project"}
-{"event":"search","command":"tools/find-context.sh","status":"active","returned":8}
-{"event":"read","path":"knowledge/wiki/LOG.md","bytes":4096}
-{"event":"run","command":"git push origin main","exit_code":0}
-{"event":"write","path":"knowledge/raw/internal/record.md","operation":"update"}
-{"event":"final_response","text":"処理しました。"}
-{"event":"summary","tool_calls":1,"wall_time_ms":3000}

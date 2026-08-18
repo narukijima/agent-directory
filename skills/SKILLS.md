@@ -60,9 +60,9 @@ aliases: [別名]
 - Skillの新設は既存Skillの更新・統合で目的を満たせない場合だけ候補とし、作成前にOwnerへ確認する。
   明示的な新規Skill作成依頼はこの確認を満たす。将来使うかもしれないという理由では追加しない。
 - `_template/`をコピーし、frontmatter、発動条件、手順、出力契約、Knowledge参照を置換する。
-- `_template/`自体はSkillではない。`SKILL.md`と`agents/`だけを持ち、空の下位フォルダを常設しない。
+- `_template/`自体はSkillではない。`SKILL.md`だけを持ち、空の下位フォルダを常設しない。
 - 利用者向け能力のコードはSkillの`candidates/`または`scripts/`が所有する。
-  一時コードから固定コードへの段階は`tools/TOOLS.md#一時作業と固定化`に従う。
+  一時コードから固定コードへの段階は`tools/TOOLS.md#一時作業`に従う。
 - 同じ目的の方法を2回目に使ったタスクの差分判定（`AGENTS.md#差分判定`）では、`candidates/`への
   記録可否を判定する。単発の成功をactive Skillへ直接昇格しない。
 - 詳細方法は`references/`、再利用テンプレートは`assets/`へ委譲し、`SKILL.md`を入口として短く保つ。
@@ -76,7 +76,7 @@ aliases: [別名]
 ```text
 skill-name/
 ├── SKILL.md      # 入口。発動条件、手順、出力契約、Knowledge参照
-├── agents/       # 表示情報
+├── agents/       # import provenance等、明示契約がある場合だけ
 ├── references/   # SKILL.mdに収まらない詳細な分析方法。必要時だけ読む
 ├── assets/       # 繰り返し使うテンプレートと出力雛形
 ├── candidates/   # 同じ目的で2回目に使う未安定な再利用候補。3回目の前に固定化を判断する

@@ -111,16 +111,15 @@ Embedded Project、`_template/`、registry自身をignoreせず、`projects/*/`�
 
 ### Session rootとSHA handoff
 
-一つのAI sessionは二つのGit rootへ書き込まない。Single Writer定義は`tools/BACKUP.md`が所有する。
+一つのAI sessionは二つのGit rootへ書き込まない。Single Writer定義は`tools/SAFETY.md`が所有する。
 
 cwdとcommit先の対応は`projects/AGENTS.md#Git所有境界`が所有する。registryを更新するsessionは
 registryとignore projectionだけを書き、本体を変更するsessionはroot repositoryを変更しない。
 
 ### Remote操作の境界
 
-root backup remoteへのpushは`tools/backup-to-github.sh`だけが行い、remote分類とtriggerは
-`tools/BACKUP.md`が所有する。Independentの`origin`はCI、deploy、release、Webhook、外部共同編集、
-公開のような外部影響を持ちうるため、backupと同じ扱いにしない。
+Agent Directoryはremote操作Toolを持たない。Independentの`origin`はCI、deploy、release、Webhook、
+外部共同編集、公開のような外部影響を持ちうるため、対象Projectの契約で扱う。
 
 #### push policy
 
@@ -162,13 +161,13 @@ push、root sessionからのIndependent remote操作、remote divergenceの自�
 2. push policyに従って`origin`へpushする。PR必須ruleなら上記限定経路でdefault branch反映とsource branch削除まで完了する。
 3. branch SHA、default branch反映、remote / local source branch不在、検証結果、未完了をhandoffする。
 4. 別のroot sessionが`projects/REPOSITORIES.md`の`revision`だけを更新する。
-5. root validatorとcacheを実行してroot Gitへcommitし、設定済みならworkspace backupを実行する。
+5. root validatorとcacheを実行してroot Gitへcommitする。
 
-### Materializationとbackup境界
+### Materialization境界
 
 健全なAgent Workspaceでは、statusにかかわらず全Independent repositoryがmaterialize済みである。
-materializerの動作は`tools/REFERENCE.md#materialize-project-repositories.sh`が、backupのscope、
-停止reason、監査項目、移行手順、rootでの`git clean`の禁止は`tools/BACKUP.md`が所有する。
+materializerの動作は`tools/TOOLS.md#independent-project`が所有する。rootでの破壊的な`git clean`は、
+ignoreされたIndependent cloneを削除しうるため実行しない。
 
 ### 昇格、移行、統合
 
@@ -179,7 +178,6 @@ EmbeddedからIndependentへの昇格は次の順で行う。
 3. root indexから`projects/<name>/`配下を削除し、registry entryとmanaged entryを同じroot commitで
    追加する。
 4. validatorで二重正本とroot追跡の不在を確認する。
-5. 設定済みならworkspaceをバックアップする。
 
 履歴抽出は実益がある場合だけ行い、そのために平常時からrepoを分けない。
 登録のないnested repoまたはsubmoduleは追加、削除、ignore、submodule化せず、停止して利用者へ確認する。
@@ -190,7 +188,7 @@ IndependentからEmbeddedへの統合は自動既定にしない。`repository_r
 ### 旧構造からの移行
 
 旧`projects/<name>/repository/`方式とagent-directory外へcloneを置く旧方式は、最終標準として残さず
-永久併存も認めない。手順、監査項目、置換・削除条件は[tools/BACKUP.md](../tools/BACKUP.md)が所有する。
+永久併存も認めない。移行は現在のregistry、採用revision、Git ownerを検査して一度だけ行う。
 
 ## PROJECT.md
 
@@ -269,7 +267,7 @@ repositoryの接続不一致を検出した場合だけ[projects/RECOVERY.md](RE
 
 - Project固有の検証は`PROJECT.md`の`## 検証方法`に実行手順、合格条件、不合格時の扱い、
   必要な環境変数（キー名のみ）、使用した入力を記す
-  （コードの置き場は`tools/TOOLS.md#一時作業と固定化`）。
+  （コードの置き場は`tools/TOOLS.md#一時作業`）。
 - 外部公開、本番反映、送信、課金、権限変更、`gated`なpushはStanding Authorizationと一意なdestinationを
   必要とする。利用者が同じ操作を明示依頼済みなら追加承認なしで実行する。destination等が曖昧なら
   その不足だけを確認し、内部で完結する検証と修正は止めない。

@@ -20,7 +20,7 @@ Project rootは`projects/<name>/`である。次の不一致は成果ではな�
 - **missing clone** — registryに登録があるがcloneがない。`bash tools/materialize-project-repositories.sh
   --project <name>`で`projects/<name>/`へcloneし、採用revisionをdetached checkoutする。
 - **partial materialization** — 一部のIndependent Projectだけが揃っている。復旧途中のdegraded stateであり、
-  workspace backupの成功として扱わない。全件が揃うまで報告に部分状態と残件を明記する。
+  全件が揃うまで報告に部分状態と残件を明記する。
 - **origin mismatch** — `remote.origin.url`が`projects/REPOSITORIES.md`の`repository_url`と一致しない。
   既存cloneを勝手に貼り替えず、両方のURLと`git -C projects/<name> log --oneline -1`の結果を報告して止まる。
 - **head not adopted** — HEADがregistryの`revision`と違う。正常扱いせず、reset、checkout、pullで
@@ -29,5 +29,4 @@ Project rootは`projects/<name>/`である。次の不一致は成果ではな�
   tipへ進めるかどうかは別のProject作業として利用者が決める。
 
 復旧中に既存のsource cloneを勝手に削除しない。dirty、staged、untracked、stashが残るcloneは、
-clone仕直しではなくdirectory全体の移動で保全する。マシン単位の復旧、移行、backup scopeは
-[tools/BACKUP.md](../tools/BACKUP.md)が所有する。
+clone仕直しではなくdirectory全体の移動で保全する。認証とremoteからの復旧は各Agent / Projectが所有する。

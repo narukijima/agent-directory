@@ -1,7 +1,0 @@
-product,component,layer,contrast_ratio
-alpha,Button,primitives,4.7
-alpha,Card,patterns,4.4
-beta,IconButton,primitives,4.9
-beta,Card,patterns,4.6
-gamma,Button,primitives,4.5
-gamma,Banner,patterns,3.9

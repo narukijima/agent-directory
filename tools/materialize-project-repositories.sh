@@ -8,7 +8,6 @@ set -euo pipefail
 tool_root="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
 repo_root="$(cd "${AGENT_DIRECTORY_ROOT:-$tool_root/..}" 2>/dev/null && pwd -P)" || repo_root=''
 . "$tool_root/lib/project-registry.sh"
-. "$tool_root/lib/github-auth.sh"
 registry_path='projects/REPOSITORIES.md'
 ignore_path='projects/.gitignore'
 select_all=false
@@ -74,9 +73,7 @@ redact_repository_url() {
 # Classify the cause from failure output so we never hang on an authentication prompt.
 classify_remote_failure() {
   local output="$1" status="${2:-1}" repository_url="${3:-}"
-  if [[ "$(github_auth_remote_kind "$repository_url")" == github-https ]]; then
-    github_auth_classify_git_error "$output" "$status"
-  elif printf '%s\n' "$output" | grep -Eqi \
+  if printf '%s\n' "$output" | grep -Eqi \
     'authentication|could not read Username|could not read Password|terminal prompts disabled|invalid username or password|access denied'; then
     printf 'authentication-required'
   elif printf '%s\n' "$output" | grep -Eqi 'permission denied \(publickey\)'; then
@@ -86,27 +83,10 @@ classify_remote_failure() {
   fi
 }
 
-require_github_materialization() {
-  local repository_url="$1" project_name="$2" repository
-  [[ "$(github_auth_remote_kind "$repository_url")" == github-https ]] || return 0
-  repository="$(github_auth_repository_from_url "$repository_url")" || \
-    blocked 'github-remote-invalid' "$project_name" 'registered GitHub remote is not a credential-free HTTPS repository URL'
-  GITHUB_AUTH_REMOTE_RESOLVED='yes'
-  if ! github_auth_resolve "$repo_root" "$repository" git-read; then
-    github_auth_diagnostic git-read "$repository" origin github-https 90 >&2
-    blocked "${GITHUB_AUTH_REASON:-github-unknown-failure}" "$project_name" \
-      'GitHub materialization requires the current Agent root .env credential immediately before clone/fetch'
-  fi
-}
-
 run_remote_git() {
   local repository_url="$1"
   shift
-  if [[ "$(github_auth_remote_kind "$repository_url")" == github-https ]]; then
-    github_git_run "$repo_root" "$repository_url" git-read "$@"
-  else
-    GIT_TERMINAL_PROMPT=0 GIT_ASKPASS=true GCM_INTERACTIVE=never git "$@"
-  fi
+  GIT_TERMINAL_PROMPT=0 GIT_ASKPASS=true GCM_INTERACTIVE=never git "$@"
 }
 
 while (( $# > 0 )); do
@@ -333,7 +313,6 @@ while (( entry_index < registry_count )); do
   fi
 
   pending_target="$target"
-  require_github_materialization "$repository_url" "$project_name"
   clone_output=''
   clone_status=0
   clone_output="$(run_remote_git "$repository_url" clone --quiet --no-checkout -- "$repository_url" "$target" 2>&1)" || clone_status=$?
@@ -353,7 +332,6 @@ while (( entry_index < registry_count )); do
     "remote.origin.url is $(redact_repository_url "${cloned_origin:-<unset>}"), expected $(redact_repository_url "$repository_url")"
 
   if ! git -C "$target" cat-file -e "${state_revision}^{commit}" 2>/dev/null; then
-    require_github_materialization "$repository_url" "$project_name"
     fetch_output=''
     fetch_status=0
     fetch_output="$(run_remote_git "$repository_url" -C "$target" fetch --quiet --no-tags origin "$state_revision" 2>&1)" || fetch_status=$?

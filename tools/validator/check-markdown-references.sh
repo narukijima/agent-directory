@@ -3,7 +3,7 @@ set -euo pipefail
 
 # Internal checker used by validate-agent-directory.sh. Keep Markdown reference
 # resolution isolated from the rest of the workspace validator so path and heading rules can
-# be tested without coupling them to Git or backup fixtures.
+# be tested without coupling them to Git or external-operation fixtures.
 # Usage: check-markdown-references.sh [<repo_root> [<repo-relative .md file>...]]
 # Without file arguments every tracked Markdown file is scanned (--full). With file
 # arguments only the outgoing references of those files are checked (--changed scope).

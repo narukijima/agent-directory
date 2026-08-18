@@ -24,7 +24,7 @@
 | `knowledge` | 取り込み、照会、統合 | `knowledge/KNOWLEDGE.md` |
 | `skill` | 再利用手順・研究方法 | `skills/SKILLS.md`と対象`SKILL.md` |
 | `project` | 固有作業・成果物・研究 | `projects/AGENTS.md` |
-| `meta` | 構造、規約、eval、tool | 対象領域の正本と変更対象 |
+| `meta` | 構造、規約、tool | 対象領域の正本と変更対象 |
 | `none` | 永続変更のない回答 | 追加ロードなし |
 
 ## Context Loading
@@ -39,9 +39,9 @@ Runtime、Provider、認証、permission mode、schedulerは各AgentとOperator�
 失敗層を分け、同じfingerprintを状態・入力・経路の差分なしに再試行しない。
 
 明示依頼は同じ操作のStanding Authorizationである。target / destinationが一意で契約、secret、divergence、
-Single Writerと衝突しなければ、scope内の通常工程と設定済みbackupを追加承認なしで完了する。Runtimeが許可した
-read / edit / build / test / network / API / Git / GitHub / deploy等をTool call単位へ再分解しない。詳細は対象Owner、
-backup停止条件は`tools/BACKUP.md`が所有する。
+Single Writerと衝突しなければ、scope内の通常工程を追加承認なしで完了する。Runtimeが許可した
+read / edit / build / test / network / API / Git / deploy等をTool call単位へ再分解しない。外部操作の詳細は
+各Agent、Operator、対象Projectが所有する。
 
 ## 差分判定
 
@@ -54,25 +54,24 @@ backup停止条件は`tools/BACKUP.md`が所有する。
 
 target / destination / credential、目的・契約、不可逆対象、lifecycle、secret、divergence、Single Writer、所有者、
 正本が一意でない場合だけ不足一点を確認する。詳細Ownerは`projects/PROJECTS.md`、`projects/LIFECYCLE.md`、
-`tools/BACKUP.md`、`tools/TOOLS.md`。Generic Permissionを再承認させない。
+`tools/TOOLS.md`。Generic Permissionを再承認させない。
 
 ## 禁止事項
 
 - APIキー、token、password、外部サービス設定の実値をcommitしない。保存と注入は各Agent / Runtimeが所有する。
-- GitHubを書込正本にしない。remote、push、divergence、privacy訂正は`tools/BACKUP.md`に従い、local pull / mergeと
-  履歴書換えを行わない。repository ruleがPRを必須にする場合のremote mergeは`projects/PROJECTS.md`が所有する。
+- remoteを書込正本にしない。push、divergence、privacy訂正、PR必須ruleは対象Project / Repository契約に従う。
 - 未依頼の機能・抽象化・依存を足さず、未検証を完了報告しない。
 - 一意な削除・移動だけを実行し、paused / retiredとProject削除は`projects/LIFECYCLE.md`に従う。
 - 下位`AGENTS.md`で上位規則・`PROJECT.md`を弱めない。
 
 上記の判断を支える安全核は`tools/SAFETY.md`の6項目だけとする。commit境界の実装を変更するときだけ
-`tools/CONTROL.md`、backup・divergence時だけ`tools/BACKUP.md`を読む。
+`tools/CONTROL.md`を読む。
 
 ## 詳細正本
 
 - Project: `projects/PROJECTS.md`、`projects/LIFECYCLE.md`、`projects/RECOVERY.md`
-- Tool: `tools/TOOLS.md`、`tools/BACKUP.md`、`tools/UPSTREAM.md`
-- Safety / eval: `tools/SAFETY.md`、`tools/CONTROL.md`、`evals/EVALS.md`
+- Tool: `tools/TOOLS.md`
+- Safety: `tools/SAFETY.md`、`tools/CONTROL.md`
 
 ## 参照順序
 

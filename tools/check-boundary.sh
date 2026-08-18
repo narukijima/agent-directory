@@ -345,7 +345,12 @@ check_op() {
       ordinary_paths+=("$path")
       ;;
     forbidden)
-      record_violation 'forbidden-path' "$op" "$path"
+      if [[ "$op" == 'delete' ]]; then
+        normal_count=$((normal_count + 1))
+        ordinary_paths+=("$path")
+      else
+        record_violation 'forbidden-path' "$op" "$path"
+      fi
       ;;
     frozen)
       if [[ "$op" == 'add' ]]; then

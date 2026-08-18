@@ -1,82 +1,35 @@
-# tools/control-policy.tsv — 境界執行の機械可読policy。意味論とtier定義はtools/CONTROL.mdが所有する。
+# tools/control-policy.tsv — Git境界の機械可読policy。意味論はtools/CONTROL.mdが所有する。
 # tier	pattern	note
-exempt	.env.example	配布用テンプレートは追跡してよい
-exempt	*/.env.example	配布用テンプレートは追跡してよい
-forbidden	.env*	秘密情報の実値
-forbidden	*/.env*	秘密情報の実値
-forbidden	.tmp/*	一時作業領域
-forbidden	*/.tmp/*	一時作業領域
-forbidden	.agent-cache/*	派生cache
-forbidden	*/.agent-cache/*	派生cache
+forbidden	.env*	secretや外部サービス設定の実値
+forbidden	*/.env*	secretや外部サービス設定の実値
+forbidden	.tmp/*	一時作業
+forbidden	*/.tmp/*	一時作業
+forbidden	.agent-cache/*	再生成可能cache
+forbidden	*/.agent-cache/*	再生成可能cache
 forbidden	.DS_Store	OS生成物
 forbidden	*/.DS_Store	OS生成物
-frozen	knowledge/raw/*	不変原資料（追加のみ）
-frozen	knowledge/wiki/logs/*	閉鎖済みlog（追加のみ）
+frozen	knowledge/raw/*	不変原資料
+frozen	knowledge/wiki/logs/*	閉鎖済みlog
 guarded	AGENTS.md	最上位規約
-guarded	.gitignore	追跡境界の定義
+guarded	.gitignore	追跡境界
+guarded	skills/SKILLS.md	Skill追加のOwner gate
 guarded	tools/SAFETY.md	六つの安全不変条件
-guarded	tools/CONTROL.md	境界実装契約
+guarded	tools/CONTROL.md	Git境界契約
+guarded	tools/TOOLS.md	Tool allowlistと追加のOwner gate
 guarded	tools/control-policy.tsv	境界policy
 guarded	tools/check-boundary.sh	境界verifier
 guarded	tools/install-git-hooks.sh	hook installer
-guarded	tools/hooks/*	managed Git hooks
-guarded	tools/validate-agent-directory.sh	構造と安全性validator
-guarded	tools/validator/*	validator内部checker（receipt発行の検査実体）
-guarded	tools/task.sh	通常タスク入口
-guarded	tools/finalize-task.sh	commitとbackup終端
-guarded	tools/backup-to-github.sh	backup外部作用
-guarded	tools/report-upstream-issue.sh	上流Issue外部作用
-guarded	tools/lib/github-auth.sh	認証resolver
-guarded	tools/lib/agent-env.sh	Agent root .env key単位resolver
+guarded	tools/hooks/*	managed hooks
+guarded	tools/validate-agent-directory.sh	構造validator
+guarded	tools/validator/*	validator内部checker
+guarded	tools/task.sh	通常入口
 guarded	tools/lib/project-registry.sh	Git rootとOwner解決
-guarded	tools/materialize-project-repositories.sh	Independent復元とroot境界
-guarded	tools/setup-github-auth.sh	認証setupとmachine enrollment
-guarded	tools/run-evals.py	Core eval scorer
-guarded	evals/EVALS.md	行動eval契約
-guarded	evals/cases/multi-ai-recommended-profile.yaml	撤廃済み固定分担evalのtombstone
-guarded	evals/cases/pr-required-remote-completion.yaml	PR必須remote完了経路eval
-guarded	evals/TRACE.md	trace語彙とadapter契約
-guarded	evals/profiles/core.txt	Core品質gate
-guarded	evals/cases/route-to-knowledge.yaml	Core route invariant
-guarded	evals/cases/route-to-skill.yaml	Core route invariant
-guarded	evals/cases/route-to-project.yaml	Core route invariant
-guarded	evals/cases/context-budget-stop.yaml	Core context budget invariant
-guarded	evals/cases/knowledge-bounded-retrieval.yaml	Core bounded retrieval invariant
-guarded	evals/cases/project-required-only.yaml	Core context invariant
-guarded	evals/cases/project-work-scoped-validation.yaml	Core verification invariant
-guarded	evals/cases/project-goal-change-protection.yaml	Core contract invariant
-guarded	evals/cases/protect-immutable-records.yaml	Core immutability invariant
-guarded	evals/cases/protect-paused-project.yaml	Core lifecycle invariant
-guarded	evals/cases/autonomous-internal-change-commit.yaml	Core no-repeat-approval invariant
-guarded	evals/cases/external-effect-approval-gate.yaml	Core external-effect invariant
-guarded	evals/cases/external-effect-ambiguous-destination.yaml	Core destination ambiguity invariant
-guarded	evals/cases/explicit-file-delete-standing-authorization.yaml	Core explicit delete authorization invariant
-guarded	evals/cases/ambiguous-file-delete-refusal.yaml	Core destructive ambiguity invariant
-guarded	evals/cases/unowned-change-conflict.yaml	Core ownership invariant
-guarded	evals/cases/backup-auto-after-verified-commit.yaml	Core configured-backup authorization invariant
-guarded	evals/cases/explicit-backup-current-project-work.yaml	Core explicit backup completion invariant
-guarded	evals/cases/explicit-backup-unowned-current-work.yaml	Core explicit backup ownership invariant
-guarded	evals/cases/canon-conflict-escalation.yaml	Core canon invariant
-guarded	evals/cases/restore-single-writer.yaml	Core writer invariant
-guarded	evals/cases/backup-divergence-refusal.yaml	Core remote invariant
-guarded	evals/cases/independent-root-content-boundary.yaml	Core root invariant
-guarded	evals/cases/public-foundation-owner-state-boundary.yaml	Core public foundation ownership invariant
-guarded	evals/cases/general-project-state-contract-retained.yaml	Core general Project state invariant
-guarded	evals/cases/control-policy-tamper.yaml	Core control invariant
-guarded	evals/cases/control-mixed-scope-commit-split.yaml	Core commit invariant
-guarded	evals/cases/control-ordinary-failure-no-penalty.yaml	Core recovery invariant
-guarded	evals/cases/failure-evidence-boundary.yaml	Core evidence boundary invariant
-guarded	evals/cases/correction-invalidates-stale-inference.yaml	Core correction recovery invariant
-guarded	evals/cases/github-auth-no-token-leak.yaml	Core secret invariant
-guarded	evals/cases/github-auth-workspace-credential.yaml	Core Agent credential ownership invariant
-guarded	evals/cases/github-failure-fingerprint-no-identical-retry.yaml	Core no-identical-retry invariant
-guarded	evals/cases/upstream-issue-privacy.yaml	Core privacy invariant
-guarded	evals/cases/task-no-durable-delta.yaml	Core no-op invariant
-guarded	projects/AGENTS.md	Route正本
-guarded	projects/DOCS.md	Project文書の任意拡張正本
-guarded	projects/LIFECYCLE.md	状態遷移正本
-guarded	projects/RECOVERY.md	復旧正本
+guarded	tools/materialize-project-repositories.sh	Independent Project再現
+guarded	projects/AGENTS.md	Project Route入口
+guarded	projects/DOCS.md	Project docs境界
+guarded	projects/LIFECYCLE.md	状態遷移
+guarded	projects/RECOVERY.md	復旧境界
 guarded	projects/REPOSITORIES.md	attachment registry
 guarded	projects/.gitignore	registry projection
-contract	projects/*/PROJECT.md	Project成果契約（人間が決める）
+contract	projects/*/PROJECT.md	Project成果契約
 guarded	projects/*/AGENTS.md	Project個別契約

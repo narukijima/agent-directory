@@ -1,5 +1,0 @@
-{"event":"trace","source":"agent","case":"eval-runtime-fixture","coverage":["route","search","read","run","write","final_response","metrics"]}
-{"event":"route","route":"meta"}
-{"event":"read","path":"AGENTS.md","bytes":200}
-{"event":"run","command":"bash tools/validate-agent-directory.sh --changed","exit_code":0}
-{"event":"final_response","text":"検証は完了し、PASSしました。"}

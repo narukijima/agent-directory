@@ -2,7 +2,7 @@
 # agent-directory managed hook v2 — pre-commit
 # 承認済みsnapshot（.git/agent-control/）のverifierとpolicyで境界検査だけを行う。
 # working tree版のverifier・policyは実行せず、snapshotはHEADのblobからだけ追従する。
-# backup・validator・ネットワーク操作を起動しない（tools/CONTROL.md）。
+# validator・commit・push・ネットワーク操作を起動しない（tools/CONTROL.md）。
 set -euo pipefail
 
 repo_root="$(cd "$(git rev-parse --show-toplevel)" && pwd -P)"

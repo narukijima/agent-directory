@@ -1,7 +1,7 @@
 # SAFETY.md — 安全核
 
 通常作業で常に意識する安全境界はこの6項目だけである。実装詳細は必要時だけ
-`tools/CONTROL.md`、`tools/BACKUP.md`、`projects/LIFECYCLE.md`を読む。
+`tools/CONTROL.md`、`projects/LIFECYCLE.md`、対象Project契約を読む。
 
 shell、filesystem、network、sandbox、tool approval、Provider選択は各Agent / Runtimeが所有し、
 本安全核は設定・診断しない。本書が扱うのは操作の意味、対象、Repository整合性だけである。
@@ -28,7 +28,7 @@ shell、filesystem、network、sandbox、tool approval、Provider選択は各Age
 | external | push、公開、送信、本番、課金、権限、破壊操作 | Standing Authorization、一意なtarget / destination、実行後照合 |
 
 `guarded`は「重要そうなファイル全部」ではなく、protected経路の実装だけへ限定する。
-通常の失敗、文書改善、eval追加、非安全Toolの修正を境界違反にしない。
+通常の失敗、文書改善、通常Toolの修正を境界違反にしない。
 
 ## 執行の所有先
 
@@ -38,7 +38,7 @@ shell、filesystem、network、sandbox、tool approval、Provider選択は各Age
 | Lifecycle | validator、Project契約 | `projects/LIFECYCLE.md` |
 | Secrets | `tools/check-boundary.sh`、validator | `tools/CONTROL.md` |
 | Standing Authorization | 対象固有契約 | `AGENTS.md`、各Project契約 |
-| Remote Integrity | Gitと対象Project契約 | `tools/BACKUP.md` |
+| Remote Integrity | Gitと対象Project契約 | 対象Project / remoteの契約 |
 | Control Integrity | `tools/control-policy.tsv`、managed hooks | `tools/CONTROL.md` |
 
 通常タスクは`tools/task.sh`を入口にし、この表の実装詳細を再推論しない。境界で停止した場合だけ

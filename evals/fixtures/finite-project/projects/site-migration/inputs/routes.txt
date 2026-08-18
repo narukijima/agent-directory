@@ -1,2 +1,0 @@
-/old-home -> /home
-/old-help -> /help

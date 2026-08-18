@@ -1,5 +1,4 @@
 .tmp/
 .agent-cache/
 .env*
-!.env.example
 .DS_Store

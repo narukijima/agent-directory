@@ -98,7 +98,7 @@ Root Knowledgeとして扱わない。昇格条件と昇格時の責務は`proje
 
 大きいことだけを理由に、原資料、Knowledge、研究証拠、Project成果物を圧縮、要約置換、削除しない。入口
 ファイルのサイズ超過とは別問題として扱い、次の非破壊的手段で解く。入口側の処理は
-`tools/TOOLS.md#超過時の標準処理`が所有する。
+`tools/TOOLS.md#サイズ予算`が所有する。
 
 - 見出し単位の部分読込、frontmatter metadataによる候補選択、検索による限定取得
 - `INDEX.md`とDomain Canonからの段階的開示、不変原資料と解釈済みKnowledgeの分離

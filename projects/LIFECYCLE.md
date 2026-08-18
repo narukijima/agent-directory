@@ -36,7 +36,7 @@ AIが自動でactiveへ戻さない。
 
 - 合格条件が検証済みで、次目標が正本から一意に決まるcontinuousの現在目標更新。
 - 全`PC-xx`の検証証拠が揃ったfiniteの`completed`化と、`STATE.md`の完了状態への更新。
-- 状態変化の同じ作業内での`STATE.md`反映と、`tools/TOOLS.md#自律実行の標準完了`に従うcommit。
+- 状態変化の同じ作業内での`STATE.md`反映と、対象検証後のscoped commit。
 
 ## 物理位置
 

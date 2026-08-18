@@ -215,16 +215,9 @@ meta_files=(
   'projects/REPOSITORIES.md|repository-registry|Independent repository attachment registry'
   'projects/LIFECYCLE.md|project-lifecycle|Projectの状態遷移と削除条件'
   'projects/RECOVERY.md|project-recovery|Projectの目的不一致からの復旧'
-  'evals/EVALS.md|eval-policy|振る舞いEvalの規約'
-  'evals/TRACE.md|trace-contract|Context traceの語彙、信頼、adapter契約'
   'tools/TOOLS.md|tool-policy|構造保守Toolの規約'
   'tools/SAFETY.md|safety-invariants|Workspace integrityを守る六つの安全不変条件'
   'tools/CONTROL.md|control-policy|commit・push境界執行と違反処理'
-  'tools/REFERENCE.md|tool-reference|固定Toolの呼出形、結果、停止reason'
-  'tools/BACKUP.md|backup-policy|遠隔バックアップ、復旧、マシン移行の規約'
-  'tools/BACKUP-RECOVERY.md|backup-recovery|privacy訂正、移行、障害復旧の条件付きrunbook'
-  'tools/THREAT_MODEL.md|environment-threat-model|Agent rootの環境変数とcredential分離の脅威モデル'
-  'tools/UPSTREAM.md|upstream-policy|匿名化された上流Issue報告の境界'
 )
 
 # --- --check-routing warm fast path -----------------------------------------------
@@ -525,9 +518,7 @@ if [[ "$mode" != 'routing' ]]; then
   while IFS= read -r -d '' file; do
     relative_path="${file#"$repo_root"/}"
     case "$relative_path" in
-      .git/*|*/.git/*|.agent-cache/*|*/.agent-cache/*|.tmp/*|*/.tmp/*|.DS_Store|*/.DS_Store|.env|.env.*|*/.env|*/.env.*)
-        [[ "$relative_path" == '.env.example' || "$relative_path" == */.env.example ]] || continue
-        ;;
+      .git/*|*/.git/*|.agent-cache/*|*/.agent-cache/*|.tmp/*|*/.tmp/*|.DS_Store|*/.DS_Store|.env|.env.*|*/.env|*/.env.*) continue ;;
     esac
 
     kind='file'
@@ -543,7 +534,6 @@ if [[ "$mode" != 'routing' ]]; then
       projects/*/STATE.md) kind='project-state' ;;
       projects/*/ARCHITECTURE.md) kind='project-architecture' ;;
       projects/*/docs/*) kind='project-doc' ;;
-      evals/cases/*.yaml) kind='eval' ;;
       tools/*) kind='tool' ;;
       *.md|*/*.md) kind='policy-or-document' ;;
     esac

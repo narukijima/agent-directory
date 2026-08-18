@@ -1,18 +1,17 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Thin task facade. It keeps task class and validation/backup profiles inside the
-# compatibility tools so an agent normally supplies only Route and Target.
+# Thin local task entrypoint. Runtime, Provider, commit, push, and publication
+# workflows belong to each Agent / Operator, not to Agent Directory.
 
-tool_root="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-repo_root="${AGENT_DIRECTORY_ROOT:-$(cd "$tool_root/.." && pwd)}"
+tool_root="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
+repo_root="$(cd "$tool_root/.." && pwd -P)"
 
 usage() {
   cat >&2 <<'USAGE'
 Usage:
-  tools/task.sh context --route knowledge|skill|project|meta [--target <path>]
+  tools/task.sh context --route knowledge|skill|project|meta [--target <repository-relative-path>]
   tools/task.sh verify
-  tools/task.sh finish --route knowledge|skill|project|meta [--target <path>] --message <text> [--current-work]
   tools/task.sh status
 USAGE
 }
@@ -28,8 +27,6 @@ shift
 
 route=''
 target=''
-message=''
-current_work=false
 while (( $# > 0 )); do
   case "$1" in
     --route)
@@ -39,50 +36,93 @@ while (( $# > 0 )); do
       ;;
     --target)
       [[ $# -ge 2 ]] || { usage; exit 2; }
-      target="$2"
+      target="${2#./}"
       shift 2
-      ;;
-    --message)
-      [[ $# -ge 2 ]] || { usage; exit 2; }
-      message="$2"
-      shift 2
-      ;;
-    --current-work)
-      current_work=true
-      shift
       ;;
     *) usage; exit 2 ;;
   esac
 done
 
+emit_target() {
+  local path="$1"
+  if [[ -f "$repo_root/$path" ]]; then
+    printf 'READ: %s\n' "$path"
+  elif [[ -d "$repo_root/$path" ]]; then
+    printf 'READ: %s\n' "$path"
+  else
+    printf 'MISSING: %s\n' "$path"
+  fi
+}
+
 case "$command_name" in
   context)
-    [[ "$current_work" == false ]] || { usage; exit 2; }
     case "$route" in knowledge|skill|project|meta) ;; *) usage; exit 2 ;; esac
-    args=(--route "$route" --class work)
-    [[ -z "$target" ]] || args+=(--target "$target")
-    packet="$(bash "$tool_root/prepare-context.sh" "${args[@]}")" || \
-      blocked context context-resolution-failed
-    printf 'TASK_CONTEXT v2\n'
-    printf '%s\n' "$packet" | awk '
-      /^route=/ || /^target=/ || /^git_root=/ || /^repository_owner=/ || /^repository_role=/ { print }
-      /^READ:/ || /^CONDITIONAL:/ || /^MISSING:/ { emit=1; print; next }
-      emit && !/^(task_class|validation_profile|backup_profile)=/ { print }
-    '
+    case "$target" in
+      /*|..|../*|*/../*|*/..) blocked context target-outside-repository ;;
+    esac
+
+    git_root="$repo_root"
+    repository_owner='root'
+    if [[ -n "$target" && -e "$repo_root/$target" ]]; then
+      probe="$repo_root/$target"
+      [[ -d "$probe" ]] || probe="$(dirname "$probe")"
+      resolved_root="$(git -C "$probe" rev-parse --show-toplevel 2>/dev/null || true)"
+      if [[ -n "$resolved_root" ]]; then
+        resolved_root="$(cd "$resolved_root" && pwd -P)"
+        case "$resolved_root" in
+          "$repo_root") ;;
+          "$repo_root"/projects/*)
+            git_root="$resolved_root"
+            repository_owner='independent'
+            ;;
+          *) blocked context target-owned-by-another-root ;;
+        esac
+      fi
+    fi
+
+    printf 'TASK_CONTEXT v3\n'
+    printf 'route=%s\n' "$route"
+    printf 'target=%s\n' "${target:-none}"
+    printf 'git_root=%s\n' "$git_root"
+    printf 'repository_owner=%s\n' "$repository_owner"
+    printf 'READ: AGENTS.md\n'
+    case "$route" in
+      knowledge)
+        printf 'READ: knowledge/KNOWLEDGE.md\n'
+        [[ -z "$target" ]] || emit_target "$target"
+        ;;
+      skill)
+        printf 'READ: skills/SKILLS.md\n'
+        if [[ -n "$target" ]]; then
+          if [[ -d "$repo_root/$target" ]]; then
+            emit_target "$target/SKILL.md"
+          else
+            emit_target "$target"
+          fi
+        fi
+        ;;
+      project)
+        printf 'READ: projects/AGENTS.md\n'
+        if [[ -n "$target" ]]; then
+          if [[ -d "$repo_root/$target" ]]; then
+            [[ ! -f "$repo_root/$target/AGENTS.md" ]] || emit_target "$target/AGENTS.md"
+            emit_target "$target/PROJECT.md"
+            emit_target "$target/STATE.md"
+          else
+            emit_target "$target"
+          fi
+        fi
+        ;;
+      meta)
+        [[ -z "$target" ]] || emit_target "$target"
+        ;;
+    esac
     ;;
   verify)
-    [[ -z "$route$target$message" && "$current_work" == false ]] || { usage; exit 2; }
-    if ! git -C "$repo_root" rev-parse --show-toplevel >/dev/null 2>&1; then
-      blocked verify not-a-git-repository
-    fi
-    [[ -f "$repo_root/tools/validate-agent-directory.sh" ]] || blocked verify validator-not-found
-    if output="$( (cd "$repo_root" && bash tools/validate-agent-directory.sh --changed) 2>&1 )"; then
+    [[ -z "$route$target" ]] || { usage; exit 2; }
+    if output="$(cd "$repo_root" && bash tools/validate-agent-directory.sh --changed 2>&1)"; then
       printf '%s\n' "$output" >&2
-      scope='changed'
-      case "$output" in
-        *'running the full static validation'*) scope='full' ;;
-      esac
-      printf 'TASK_OK action=verify scope=%s\n' "$scope"
+      printf 'TASK_OK action=verify\n'
     else
       rc=$?
       printf '%s\n' "$output" >&2
@@ -90,38 +130,9 @@ case "$command_name" in
       exit "$rc"
     fi
     ;;
-  finish)
-    case "$route" in knowledge|skill|project|meta) ;; *) usage; exit 2 ;; esac
-    [[ -n "$message" ]] || { usage; exit 2; }
-    args=(--route "$route" --class work --message "$message")
-    [[ -z "$target" ]] || args+=(--target "$target")
-    if [[ "$current_work" == true ]]; then
-      [[ -n "$target" ]] || { usage; exit 2; }
-      args+=(--current-work)
-    fi
-    if output="$(bash "$tool_root/finalize-task.sh" "${args[@]}" 2>&1)"; then
-      printf '%s\n' "$output" >&2
-      printf 'TASK_OK action=finish\n'
-    else
-      rc=$?
-      printf '%s\n' "$output" >&2
-      case "$output" in
-        *'FINALIZE_BLOCKED reason=boundary'*|*'FINALIZE_BLOCKED reason=ack-env-set'*)
-          blocked finish protected-change "$rc"
-          ;;
-        *)
-          printf 'TASK_FAILED action=finish reason=finalize-failed\n'
-          exit "$rc"
-          ;;
-      esac
-    fi
-    ;;
   status)
-    [[ -z "$route$target$message" && "$current_work" == false ]] || { usage; exit 2; }
-    git_root="$(git -C "$repo_root" rev-parse --show-toplevel 2>/dev/null)" || \
-      blocked status not-a-git-repository
-    changed_count="$({ git -C "$repo_root" status --porcelain --untracked-files=normal || true; } | wc -l | tr -d ' ')"
-    printf 'TASK_OK action=status git_root=%s changed=%s\n' "$git_root" "$changed_count"
+    [[ -z "$route$target" ]] || { usage; exit 2; }
+    printf 'TASK_STATUS git_root=%s changed=%s\n' "$repo_root" "$(git -C "$repo_root" status --porcelain | wc -l | tr -d ' ')"
     ;;
   *) usage; exit 2 ;;
 esac
