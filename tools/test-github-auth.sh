@@ -12,6 +12,8 @@ trap 'rm -rf "$fixture"' EXIT
 fail() { printf 'FAIL: %s\n' "$1" >&2; failures=$((failures + 1)); }
 fixture_pat_a="$(printf '%s%s' 'github_' 'pat_')$(printf 'A%.0s' {1..76})"
 fixture_pat_b="$(printf '%s%s' 'github_' 'pat_')$(printf 'B%.0s' {1..76})"
+fixture_pat_a_updated="$(printf '%s%s' 'github_' 'pat_')$(printf 'C%.0s' {1..76})"
+fixture_pat_b_updated="$(printf '%s%s' 'github_' 'pat_')$(printf 'D%.0s' {1..76})"
 
 make_workspace() {
   local root="$1"
@@ -46,7 +48,41 @@ write_env "$workspace_b" "$fixture_pat_b"
 resolve_expected "$workspace_a" "$fixture_pat_a" || fail 'Agent A did not select its own .env token'
 resolve_expected "$workspace_b" "$fixture_pat_b" || fail 'Agent B did not select its own .env token'
 
-GH_TOKEN="$fixture_pat_b" resolve_expected "$workspace_a" "$fixture_pat_a" ||   fail 'ambient process token overrode the Agent-owned .env'
+cp "$workspace_b/.env" "$fixture/agent-b-before-agent-a-update.env"
+printf '%s\n' "$fixture_pat_a_updated" | AGENT_DIRECTORY_ROOT="$workspace_a" \
+  /bin/bash "$tool_root/setup-github-auth.sh" --install-token >/dev/null || \
+  fail 'Agent A token update failed'
+resolve_expected "$workspace_a" "$fixture_pat_a_updated" || \
+  fail 'Agent A did not select its updated .env token'
+resolve_expected "$workspace_b" "$fixture_pat_b" || \
+  fail 'Agent A update changed Agent B token selection'
+cmp -s "$fixture/agent-b-before-agent-a-update.env" "$workspace_b/.env" || \
+  fail 'Agent A update changed Agent B .env'
+
+cp "$workspace_a/.env" "$fixture/agent-a-before-agent-b-update.env"
+printf '%s\n' "$fixture_pat_b_updated" | AGENT_DIRECTORY_ROOT="$workspace_b" \
+  /bin/bash "$tool_root/setup-github-auth.sh" --install-token >/dev/null || \
+  fail 'Agent B token update failed'
+resolve_expected "$workspace_b" "$fixture_pat_b_updated" || \
+  fail 'Agent B did not select its updated .env token'
+resolve_expected "$workspace_a" "$fixture_pat_a_updated" || \
+  fail 'Agent B update changed Agent A token selection'
+cmp -s "$fixture/agent-a-before-agent-b-update.env" "$workspace_a/.env" || \
+  fail 'Agent B update changed Agent A .env'
+
+mv "$workspace_a/.env" "$fixture/agent-a-owned.env"
+missing_with_sibling_output="$(/bin/bash -c '
+  . "$1"
+  github_auth_resolve "$2" fixture/repository git-read || printf "%s" "$GITHUB_AUTH_REASON"
+' _ "$auth_lib" "$workspace_a")"
+[[ "$missing_with_sibling_output" == agent-env-missing ]] || \
+  fail "Agent A fell back when only Agent B had an .env: $missing_with_sibling_output"
+resolve_expected "$workspace_b" "$fixture_pat_b_updated" || \
+  fail 'Agent B stopped selecting its own token while Agent A .env was absent'
+mv "$fixture/agent-a-owned.env" "$workspace_a/.env"
+
+GH_TOKEN="$fixture_pat_b" resolve_expected "$workspace_a" "$fixture_pat_a_updated" || \
+  fail 'ambient process token overrode the Agent-owned .env'
 
 mkdir -p "$fixture/account-home/.config/agent-directory"
 printf 'GH_TOKEN=%s\n' "$fixture_pat_b" > "$fixture/account-home/.config/agent-directory/github.env"
