@@ -47,7 +47,10 @@ path_prefix=''
 [[ -f "$control_dir/path-prefix" ]] && path_prefix="$(head -n 1 "$control_dir/path-prefix")"
 
 zero='0000000000000000000000000000000000000000'
-empty_tree="$(git hash-object -t tree /dev/null)"
+# A fresh repository may not have the well-known empty tree object yet. Range validation
+# resolves both endpoints from the local object database, so write the empty tree before
+# using it as the full-history fallback for a new remote ref.
+empty_tree="$(git hash-object -t tree -w /dev/null)"
 status=0
 
 nearest_remote_ancestor() {
