@@ -1,6 +1,7 @@
 # projects/AGENTS.md — Project作業の入口
 
 成果契約・Git境界は`projects/PROJECTS.md`、文書拡張は`projects/DOCS.md`が所有する。
+registryで`repository_role: public-foundation`と明示した公開基盤製品は一般Projectではなく`meta` Routeで扱う。
 
 ## 着手
 

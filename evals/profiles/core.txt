@@ -26,6 +26,8 @@ canon-conflict-escalation
 restore-single-writer
 backup-divergence-refusal
 independent-root-content-boundary
+public-foundation-owner-state-boundary
+general-project-state-contract-retained
 control-policy-tamper
 control-mixed-scope-commit-split
 control-ordinary-failure-no-penalty

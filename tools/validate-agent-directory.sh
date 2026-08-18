@@ -624,6 +624,7 @@ validate_independent_attachment() {
   local project_name="$1"
   local repository_url="$2"
   local state_revision="$3"
+  local repository_role="${4:-project}"
   local rel_project="projects/$project_name"
   local target="$repo_root/$rel_project"
   local child_top child_origin child_head contract_file
@@ -666,10 +667,12 @@ validate_independent_attachment() {
     [[ "$child_head" == "$state_revision" ]] || \
       fail "$rel_project HEAD is ${child_head:-none}, but projects/REPOSITORIES.md adopts $state_revision"
   fi
-  for contract_file in PROJECT.md STATE.md; do
-    [[ -f "$target/$contract_file" ]] || \
-      fail "$rel_project must carry its own $contract_file; the Independent Git owns the Project contract"
-  done
+  if [[ "$repository_role" == 'project' ]]; then
+    for contract_file in PROJECT.md STATE.md; do
+      [[ -f "$target/$contract_file" ]] || \
+        fail "$rel_project must carry its own $contract_file; the Independent Git owns the Project contract"
+    done
+  fi
 }
 
 validate_project_contract() {
@@ -989,7 +992,7 @@ ignore_path='projects/.gitignore'
 # Keep the arrays permanently non-empty with a harmless entry duplicating the existing prune, so they are safe under set -u.
 independent_names=()
 if [[ -f "$repo_root/$registry_path" ]]; then
-  while IFS=$'\t' read -r registry_kind registry_a registry_b registry_c registry_d; do
+  while IFS=$'\t' read -r registry_kind registry_a registry_b registry_c registry_d registry_e; do
     [[ "$registry_kind" == 'R' ]] || continue
     independent_names+=("$registry_a")
   done < <(agent_registry_records "$repo_root/$registry_path")
@@ -1652,7 +1655,7 @@ validate_repositories_registry() {
   local scope_is_root="$2"
   local scope_registry="$scope_root/$registry_path"
   local scope_ignore="$scope_root/$ignore_path"
-  local rel_registry rel_ignore record_kind entry_name entry_url entry_reason entry_revision
+  local rel_registry rel_ignore record_kind entry_name entry_url entry_reason entry_revision entry_role
   local ignore_entry ignore_name previous_ignore tracked_entry
   local names_file ignore_file
 
@@ -1664,10 +1667,10 @@ validate_repositories_registry() {
   # Register so the EXIT trap can reclaim them even when set -e aborts; the happy-path rm stays as-is.
   cleanup_paths+=("$names_file" "$ignore_file")
 
-  grep -Fqx '# REPOSITORIES — Independent Project Registry' "$scope_registry" || \
-    fail "$rel_registry must open with the fixed heading: # REPOSITORIES — Independent Project Registry"
+  grep -Fqx '# REPOSITORIES — Independent Repository Registry' "$scope_registry" || \
+    fail "$rel_registry must open with the fixed heading: # REPOSITORIES — Independent Repository Registry"
 
-  while IFS=$'\t' read -r record_kind entry_name entry_url entry_reason entry_revision; do
+  while IFS=$'\t' read -r record_kind entry_name entry_url entry_reason entry_revision entry_role; do
     [[ -n "$record_kind" ]] || continue
     if [[ "$record_kind" == 'E' ]]; then
       fail "$rel_registry: $entry_name"
@@ -1683,10 +1686,14 @@ validate_repositories_registry() {
     fi
     [[ "$entry_revision" =~ ^[0-9a-f]{40}$ ]] || \
       fail "$rel_registry entry \`$entry_name\` revision must be a 40-character lowercase commit SHA"
+    case "$entry_role" in
+      project|public-foundation) ;;
+      *) fail "$rel_registry entry \`$entry_name\` has an invalid repository_role: ${entry_role:-<empty>}" ;;
+    esac
     [[ -d "$scope_root/projects/$entry_name" ]] || \
       fail "$rel_registry entry \`$entry_name\` has no matching Project root at projects/$entry_name/"
     if [[ "$scope_is_root" == true ]]; then
-      validate_independent_attachment "$entry_name" "$entry_url" "$entry_revision"
+      validate_independent_attachment "$entry_name" "$entry_url" "$entry_revision" "$entry_role"
       if [[ -n "$tracked_files_snapshot" ]]; then
         while IFS= read -r tracked_entry; do
           [[ -n "$tracked_entry" ]] || continue
@@ -1834,6 +1841,7 @@ required_cases=(
   provider-semantic-authorization-parity canon-conflict-escalation unowned-change-conflict
   independent-promotion-session-boundary independent-repository-materialization
   independent-remote-update-handoff root-clean-independent-repository-safety
+  public-foundation-owner-state-boundary general-project-state-contract-retained
   root-agents-router-scope project-agents-optional project-agents-diff-only
   project-agents-no-contract-copy project-agents-claude-bridge
   knowledge-internal-record-storage knowledge-external-source-storage
@@ -3561,6 +3569,91 @@ if [[ -f "$cache_test_dir/catalog.tsv" ]]; then
   [[ -z "$alias_collisions" ]] || fail "active alias collision(s): $alias_collisions"
 fi
 
+# Public foundations keep Git/revision/materialization guarantees without carrying the
+# Owner Agent's PROJECT.md/STATE.md. Exercise the real materializer and context router so
+# this exception cannot silently become an unverified documentation-only branch.
+if [[ -f "$materialize_tool" ]] && command -v git >/dev/null 2>&1; then
+  foundation_fixture_dir="$(mktemp -d "${TMPDIR:-/tmp}/agent-foundation-fixture.XXXXXX")"
+  cleanup_paths+=("$foundation_fixture_dir")
+  foundation_root="$foundation_fixture_dir/workspace"
+  foundation_seed="$foundation_fixture_dir/seed"
+  foundation_remote="$foundation_fixture_dir/foundation.git"
+  foundation_env=(
+    HOME="$foundation_fixture_dir" GIT_CONFIG_NOSYSTEM=1
+    GIT_AUTHOR_NAME=fixture GIT_AUTHOR_EMAIL=fixture@example.invalid
+    GIT_COMMITTER_NAME=fixture GIT_COMMITTER_EMAIL=fixture@example.invalid
+    AGENT_ALLOW_LOCAL_REPOSITORY_URL=true
+  )
+  env "${foundation_env[@]}" git init -q --bare "$foundation_remote"
+  env "${foundation_env[@]}" git -C "$foundation_remote" symbolic-ref HEAD refs/heads/main
+  env "${foundation_env[@]}" git init -q "$foundation_seed"
+  env "${foundation_env[@]}" git -C "$foundation_seed" symbolic-ref HEAD refs/heads/main
+  printf '%s\n' '# Public foundation fixture' > "$foundation_seed/README.md"
+  printf '%s\n' '# Repository-local rules' > "$foundation_seed/AGENTS.md"
+  env "${foundation_env[@]}" git -C "$foundation_seed" add README.md AGENTS.md
+  env "${foundation_env[@]}" git -C "$foundation_seed" commit -q -m 'fixture: public foundation'
+  env "${foundation_env[@]}" git -C "$foundation_seed" remote add origin "$foundation_remote"
+  env "${foundation_env[@]}" git -C "$foundation_seed" push -q origin main
+  foundation_revision="$(env "${foundation_env[@]}" git -C "$foundation_seed" rev-parse HEAD)"
+
+  env "${foundation_env[@]}" git init -q "$foundation_root"
+  mkdir -p "$foundation_root/tools/lib" "$foundation_root/projects"
+  printf '%s\n' '# Owner Agent' > "$foundation_root/AGENTS.md"
+  printf '%s\n' '# Owner active state' > "$foundation_root/STATE.md"
+  printf '#!/usr/bin/env bash\nexit 0\n' > "$foundation_root/tools/validate-agent-directory.sh"
+  cp "$repo_root/tools/lib/project-registry.sh" "$foundation_root/tools/lib/"
+  cp "$repo_root/tools/materialize-project-repositories.sh" "$foundation_root/tools/"
+  cp "$repo_root/tools/prepare-context.sh" "$foundation_root/tools/"
+  cp "$repo_root/tools/build-context-cache.sh" "$foundation_root/tools/"
+  {
+    printf '%s\n' '# REPOSITORIES — Independent Repository Registry' '' '## `foundation-product`' ''
+    printf -- '- repository_url: `%s`\n' "$foundation_remote"
+    printf '%s\n' '- repository_reason: `distribution`'
+    printf -- '- revision: `%s`\n' "$foundation_revision"
+    printf '%s\n' '- repository_role: `public-foundation`'
+  } > "$foundation_root/projects/REPOSITORIES.md"
+  printf '%s\n' '# Derived from projects/REPOSITORIES.md.' '# BEGIN INDEPENDENT PROJECTS' \
+    '/foundation-product/' '# END INDEPENDENT PROJECTS' > "$foundation_root/projects/.gitignore"
+  env "${foundation_env[@]}" git -C "$foundation_root" add -A
+  env "${foundation_env[@]}" git -C "$foundation_root" commit -q -m 'fixture: owner registry'
+
+  foundation_materialize_output="$(env "${foundation_env[@]}" AGENT_DIRECTORY_ROOT="$foundation_root" \
+    bash "$foundation_root/tools/materialize-project-repositories.sh" --all 2>&1)" || \
+    fail "public foundation fixture: materializer required owner-state contracts: $foundation_materialize_output"
+  printf '%s\n' "$foundation_materialize_output" | \
+    grep -Fqx 'MATERIALIZATION_OK total=1 cloned=1 verified=0' || \
+    fail "public foundation fixture: unexpected materializer result: $foundation_materialize_output"
+  [[ ! -e "$foundation_root/projects/foundation-product/PROJECT.md" && \
+    ! -e "$foundation_root/projects/foundation-product/STATE.md" ]] || \
+    fail 'public foundation fixture: materialization introduced Owner Agent state contracts into the product repository'
+
+  foundation_cache="$foundation_fixture_dir/cache"
+  foundation_cache_output="$(env "${foundation_env[@]}" AGENT_DIRECTORY_ROOT="$foundation_root" \
+    AGENT_CACHE_DIR="$foundation_cache" bash "$foundation_root/tools/build-context-cache.sh" 2>&1)" || \
+    fail "public foundation fixture: context cache generation failed: $foundation_cache_output"
+  if [[ -f "$foundation_cache/catalog.tsv" ]] && \
+    grep -Fq 'projects/foundation-product/PROJECT.md' "$foundation_cache/catalog.tsv"; then
+    fail 'public foundation fixture: Owner Agent state-free product entered the general Project search catalog'
+  fi
+
+  foundation_context_output="$(env "${foundation_env[@]}" AGENT_DIRECTORY_ROOT="$foundation_root" \
+    bash "$foundation_root/tools/prepare-context.sh" --route meta \
+      --target projects/foundation-product --class work 2>&1)" || \
+    fail "public foundation fixture: meta Route failed: $foundation_context_output"
+  for expected_context_line in \
+    'route=meta' 'git_root=projects/foundation-product' 'repository_owner=independent' \
+    'repository_role=public-foundation' 'STATE.md' 'projects/foundation-product/AGENTS.md' \
+    'projects/foundation-product/README.md'; do
+    printf '%s\n' "$foundation_context_output" | grep -Fqx "$expected_context_line" || \
+      fail "public foundation fixture: context omitted $expected_context_line"
+  done
+  if env "${foundation_env[@]}" AGENT_DIRECTORY_ROOT="$foundation_root" \
+    bash "$foundation_root/tools/prepare-context.sh" --route project \
+      --target projects/foundation-product --class work >/dev/null 2>&1; then
+    fail 'public foundation fixture: Project Route accepted a public foundation without Project state contracts'
+  fi
+fi
+
 if [[ -f "$backup_tool" ]] && command -v git >/dev/null 2>&1; then
   backup_work="$backup_fixture_dir/work"
   backup_remote_dir="$backup_fixture_dir/remote.git"
@@ -3646,7 +3739,7 @@ if [[ -f "$backup_tool" ]] && command -v git >/dev/null 2>&1; then
   }
   write_registry() {
     {
-      printf '%s\n' '# REPOSITORIES — Independent Project Registry' ''
+      printf '%s\n' '# REPOSITORIES — Independent Repository Registry' ''
       printf '%s\n' 'Independent Projectのattachmentと復旧情報だけを持つ。' ''
       printf '%s\n' '## `data-pipeline`' ''
       printf -- '- repository_url: `%s`\n' "$independent_remote_dir"
@@ -3711,7 +3804,7 @@ if [[ -f "$backup_tool" ]] && command -v git >/dev/null 2>&1; then
     printf '%s\n' '---' 'updated_at: 2026-08-03' '---' '' '# Current State'
   } > "$backup_work/projects/embedded-project/STATE.md"
   # First confirm everything holds even with an empty registry.
-  printf '%s\n' '# REPOSITORIES — Independent Project Registry' > "$fixture_registry"
+  printf '%s\n' '# REPOSITORIES — Independent Repository Registry' > "$fixture_registry"
   write_ignore_projection
   backup_git add -A
   backup_git commit -q -m 'fixture: empty registry'
@@ -4155,13 +4248,13 @@ RACE_GIT
     backup_git reset -q --hard HEAD~1
   }
 
-  printf '%s\n' '# REPOSITORIES — Independent Project Registry' '' '## data-pipeline' '' \
+  printf '%s\n' '# REPOSITORIES — Independent Repository Registry' '' '## data-pipeline' '' \
     "- repository_url: \`$independent_remote_dir\`" '- repository_reason: `automation`' \
     "- revision: \`$independent_revision\`" > "$fixture_registry"
   registry_reject 'invalid-registry' 'a malformed registry heading'
 
   {
-    printf '%s\n' '# REPOSITORIES — Independent Project Registry' ''
+    printf '%s\n' '# REPOSITORIES — Independent Repository Registry' ''
     printf '%s\n' '## `data-pipeline`' ''
     printf -- '- repository_url: `%s`\n' "$independent_remote_dir"
     printf '%s\n' '- repository_reason: `automation`'
@@ -4174,7 +4267,7 @@ RACE_GIT
   registry_reject 'invalid-registry' 'a duplicate registry name'
 
   {
-    printf '%s\n' '# REPOSITORIES — Independent Project Registry' ''
+    printf '%s\n' '# REPOSITORIES — Independent Repository Registry' ''
     printf '%s\n' '## `zeta-project`' ''
     printf -- '- repository_url: `%s`\n' "$independent_remote_dir"
     printf '%s\n' '- repository_reason: `automation`'
@@ -4190,7 +4283,7 @@ RACE_GIT
   registry_reject 'invalid-registry' 'an invalid repository_reason'
 
   {
-    printf '%s\n' '# REPOSITORIES — Independent Project Registry' ''
+    printf '%s\n' '# REPOSITORIES — Independent Repository Registry' ''
     printf '%s\n' '## `data-pipeline`' ''
     printf -- '- repository_url: `%s`\n' "$independent_remote_dir"
     printf '%s\n' '- repository_reason: `automation`'
@@ -4200,7 +4293,7 @@ RACE_GIT
   registry_reject 'invalid-registry' 'an extra registry field'
 
   {
-    printf '%s\n' '# REPOSITORIES — Independent Project Registry' ''
+    printf '%s\n' '# REPOSITORIES — Independent Repository Registry' ''
     printf '%s\n' '## `data-pipeline`' ''
     printf -- '- repository_url: `%s`\n' "$independent_remote_dir"
     printf '%s\n' '- repository_reason: `automation`'
@@ -4215,7 +4308,7 @@ RACE_GIT
     "https://example.invalid/repository.git?token=secret" \
     "--upload-pack=/tmp/fixture-pack"; do
     {
-      printf '%s\n' '# REPOSITORIES — Independent Project Registry' ''
+      printf '%s\n' '# REPOSITORIES — Independent Repository Registry' ''
       printf '%s\n' '## `data-pipeline`' ''
       printf -- '- repository_url: `%s`\n' "$hostile_url"
       printf '%s\n' '- repository_reason: `automation`'

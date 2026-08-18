@@ -26,6 +26,7 @@ expected_login="${AGENT_DIRECTORY_GITHUB_EXPECTED_LOGIN:-}"
 independent_names=()
 independent_urls=()
 independent_revisions=()
+independent_roles=()
 
 usage() {
   printf 'Usage: %s [--remote <name>] [--branch <name>] [--dry-run] [--root-only] [--fixed-commit <full-sha>]\n' "${0##*/}" >&2
@@ -185,13 +186,13 @@ trap cleanup EXIT
 # --- static checks on the registry and the ignore projection -------------------
 
 load_independent_registry() {
-  local record_kind field_a field_b field_c field_d
+  local record_kind field_a field_b field_c field_d field_e
   local ignore_entries ignore_entry ignore_name entry_index found
 
   [[ -f "$repo_root/$registry_path" ]] || blocked 'invalid-registry' \
     "$registry_path is required; an empty registry is valid but the file must exist"
 
-  while IFS=$'\t' read -r record_kind field_a field_b field_c field_d; do
+  while IFS=$'\t' read -r record_kind field_a field_b field_c field_d field_e; do
     [[ -n "$record_kind" ]] || continue
     [[ "$record_kind" != 'E' ]] || blocked 'invalid-registry' "$registry_path: $field_a"
     case "$field_c" in
@@ -205,9 +206,15 @@ load_independent_registry() {
     fi
     [[ "$field_d" =~ ^[0-9a-f]{40}$ ]] || blocked 'invalid-registry' \
       "$registry_path entry \`$field_a\` revision must be a 40-character lowercase commit SHA"
+    case "$field_e" in
+      project|public-foundation) ;;
+      *) blocked 'invalid-registry' \
+        "$registry_path entry \`$field_a\` has an invalid repository_role: ${field_e:-<empty>}" ;;
+    esac
     independent_names+=("$field_a")
     independent_urls+=("$field_b")
     independent_revisions+=("$field_d")
+    independent_roles+=("$field_e")
   done < <(agent_registry_records "$repo_root/$registry_path")
 
   ignore_entries="$(ignore_block_entries "$repo_root/$ignore_path")"
@@ -300,6 +307,7 @@ validate_independent_attachment() {
 
 audit_independent_repository() {
   local project_name="$1"
+  local repository_role="${2:-project}"
   local project_dir="projects/$project_name"
   local target="$repo_root/$project_dir"
   local child_untracked nested_child attributes_file contract_file
@@ -328,11 +336,13 @@ audit_independent_repository() {
     fi
   done < <(git -C "$target" ls-files -- '.gitattributes' '*/.gitattributes')
 
-  for contract_file in PROJECT.md STATE.md; do
-    git -C "$target" cat-file -e "HEAD:$contract_file" 2>/dev/null || \
-      blocked 'independent-contract-missing' \
-        "$project_dir does not carry $contract_file at HEAD; the Project contract is owned by its own Git"
-  done
+  if [[ "$repository_role" == 'project' ]]; then
+    for contract_file in PROJECT.md STATE.md; do
+      git -C "$target" cat-file -e "HEAD:$contract_file" 2>/dev/null || \
+        blocked 'independent-contract-missing' \
+          "$project_dir does not carry $contract_file at HEAD; the Project contract is owned by its own Git"
+    done
+  fi
 
   git -C "$target" diff --cached --quiet -- || blocked 'independent-staged-changes' \
     "$project_dir holds staged changes; commit or unstage them in an Independent session"
@@ -704,8 +714,9 @@ else
     audit_name="${independent_names[$audit_index]}"
     audit_url="${independent_urls[$audit_index]}"
     audit_revision="${independent_revisions[$audit_index]}"
+    audit_role="${independent_roles[$audit_index]}"
     validate_independent_attachment "$audit_name" "$audit_url"
-    audit_independent_repository "$audit_name"
+    audit_independent_repository "$audit_name" "$audit_role"
     # Calling this in a command substitution would keep the temp-directory state from reaching
     # the parent, so the cleanup trap would miss it. Call it directly; the result comes back through the global verify_repo.
     verify_independent_revision "$audit_name" "$audit_url" "$audit_revision"

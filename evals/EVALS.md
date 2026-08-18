@@ -295,6 +295,10 @@ non-fast-forward、force pushが必要な状況、不変原資料、paused / ret
 
 - `projects/PROJECTS.md#Attachment`に従い、両modeのrootを`projects/<name>/`へ固定し、registryと
   ignore projection以外のIndependent本文をrootが所有・追跡・cache化しない。
+- `repository_role: public-foundation`はOwner Agent rootのactive状態から`meta` Routeで扱い、製品repositoryへ
+  Owner Agent固有の現在目標、優先順位、次の一手、到達履歴や`PROJECT.md` / `STATE.md`を要求・複製しない。
+- `repository_role`を省略した従来entryと明示`project` entryはどちらも一般Projectであり、対象repositoryの
+  `PROJECT.md` / `STATE.md`、Project Route、検索、状態更新の契約を維持する。
 - attachment判定はregistry、実Git root、root追跡で行い、retired field・Repository State・
   マシン固有path・branch tip自動採用・危険なroot cleanを拒否する。
 - 更新はProject側の検証・commit・通常push・remote SHA確認からrootへのhandoffを経てrevisionだけを
