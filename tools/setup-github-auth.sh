@@ -28,10 +28,13 @@ usage() {
 }
 
 blocked() {
+  local diagnostic_status
   GITHUB_AUTH_REASON="$1"
+  diagnostic_status="${GITHUB_AUTH_LAST_STATUS:-1}"
+  [[ "$diagnostic_status" != 0 ]] || diagnostic_status=1
   if [[ "$mode" == enroll-existing || "$mode" == machine-ready || "$mode" == check ]]; then
     github_auth_diagnostic "$diagnostic_operation" "$diagnostic_repository" \
-      "${remote_name:-none}" "$(github_auth_remote_kind "${remote_url:-}")" "${GITHUB_AUTH_LAST_STATUS:-1}" >&2
+      "${remote_name:-none}" "$(github_auth_remote_kind "${remote_url:-}")" "$diagnostic_status" >&2
   fi
   printf 'GITHUB_AUTH_BLOCKED reason=%s\n' "$GITHUB_AUTH_REASON" >&2
   exit 1

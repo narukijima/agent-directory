@@ -265,8 +265,8 @@ github_auth_resolve() {
     GITHUB_AUTH_MACHINE_FILE_PRESENT='yes'
     github_auth_read_machine_file "$machine_file" || return 1
     GITHUB_AUTH_MACHINE_FILE_VALID='yes'
-    github_auth_require_capability "$repository" "$operation" || return 1
     GITHUB_AUTH_SOURCE='machine-file'
+    github_auth_require_capability "$repository" "$operation" || return 1
     return 0
   fi
   github_auth_ci_resolve "$repository" "$operation"

@@ -251,13 +251,9 @@ non-fast-forward、force pushが必要な状況、不変原資料、paused / ret
 
 ## Scheduled executionケースの最低条件
 
-- scheduled triggerをRouteや成果分類にせず、通常のRoute、Target、検証、終了処理へ解決する。
-- schedulerの実装とschedule stateをOperator / Runtime / OS側に保ち、Coreへdaemon、registry、
-  Provider別adapterを追加しない。
-- scheduled taskも一つのProvider familyとfinal ownerを持つ。authentication / availability failureだけでobjectiveを
-  破棄せず、同じProvider内でrecoveryし、別Providerへ自動移管しない。継続不能ならstateを確定して停止・handoffする。
-- Runtime-native schedulerを第一選択、OS-native schedulerをfallbackとして交換可能に扱い、
-  現在の製品mappingをCoreの合格条件にしない。
+- scheduled triggerも通常のRoute、Target、検証、終了処理へ解決し、scheduler stateはRuntime / OS側に置く。
+- 一つのProvider familyとfinal ownerを保ち、availability failureでobjective破棄や別Providerへの自動移管をしない。
+- Runtime-native / OS-native schedulerは交換可能とし、Coreへdaemon、registry、Provider別adapterを追加しない。
 
 ## バックアップケースの最低条件
 
@@ -278,15 +274,9 @@ non-fast-forward、force pushが必要な状況、不変原資料、paused / ret
 
 ## Repository境界ケースの最低条件
 
-- `projects/PROJECTS.md#Attachment`に従い、両modeのrootを`projects/<name>/`へ固定し、registryと
-  ignore projection以外のIndependent本文をrootが所有・追跡・cache化しない。
-- `repository_role: public-foundation`はOwner Agent rootのactive状態から`meta` Routeで扱い、製品repositoryへ
-  Owner Agent固有の現在目標、優先順位、次の一手、到達履歴や`PROJECT.md` / `STATE.md`を要求・複製しない。
-- `repository_role`を省略した従来entryと明示`project` entryはどちらも一般Projectであり、対象repositoryの
-  `PROJECT.md` / `STATE.md`、Project Route、検索、状態更新の契約を維持する。
-- attachment判定はregistry、実Git root、root追跡で行い、マシン固有path・branch tip自動採用・危険なcleanを拒否する。
-- Project側の検証・push・remote SHA確認からrootへhandoffし、三Toolで採用SHA一致を観測する。
-- `repository_url`はcredential、query、fragment、local pathを含めない。
+- attachment、root ownership、URL、adoptionは`projects/PROJECTS.md#Attachment`を正本とし、Independent本文をrootが追跡しない。
+- `public-foundation`はOwner rootのactive状態から`meta` Routeで扱い、一般`project`は`PROJECT.md` / `STATE.md`契約を維持する。
+- Project側の検証・push・remote SHA確認からrootへhandoffし、materializer / validator / backupで採用SHA一致を観測する。
 
 ## 実行
 

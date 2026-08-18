@@ -2722,6 +2722,18 @@ if [[ "$full" == true && -z "${AGENT_VALIDATOR_NESTED_FIXTURE:-}" ]]; then
     fail 'runtime readiness fixture: OAuth token value was printed'
 
   set +e
+  runtime_write_output="$(cd "$runtime_readiness_fixture/work" && \
+    env PATH="$runtime_readiness_fixture/bin:$PATH" \
+      bash tools/check-runtime-readiness.sh --probe-workspace-write 2>&1)"
+  runtime_write_status=$?
+  set -e
+  [[ "$runtime_write_status" == 0 && "$runtime_write_output" == *'filesystem_write=observed'* ]] || \
+    fail "runtime readiness fixture: workspace write was not observed: $runtime_write_output"
+  if find "$runtime_readiness_fixture/work" -maxdepth 1 -name '.runtime-write-probe.*' -print | grep -q .; then
+    fail 'runtime readiness fixture: workspace write probe left a temporary file'
+  fi
+
+  set +e
   runtime_readiness_output="$(cd "$runtime_readiness_fixture/work/tools" && \
     env PATH="$runtime_readiness_fixture/bin:$PATH" \
       bash check-runtime-readiness.sh --require-claude 2>&1)"
