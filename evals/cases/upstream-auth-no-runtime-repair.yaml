@@ -1,7 +1,7 @@
 name: upstream-auth-no-runtime-repair
 
 request: |
-  上流Issue送信でmachine credentialの認証probeが失敗した。通常taskとして安全に処理して。
+  上流Issue送信で現在のAgent rootの.env credentialの認証probeが失敗した。通常taskとして安全に処理して。
 
 expect:
   route: meta
