@@ -43,6 +43,8 @@ Scheduler Engineを所有しない。公開仕様、テンプレート、validat
 - 常時守る安全境界は[tools/SAFETY.md](tools/SAFETY.md)の6項目だけとし、実装詳細は条件付きで読む。
 - 明示依頼を同じ操作のStanding Authorizationとして扱う。target / destinationが一意でsemantic safetyを
   満たす公開、送信、通常push、削除は追加承認なしで完了し、曖昧性と整合性の不足だけを人間へ確認する。
+- Provider非依存のOperator Runtime Profileは`ask / auto / full`とし、通常の推奨defaultは`auto`にする。
+  ProfileはRuntime設定を強制せず、task別capabilityの`observed / declared / not-probed / unavailable`と分離する。
 - リポジトリ内の正本を会話記憶、製品側AIメモリ、検索結果より優先する。
 - `raw/internal/`と`raw/external/`の既存原資料は同じ強さで保護し、変更・削除しない。
 - 完了・停止・廃止を物理archiveで表さず、frontmatterの状態で検索から除外する。

@@ -34,7 +34,8 @@ Operator / machine側setupの正本である。Providerとsurfaceの選択、分
    `bash tools/setup-github-auth.sh --check --remote backup`を実行する。最後にprocess環境を引き継がない別shellで
    `bash tools/setup-github-auth.sh --machine-ready --remote backup`が合格することを確認する。GitHubを使わないmachineでは省略する。
 7. 利用するProviderのruntimeを認証する。OpenAI主運用では
-   `bash tools/check-runtime-readiness.sh --require-codex`、Anthropic運用では`--require-claude`を実行する。
+   `bash tools/check-runtime-readiness.sh --profile auto --require-codex`、Anthropic運用では
+   `--profile auto --require-claude`を実行する。`auto`は推奨値であり、Operatorが`ask`または`full`を選んでもよい。
 8. `bash tools/validate-agent-directory.sh --strict --full`を実行する。
 
 両Providerを同じmachineへ導入していても、一つのtaskに両方を必須にしない。明示的に両runtimeのmachine readinessを
@@ -127,29 +128,56 @@ Claude Codeは上記の方法で独立して認証する。両Providerを導入�
 `.codex/`と`.claude/`は`tools/setup-local-environment.sh`を呼ぶ薄いadapterのまま保ち、認証token、
 Provider選択、handoff policy、Provider別permission logicを複製しない。
 
+### Runtime Profileの現行mapping
+
+Agent DirectoryのProfileとProvider modeは同一概念ではない。Operatorは利用surfaceの現行公式仕様と環境リスクに応じて
+近いmodeを選び、Agent Directoryは設定fileを自動変更しない。
+
+| Agent Directory | Codexの現行対応例 | Claude Codeの現行対応例 |
+|---|---|---|
+| `ask` | `on-request`または`untrusted` approvalと保守的sandbox | `default`（Manual） |
+| `auto` | 標準Autoの`workspace-write + on-request`。必要ならworkspace networkを明示し、利用可能ならAuto-reviewを使う | 対応account / model / providerでは`auto`。利用不能なら不足を報告し、`acceptEdits`を同一能力と偽らない |
+| `full` | isolated環境でのみ`danger-full-access`と最少approval | isolated環境でのみ`bypassPermissions` |
+
+Codexではsandboxとapprovalが別設定で、`workspace-write`のnetworkは既定offである。Claude Codeの`auto`はavailability条件があり、
+現行CLIではproject-local `.claude/settings.json`の`permissions.defaultMode: "auto"`を開始modeとして採用しない。
+そのため本テンプレートの`.codex/` / `.claude/`へprofileを固定せず、Operator / Runtime側で選択する。
+参照: [OpenAI Agent approvals & security](https://learn.chatgpt.com/docs/agent-approvals-security)、
+[Anthropic Permission modes](https://code.claude.com/docs/en/permission-modes)。
+
 ## Preflight checks
 
 `tools/check-runtime-readiness.sh`は既定でnetwork mutationを行わず、secret値を表示しないcapability diagnosticである。
-workspace writeを実測するときだけ、一時fileを作成・削除する`--probe-workspace-write`を明示する。
+`--profile`はOperatorの選択を宣言し、未指定時は`auto`を`recommended-default`として表示するがRuntime設定を変更しない。
+taskが必要とする能力は`--require-capability`、Runtimeが既知の未実測状態は`--capability-state`で渡す。
+workspace writeを要求またはprobeしたときだけ、一時fileを作成・削除して実測する。
 
 ```bash
 bash tools/check-runtime-readiness.sh
-bash tools/check-runtime-readiness.sh --require-codex
-bash tools/check-runtime-readiness.sh --require-claude
-bash tools/check-runtime-readiness.sh --probe-workspace-write
+bash tools/check-runtime-readiness.sh --profile auto --require-codex
+bash tools/check-runtime-readiness.sh --profile ask --require-claude
+bash tools/check-runtime-readiness.sh --profile auto \
+  --require-capability filesystem_write \
+  --require-capability network --capability-state network=declared
+bash tools/check-runtime-readiness.sh --profile full \
+  --require-capability network --capability-state network=unavailable
 ```
 
 次を確認する。
 
-- cwd、filesystem read、process spawningの観測結果と、filesystem writeの実測有無
+- 選択profileと、明示指定か推奨defaultか
+- cwd、filesystem read、process spawn、Gitの観測結果と、filesystem writeの実測有無
 - `codex` / `claude` executable availability、version、provider authenticationを別fieldで表示
-- network、GitHub API、Git remote、localhostが未宣言・未検査であること
+- taskのrequired capabilitiesと、各能力の`observed / declared / not-probed / unavailable`
 - `CLAUDE_CODE_OAUTH_TOKEN`がprocess environmentに存在するか（値は表示しない）
 - `GH_TOKEN` / `GITHUB_TOKEN`の存在と、通常localでは消費しないpolicy（値は表示しない）
 
-成功時は`RUNTIME_CAPABILITIES`を1行で返す。未検査capabilityを`ready`と表示しない。required runtimeが利用不能なら診断行に続けて
-`RUNTIME_READINESS_BLOCKED reason=<reason>`を返し、非0で終了する。これはavailabilityの観測であり、
-taskのowner変更やfallback実行は行わない。
+最初に`RUNTIME_CAPABILITIES`を1行で返す。required capabilityが`not-probed`なら
+`RUNTIME_READINESS_UNVERIFIED`として継続可能な未観測を分け、`unavailable`なら
+`RUNTIME_READINESS_BLOCKED reason=capability-unavailable layer=runtime`で停止する。required runtimeの認証失敗は
+`external-provider`、cwd / Git root不一致は`repository-integrity`に分類する。これはavailabilityの観測であり、
+taskのowner変更やfallback実行は行わない。GitHubが必要な外部操作はこの汎用診断だけでreadyとせず、操作直前に
+`setup-github-auth.sh --machine-ready --operation <operation>`または対象固定Toolで実probeする。
 
 ## Scheduled / unattended execution
 

@@ -92,15 +92,25 @@ scheduleの変更、ネットワーク接続は行わない。成功は`LOCAL_EN
 ## check-runtime-readiness.sh
 
 ```bash
-bash tools/check-runtime-readiness.sh [--require-codex] [--require-claude] [--probe-workspace-write]
+bash tools/check-runtime-readiness.sh [--profile ask|auto|full]
+  [--require-codex] [--require-claude]
+  [--require-capability <name>]
+  [--capability-state <name>=declared|unavailable]
+  [--probe-workspace-write]
 ```
 
-現在のcwd、filesystem read、process spawningを観測し、Codex / Claude Codeのexecutable、version、provider authenticationを
-別fieldでprobeする。filesystem writeは`--probe-workspace-write`指定時だけ一時fileで実測する。network、GitHub API、
-Git remote、localhostは未宣言なら`not-declared`であり、検査せず`ready`としない。credential environmentは存在だけを報告し、
-値や認証commandの出力はstdout / stderrへ転送しない。required flagを指定したruntimeが利用不能な場合だけ非0にする。
-成功診断は`RUNTIME_CAPABILITIES`、停止は
-`RUNTIME_READINESS_BLOCKED reason=<reason>`を返す。詳細なsetup、Trust、credential契約は`SETUP.md`が所有する。
+`--profile`はOperatorが選んだProvider非依存の`ask / auto / full`を宣言する。未指定時は`auto`を
+`runtime_profile_source=recommended-default`として表示するだけで、Runtime設定を変更しない。
+`--require-capability`は`filesystem_read`、`filesystem_write`、`network`、`localhost`、`process_spawn`、`git`、
+`github`、`browser`、`api`を反復指定できる。`--capability-state`はRuntimeが知る未実測の`declared`または
+既知の`unavailable`を渡す。filesystem writeは要求時または`--probe-workspace-write`指定時に一時fileで実測する。
+
+現在のcwd、filesystem read、process spawn、Gitを観測し、Codex / Claude Codeのexecutable、version、provider authenticationを
+別fieldでprobeする。未検査capabilityを`ready`とせず`not-probed`で返す。requiredが`not-probed`なら
+`RUNTIME_READINESS_UNVERIFIED`、`unavailable`ならlayer付き`RUNTIME_READINESS_BLOCKED`を返す。
+credential environmentは存在だけを報告し、値や認証commandの出力はstdout / stderrへ転送しない。
+GitHubの実ready判定はrepository / operationが必要なので、外部操作直前のGitHub認証Toolへ委ねる。
+詳細なsetup、Provider mapping、Trust、credential契約は`SETUP.md`が所有する。
 
 ## finalize-task.sh
 
