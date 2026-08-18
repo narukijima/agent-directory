@@ -1284,8 +1284,10 @@ required_files=(
   'tools/append-knowledge-log.sh' 'tools/backup-to-github.sh' 'tools/validate-agent-directory.sh'
   'tools/setup-local-environment.sh' 'tools/check-runtime-readiness.sh'
   'tools/materialize-project-repositories.sh' 'tools/finalize-task.sh' 'tools/run-evals.py'
-  'tools/lib/project-registry.sh' 'tools/validator/check-claude-settings.py' '.gitignore'
+  'tools/lib/project-registry.sh' 'tools/validator/check-claude-settings.py'
+  'tools/validator/check-context-meta.sh' '.gitignore'
   'tools/UPSTREAM.md' 'tools/report-upstream-issue.sh' 'tools/REFERENCE.md'
+  'tools/THREAT_MODEL.md'
   "$knowledge_source_template_path" "$knowledge_topic_template_path"
 )
 for path in "${required_files[@]}"; do require_file "$repo_root/$path"; done
@@ -1429,6 +1431,7 @@ check_size "$repo_root/tools/BACKUP-RECOVERY.md" 20480 'tools BACKUP-RECOVERY.md
 check_size "$repo_root/tools/CONTROL.md" 20480 'tools CONTROL.md'
 check_size "$repo_root/tools/UPSTREAM.md" 20480 'tools UPSTREAM.md'
 check_size "$repo_root/tools/REFERENCE.md" 20480 'tools REFERENCE.md'
+check_size "$repo_root/tools/THREAT_MODEL.md" 20480 'tools THREAT_MODEL.md'
 check_size "$knowledge_index_file" 8192 'Knowledge index'
 check_size "$knowledge_log_file" 131072 'Knowledge log'
 check_heading_warning "$repo_root/AGENTS.md" 20
@@ -2992,6 +2995,11 @@ elif ! AGENT_CACHE_DIR="$cache_test_dir" bash "$repo_root/tools/build-context-ca
 elif ! AGENT_CACHE_DIR="$cache_test_dir" bash "$repo_root/tools/build-context-cache.sh" --check-routing >/dev/null; then
   fail 'build-context-cache.sh --check-routing reports a fresh catalog as stale'
 fi
+context_meta_output="$(bash "$repo_root/tools/validator/check-context-meta.sh" \
+  "$cache_test_dir/catalog.tsv" 2>&1)" || \
+  fail "context meta catalog coverage failed: $context_meta_output"
+printf '%s\n' "$context_meta_output" | grep -Fq 'CONTEXT_META_OK checked=22' || \
+  fail 'context meta catalog coverage did not verify the complete canon set'
 if grep -Eq '^head=' "$cache_test_dir/cache.meta"; then
   fail 'cache.meta must not use Git HEAD as a freshness input'
 fi
