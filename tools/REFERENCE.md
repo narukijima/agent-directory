@@ -188,6 +188,10 @@ pushせず、`--dry-run`はremoteへ書き込まない。成功とdry-runはstdo
 OS home / machine store / 別Agent / global environment / Keychainへfallbackしない。保存は[SETUP.md](../SETUP.md#initial-setup)、
 riskは[threat model](THREAT_MODEL.md)が所有する。
 
+登録済みIndependent Projectでは、現在Git rootが`<agent-root>/projects/<name>`にあり、親registryのnameとremote repositoryが
+完全一致する場合だけ、親Agent rootをcredential ownerとして解決する。childの`.env`は見ず、`--install-token`も
+`credential-owned-by-agent-root`で拒否する。これは別Agent fallbackではなく、同一Agent内のGit Owner分離である。
+
 ```bash
 bash tools/setup-github-auth.sh --install-token
 bash tools/setup-github-auth.sh --install-from-gh

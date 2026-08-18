@@ -200,7 +200,9 @@ tools/task.sh context --route meta --target tools/TOOLS.md
 Agent固有の環境変数・secret・API token・外部サービス設定はすべてAgent Workspace rootの`.env`が所有し、OS home、
 machine共通store、Keychain、別Workspace、global process environmentを正本にしない。各Toolは
 `tools/lib/agent-env.sh`で必要なkeyだけを非実行parseし、`.env`全体をsourceしない。GitHub操作は同じrootの
-`GH_TOKEN`だけを子processへ限定注入し、別Agentのcredentialへfallbackしない。導入と実probeは
+`GH_TOKEN`だけを子processへ限定注入し、別Agentのcredentialへfallbackしない。登録済みIndependent Projectでは
+Project Git rootとcredential ownerを分け、`projects/REPOSITORIES.md`で完全一致した親Agent rootの`.env`を使う。
+導入と実probeは
 `setup-github-auth.sh --install-token` / `--workspace-ready` / `--check`を使う。境界は
 [Agent-scoped environment threat model](tools/THREAT_MODEL.md)を参照する。
 
