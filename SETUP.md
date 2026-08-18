@@ -56,6 +56,10 @@ Agent Workspace rootで作業するなら、そのrootへ`cd`してから`codex`
 Independent Projectへhandoffした後は、そのProject自身のGit rootをcwdにする。`$HOME`、呼出元不明のdirectory、
 または親Workspaceのrootから、別Git rootのProjectを暗黙に操作しない。
 
+Gitの書込rootがIndependent Projectへ移っても、credential ownerは登録元のAgent Workspace rootに残る。
+`<agent-root>/projects/<name>`と`projects/REPOSITORIES.md`のname・repositoryが完全一致するときだけ、GitHub Toolは
+親Agent rootの`.env`を利用する。childへ同じtokenを複製せず、childで`--install-token`を実行しない。
+
 Anthropicの[Security](https://code.claude.com/docs/en/security)によれば、Claude Codeをhome directoryから
 直接起動した場合のTrust acceptanceはsession限定で、次回起動時にpromptが再表示される。project
 subdirectoryではdirectoryごとに保存される。またworking directoryはwrite boundaryでもある。そのため、
@@ -177,6 +181,7 @@ partial execution後はfile、Git、output、external side effect、receipt、id
 ## Machine-local secrets
 
 - token、API key、password、credential実値をrepository、tracked settings、`.env.example`、fixtureへ保存しない。
+- 登録済みIndependent ProjectへAgent rootのtokenを複製しない。Git rootとcredential ownerをregistryで結ぶ。
 - 個人token、固定home path、特定accountをtemplateの既定値にしない。
 - secretの保存方式は一つに強制せず、利用runtimeのprocess environmentから参照可能であることだけを要件にする。
 - 同一tokenの複数machine共有を必須にしない。machineごとに認証・失効・rotationを管理する。

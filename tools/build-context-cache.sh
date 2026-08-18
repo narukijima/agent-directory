@@ -207,15 +207,26 @@ append_adopted_project() {
 meta_files=(
   'AGENTS.md|root-policy|最上位ブートローダー、Route判定、Context Loading'
   'README.md|overview|人間向けの導入と全体像'
+  'OPERATING_PROFILE.md|operating-profile|Provider分離、surface選択、handoff、recovery'
+  'SETUP.md|operator-setup|Runtime、認証、Workspace Trust、machine-local setup'
   'knowledge/KNOWLEDGE.md|knowledge-policy|Knowledge運用規約'
   'skills/SKILLS.md|skill-policy|Skill運用規約'
   'projects/AGENTS.md|project-entry|Project作業共通の入口と読込順序'
+  'projects/DOCS.md|project-docs|Project文書拡張とDocs Routeの規約'
   'projects/PROJECTS.md|project-policy|Project運用規約とProject docs契約'
+  'projects/REPOSITORIES.md|repository-registry|Independent repository attachment registry'
   'projects/LIFECYCLE.md|project-lifecycle|Projectの状態遷移と削除条件'
   'projects/RECOVERY.md|project-recovery|Projectの目的不一致からの復旧'
   'evals/EVALS.md|eval-policy|振る舞いEvalの規約'
+  'evals/TRACE.md|trace-contract|Context traceの語彙、信頼、adapter契約'
   'tools/TOOLS.md|tool-policy|構造保守Toolの規約'
+  'tools/SAFETY.md|safety-invariants|Workspace integrityを守る六つの安全不変条件'
+  'tools/CONTROL.md|control-policy|commit・push境界執行と違反処理'
+  'tools/REFERENCE.md|tool-reference|固定Toolの呼出形、結果、停止reason'
   'tools/BACKUP.md|backup-policy|遠隔バックアップ、復旧、マシン移行の規約'
+  'tools/BACKUP-RECOVERY.md|backup-recovery|privacy訂正、移行、障害復旧の条件付きrunbook'
+  'tools/THREAT_MODEL.md|environment-threat-model|Agent rootの環境変数とcredential分離の脅威モデル'
+  'tools/UPSTREAM.md|upstream-policy|匿名化された上流Issue報告の境界'
 )
 
 # --- --check-routing warm fast path -----------------------------------------------

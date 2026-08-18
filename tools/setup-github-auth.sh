@@ -79,6 +79,16 @@ resolve_remote() {
   GITHUB_AUTH_REMOTE_RESOLVED='yes'
 }
 
+refuse_registered_child_install() {
+  local owner_root=''
+  resolve_remote
+  owner_root="$(github_auth_registered_agent_root "$repo_root" "$diagnostic_repository" 2>/dev/null || true)"
+  if [[ -n "$owner_root" && "$owner_root" != "$repo_root" ]]; then
+    GITHUB_AUTH_CREDENTIAL_OWNER='registered-agent-root'
+    blocked credential-owned-by-agent-root
+  fi
+}
+
 prepare_workspace_env() {
   [[ -d "$repo_root" && ! -L "$repo_root" ]] || blocked agent-env-root-invalid
   if [[ -e "$credential_file" || -L "$credential_file" ]]; then
@@ -148,12 +158,12 @@ workspace_ready() {
     github_auth_resolve "$repo_root" "$diagnostic_repository" "$operation" ||       blocked "${GITHUB_AUTH_REASON:-agent-env-invalid}"
   done
   GITHUB_AUTH_TOKEN=''
-  printf 'GITHUB_WORKSPACE_READY source=workspace-env credential_file_present=yes credential_file_valid=yes workspace_scoped=yes remote_resolved=yes api_probe_attempted=no git_probe_attempted=no repository=%s operation=%s\n'     "$diagnostic_repository" "$(IFS=,; printf '%s' "${operations[*]}")"
+  printf 'GITHUB_WORKSPACE_READY source=%s credential_owner=%s credential_file_present=yes credential_file_valid=yes workspace_scoped=yes remote_resolved=yes api_probe_attempted=no git_probe_attempted=no repository=%s operation=%s\n'     "$GITHUB_AUTH_SOURCE" "$GITHUB_AUTH_CREDENTIAL_OWNER" "$diagnostic_repository" "$(IFS=,; printf '%s' "${operations[*]}")"
 }
 
 case "$mode" in
-  install-token) install_token; exit 0 ;;
-  install-from-gh) install_from_gh; exit 0 ;;
+  install-token) refuse_registered_child_install; install_token; exit 0 ;;
+  install-from-gh) refuse_registered_child_install; install_from_gh; exit 0 ;;
   workspace-ready) workspace_ready; exit 0 ;;
   check) resolve_remote ;;
   *) usage ;;
@@ -170,4 +180,4 @@ github_auth_probe_api "$expected_login" "$repo_root" "$diagnostic_repository" ||
 diagnostic_operation='git-read'
 github_auth_probe_git "$repo_root" "$remote_url" ||   blocked "${GITHUB_AUTH_REASON:-github-unknown-failure}"
 GITHUB_AUTH_TOKEN=''
-printf 'GITHUB_AUTH_OK source=%s login=%s api=ok git=ok repository=%s remote=%s transport=%s workspace_scoped=yes network_attempted=yes api_attempted=yes git_attempted=yes\n'   "$GITHUB_AUTH_SOURCE" "$GITHUB_AUTH_LOGIN" "$diagnostic_repository" "$remote_name" "$(github_auth_remote_kind "$remote_url")"
+printf 'GITHUB_AUTH_OK source=%s credential_owner=%s login=%s api=ok git=ok repository=%s remote=%s transport=%s workspace_scoped=yes network_attempted=yes api_attempted=yes git_attempted=yes\n'   "$GITHUB_AUTH_SOURCE" "$GITHUB_AUTH_CREDENTIAL_OWNER" "$GITHUB_AUTH_LOGIN" "$diagnostic_repository" "$remote_name" "$(github_auth_remote_kind "$remote_url")"

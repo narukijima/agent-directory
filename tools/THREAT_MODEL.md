@@ -1,4 +1,4 @@
-# Agent Workspace Environment Threat Model
+# THREAT_MODEL.md — Agent Workspace Environment Threat Model
 
 ## Scope
 
@@ -13,6 +13,8 @@ OS home、machine共通store、Keychain、別Agent root、global process environ
 - **Tool process** — 必要keyだけを保持し、値をstdout、stderr、argv、remote URL、tracked fileへ出さない。
 - **Child process** — GitHub等の外部操作を所有する固定childだけへ該当tokenを一時注入する。
 - **Sibling Agent** — 別Workspace rootと別`.env`を持ち、自動探索・共通store・fallbackで接続しない。
+- **Registered Independent Project** — 独立Git rootを持つが、完全一致するregistry attachmentを介して親Agent rootを
+  credential ownerとして保持する。childへ`.env`を複製しない。
 
 同じOS userで任意filesystem readを実行できる悪意あるprocessに対し、`0600`は絶対的な秘密境界ではない。
 本設計の目的は、通常Toolが別Agentのcredentialを誤選択・上書き・共有する構造をなくし、所有者をWorkspace rootへ固定することにある。
@@ -27,6 +29,8 @@ OS home、machine共通store、Keychain、別Agent root、global process environ
 5. `.env`と`.env.*`実値はGitへcommitしない。共有可能なkey名と説明だけ`.env.example`へ置く。
 6. 同じAgentのrotationは同じrootの`.env`だけをatomic updateし、別Agentのcredentialを変更しない。
 7. CI process tokenは`CI=true`かつ明示的なrepository / operation一致時だけの例外である。
+8. `<agent-root>/projects/<name>`とregistryのname・repositoryが完全一致するIndependent Projectだけ、親Agent rootの
+   `.env`を使う。任意parent、未登録child、sibling Agentは使わない。
 
 ## Attack surfaces
 

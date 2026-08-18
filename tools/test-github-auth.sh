@@ -48,6 +48,65 @@ write_env "$workspace_b" "$fixture_pat_b"
 resolve_expected "$workspace_a" "$fixture_pat_a" || fail 'Agent A did not select its own .env token'
 resolve_expected "$workspace_b" "$fixture_pat_b" || fail 'Agent B did not select its own .env token'
 
+# A registered Independent Project owns its Git root, while the enclosing Agent
+# Workspace remains the credential owner. Exact registry and repository matching
+# prevents this from becoming arbitrary parent or sibling fallback.
+owner_workspace="$fixture/owner-agent"
+registered_child="$owner_workspace/projects/registered-child"
+mkdir -p "$owner_workspace/projects" "$registered_child"
+git -C "$owner_workspace" init -q
+git -C "$registered_child" init -q
+owner_workspace_physical="$(cd "$owner_workspace" && pwd -P)"
+git -C "$registered_child" remote add origin https://github.com/fixture/registered.git
+write_env "$owner_workspace" "$fixture_pat_a"
+write_env "$registered_child" "$fixture_pat_b"
+cat > "$owner_workspace/projects/REPOSITORIES.md" <<'REGISTERED_PROJECT'
+# REPOSITORIES — Independent Repository Registry
+
+## `registered-child`
+
+- repository_url: `https://github.com/fixture/registered.git`
+- repository_role: `public-foundation`
+- repository_reason: `distribution`
+- revision: `aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa`
+REGISTERED_PROJECT
+
+registered_resolve_status=0
+EXPECTED_TOKEN="$fixture_pat_a" /bin/bash -c '
+  . "$1"
+  github_auth_resolve "$2" fixture/registered git-push || exit 20
+  [[ "$GITHUB_AUTH_TOKEN" == "$EXPECTED_TOKEN" ]] || exit 21
+  [[ "$GITHUB_AUTH_CREDENTIAL_FILE" == "$3/.env" ]] || exit 22
+  [[ "$GITHUB_AUTH_CREDENTIAL_ROOT" == "$3" ]] || exit 23
+  [[ "$GITHUB_AUTH_CREDENTIAL_OWNER" == registered-agent-root ]] || exit 24
+' _ "$auth_lib" "$registered_child" "$owner_workspace_physical" || registered_resolve_status=$?
+(( registered_resolve_status == 0 )) || \
+  fail "registered Independent Project did not select its Agent root credential (status=$registered_resolve_status)"
+
+registered_ready_output="$(AGENT_DIRECTORY_ROOT="$registered_child" /bin/bash \
+  "$tool_root/setup-github-auth.sh" --workspace-ready --remote origin --operation git-push 2>&1)" || \
+  fail "registered Independent workspace-ready failed: $registered_ready_output"
+[[ "$registered_ready_output" == *'credential_owner=registered-agent-root'* ]] || \
+  fail "registered Independent workspace-ready hid its credential owner: $registered_ready_output"
+
+set +e
+registered_install_output="$(printf '%s\n' "$fixture_pat_b_updated" | AGENT_DIRECTORY_ROOT="$registered_child" \
+  /bin/bash "$tool_root/setup-github-auth.sh" --install-token 2>&1)"
+registered_install_status=$?
+set -e
+if (( registered_install_status == 0 )) || \
+  [[ "$registered_install_output" != *'GITHUB_AUTH_BLOCKED reason=credential-owned-by-agent-root'* ]]; then
+  fail "registered Independent Project requested or installed a duplicate token: $registered_install_output"
+fi
+
+EXPECTED_TOKEN="$fixture_pat_b" /bin/bash -c '
+  . "$1"
+  github_auth_resolve "$2" fixture/unregistered git-read || exit 25
+  [[ "$GITHUB_AUTH_TOKEN" == "$EXPECTED_TOKEN" ]] || exit 26
+  [[ "$GITHUB_AUTH_CREDENTIAL_OWNER" == workspace-root ]] || exit 27
+' _ "$auth_lib" "$registered_child" || \
+  fail 'repository mismatch consumed the parent Agent credential'
+
 cp "$workspace_b/.env" "$fixture/agent-b-before-agent-a-update.env"
 printf '%s\n' "$fixture_pat_a_updated" | AGENT_DIRECTORY_ROOT="$workspace_a" \
   /bin/bash "$tool_root/setup-github-auth.sh" --install-token >/dev/null || \
@@ -161,4 +220,4 @@ done
 if (( failures > 0 )); then
   exit "$failures"
 fi
-printf 'GITHUB_AUTH_TEST_OK source=workspace-env workspace_isolation=ok dotenv=ok setup=ok diagnostics=ok\n'
+printf 'GITHUB_AUTH_TEST_OK source=workspace-env workspace_isolation=ok registered_owner=ok dotenv=ok setup=ok diagnostics=ok\n'
