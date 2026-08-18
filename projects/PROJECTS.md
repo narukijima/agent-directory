@@ -4,7 +4,7 @@
 
 ## 正本と責務
 
-すべてのProjectに必要なのは`PROJECT.md`と`STATE.md`だけである。その他は実在する複雑さを分離する
+すべての一般Projectに必要なのは`PROJECT.md`と`STATE.md`だけである。その他は実在する複雑さを分離する
 必要が生じたときだけ追加し、空の層や将来用文書を作らない。
 
 ```text
@@ -90,11 +90,18 @@ Independentでは`projects/<name>/**`のすべて（契約、状態、個別`AGE
 コード、Git履歴）をProject固有Gitが所有し、root Gitは内部ファイルを一つも追跡しない。root側へ
 `PROJECT.md`や`STATE.md`のコピーを残さず、同じ契約と状態を二つのGitへ複製しない。
 
+Owner Agentが開発する公開基盤製品だけはregistryの`repository_role: public-foundation`で明示する。
+これは一般Projectではなく、製品repositoryが公開目的、仕様、repository-local規約、検証、配布文書を所有し、
+Owner Agent rootが製品横断の現在目標、優先順位、相互影響、次の一手、採用revision、handoff状態を一元管理する。
+製品repositoryへOwner Agent固有の`PROJECT.md` / `STATE.md`を置かず、同じactive状態を二つのGitへ複製しない。
+一般利用者のProject契約と混同せず、この役割のrepositoryは`meta` Routeで扱う。
+
 ### Registryとignore projection
 
-root Gitが持つのはProject本文ではなく、[projects/REPOSITORIES.md](REPOSITORIES.md)の最小な
+root Gitが持つのはrepository本文ではなく、[projects/REPOSITORIES.md](REPOSITORIES.md)の最小な
 attachment／recovery registryと、その派生projectionである`projects/.gitignore`だけである。registryは
-目的、成果契約、status、mode、現在状態を複製せず、entry形式、field規則、`repository_reason`の値、
+目的、成果契約、status、mode、現在状態を複製せず、entry形式、field規則、`repository_reason`と
+`repository_role`の値、
 managed blockの規則はregistry自身が所有する。registryが正本であり、ignoreは派生である。
 
 Embedded Project、`_template/`、registry自身をignoreせず、`projects/*/`のような広いpatternを追加しない。

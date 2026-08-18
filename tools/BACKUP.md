@@ -101,7 +101,9 @@ root前提条件は次である。ひとつでも満たさない場合、Toolは
 
 1. **attachment** — `projects/<name>/`に存在し、targetと`.git`がsymlinkでなく`.git`が実directory
    （`.git` fileは非対応）で、toplevelと`remote.origin.url`が登録と完全一致する。
-2. **構造** — submodule、追加のnested Git、Git LFSがなく、HEADに`PROJECT.md`と`STATE.md`が存在する。
+2. **構造** — submodule、追加のnested Git、Git LFSがない。`repository_role`が既定の`project`なら
+   HEADに`PROJECT.md`と`STATE.md`が存在し、`public-foundation`ならOwner Agent rootがactive状態を
+   所有するため両ファイルを要求しない。
 3. **cleanliness** — staged、tracked dirty、非ignoreのuntracked、stashがない。
 4. **到達性** — remoteへ到達でき採用revisionをfetchでき、HEADが採用revisionと一致し、HEADと全local
    branch tipがremote headまたはtagから到達でき、local-onlyなtagがない。

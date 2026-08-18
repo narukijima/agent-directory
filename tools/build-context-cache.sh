@@ -104,9 +104,10 @@ sql_quote() {
 # Project the shared registry parser to the cache's name/revision view. The cache is a
 # derived artifact, so an invalid revision is warned about and dropped instead of stopping.
 registry_records() {
-  local record_kind entry_name entry_url entry_reason entry_revision
-  while IFS=$'\t' read -r record_kind entry_name entry_url entry_reason entry_revision; do
+  local record_kind entry_name entry_url entry_reason entry_revision entry_role
+  while IFS=$'\t' read -r record_kind entry_name entry_url entry_reason entry_revision entry_role; do
     [[ "$record_kind" == 'R' ]] || continue
+    [[ "$entry_role" == 'project' ]] || continue
     if [[ "$entry_revision" =~ ^[0-9a-f]{40}$ ]]; then
       printf '%s\t%s\n' "$entry_name" "$entry_revision"
     else

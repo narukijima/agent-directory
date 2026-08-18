@@ -213,6 +213,9 @@ registryの登録と採用revisionから`projects/<name>/`へ通常cloneを再�
 - targetが無いときだけ採用revisionをdetached checkoutし、branch tipへ勝手に進めない。既存cloneは
   HEADと採用SHAの一致まで検査し（detached HEADは要求しない）、reset、clean、stash、merge、rebaseで
   変形しない。認証情報を保存せず、絶対pathを正本へ書かない。
+  `repository_role: project`では採用revisionの`PROJECT.md` / `STATE.md`を検査し、`public-foundation`では
+  Owner Agent rootがactive状態を所有するため両ファイルを要求しない。Git、origin、HEAD、cleanliness、revisionの
+  検査は役割にかかわらず同一である。
   `AGENT_ALLOW_LOCAL_REPOSITORY_URL=true`は隔離fixture専用。
 
 ## validate-agent-directory.sh
