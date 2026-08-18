@@ -89,7 +89,7 @@ agent-directory/
     ├── SAFETY.md
     ├── CONTROL.md
     ├── control-policy.tsv
-    └── 9 executable Tools + 4 internal files
+    └── 9 executable Tools + 5 internal files
 ```
 
 ## RuntimeとProvider
@@ -150,7 +150,7 @@ commit・push境界は`tools/check-boundary.sh`とmanaged hooksが執行する�
 
 ## Tool
 
-`tools/`は17ファイル固定で、実行Toolは9本だけである。完全な一覧とCLIは
+`tools/`は17ファイル固定で、実行Toolは9本、内部実装は5ファイルである。完全な一覧とCLIは
 [tools/TOOLS.md](tools/TOOLS.md)が所有する。
 
 新しいToolを追加する前に、既存Toolまたは対象Ownerへの統合を優先する。新設が不可避な場合は、

@@ -38,21 +38,39 @@ read-only回答で対象正本が明示されている場合はToolを必須に�
 
 ## Tool一覧
 
-固定実行Toolは次の9本だけとする。
+固定実行Toolは次の9本だけとする。9本すべてを通常タスクへ読み込まず、通常入口、条件付きCapability、
+開発時保証を分ける。条件付きToolも公開契約の実装であり、ClaudAGT個体、Provider、Runtime、認証、backupの
+都合では追加しない。
+
+### 通常Core
 
 | Tool | いつ使う | すること | しないこと |
 |---|---|---|---|
 | `task.sh` | 通常タスクの開始・検証・状態確認 | Route正本、target、Git rootの表示とvalidator呼出し | commit、push、公開 |
 | `find-context.sh` | targetが明示されていない探索時 | active候補を最大5件へ絞る | 正本の代わりに回答すること |
-| `build-context-cache.sh` | cache欠損・stale・full検証時 | catalog、manifest、任意SQLite索引の再生成 | cacheを正本にすること |
+| `build-context-cache.sh` | cache欠損・stale・full検証時 | catalogと任意SQLite索引の再生成 | cacheを正本にすること |
 | `validate-agent-directory.sh` | 変更後と公開前 | 構造、参照、サイズ、Tool/eval allowlist、scriptを静的検査 | Agentの行動品質を推測すること |
 | `check-boundary.sh` | commit・push直前 | secret、frozen、protected、non-FF境界を差分から検査 | commitやpushの実行 |
 | `install-git-hooks.sh` | clone後・control更新後 | managed pre-commit / pre-pushとapproved snapshotを導入 | 未管理hookの上書き |
+
+### 条件付きCapability
+
+該当する公開機能を使うときだけ実行する。通常タスクの前提にはしない。
+
+| Tool | いつ使う | すること | しないこと |
+|---|---|---|---|
 | `materialize-project-repositories.sh` | Independent cloneの再現・監査時 | registryのURLとrevisionからcloneを再現・検査 | credential保存、reset、merge、clean |
 | `append-knowledge-log.sh` | Knowledgeを永続変更したとき | LOG追記と閾値rotation | Knowledge本文の生成・判断 |
+
+### 開発時保証
+
+公開契約やevalを変更するときに使い、通常Agentの作業経路には含めない。
+
+| Tool | いつ使う | すること | しないこと |
+|---|---|---|---|
 | `run-evals.py` | Core行動契約を評価するとき | trace採点と隔離Workspaceでのadapter実行 | Provider実行、外部送信、static validatorの代替 |
 
-内部部品は直接実行しない。
+内部部品は5物理ファイル、4責務であり、通常Agentは直接実行しない。
 
 | Path | 責務 |
 |---|---|
@@ -72,6 +90,8 @@ tools/find-context.sh --route knowledge|skill|project|meta [--limit 1..5] [--inc
 
 `.agent-cache/`は正本から再生成できるGit管理外の派生物である。cacheだけに情報を保存しない。
 `find-context.sh`はcache欠損・stale時にrouting部分だけを一度再生成し、本文ではなくmetadataだけを返す。
+生成物は`catalog.tsv`、`cache.meta`、規模閾値を超えた場合の`search.sqlite`だけとし、利用されない
+workspace全件inventoryを保持しない。
 
 ### Validation
 

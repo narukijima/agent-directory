@@ -12,6 +12,12 @@ bootstrap_status=false
 base_ref=''
 failures=0
 warnings=0
+tool_fixture_root=''
+
+cleanup() {
+  [[ -z "$tool_fixture_root" ]] || rm -rf -- "$tool_fixture_root"
+}
+trap cleanup EXIT
 
 usage() {
   printf 'Usage: %s [--strict] [--full] [--changed] [--base <ref>] [--bootstrap-status]\n' "${0##*/}" >&2
@@ -100,6 +106,148 @@ validate_status_file() {
     '') fail "${file#"$repo_root"/} is missing frontmatter status" ;;
     *) fail "${file#"$repo_root"/} has invalid status: $status" ;;
   esac
+}
+
+validate_tool_behaviors() {
+  local fixture_root task_output search_output append_root append_output
+  local control_root control_output hook_output head_sha zero_sha push_output
+  local materialize_root upstream_work upstream_bare adopted_sha materialize_output
+
+  task_output="$(bash "$repo_root/tools/task.sh" context --route meta --target tools/TOOLS.md 2>&1)" || {
+    fail "task.sh context self-check failed: $task_output"
+    task_output=''
+  }
+  printf '%s\n' "$task_output" | grep -Fqx 'route=meta' || fail 'task.sh context did not preserve the requested Route'
+  printf '%s\n' "$task_output" | grep -Fqx 'READ: tools/TOOLS.md' || fail 'task.sh context did not return the explicit target'
+
+  task_output="$(bash "$repo_root/tools/task.sh" status 2>&1)" || fail "task.sh status self-check failed: $task_output"
+  printf '%s\n' "$task_output" | grep -Fq 'TASK_STATUS git_root=' || fail 'task.sh status did not report the Git root'
+
+  task_output="$(bash "$repo_root/tools/task.sh" verify 2>&1)" || fail "task.sh verify self-check failed: $task_output"
+  printf '%s\n' "$task_output" | grep -Fqx 'TASK_OK action=verify' || fail 'task.sh verify did not report success'
+
+  search_output="$(bash "$repo_root/tools/find-context.sh" --route meta --limit 1 -- tool-policy 2>&1)" || {
+    fail "find-context.sh self-check failed: $search_output"
+    search_output=''
+  }
+  printf '%s\n' "$search_output" | grep -Fq $'meta\tpolicy\tactive\ttool-policy' || \
+    fail 'find-context.sh did not return the exact active Tool policy candidate'
+
+  fixture_root="$(mktemp -d "${TMPDIR:-/tmp}/agent-directory-tool-test.XXXXXX")"
+  tool_fixture_root="$fixture_root"
+
+  # Knowledge LOG: the 1,000th record must rotate to a closed quarterly log and leave
+  # only the current header in LOG.md.
+  append_root="$fixture_root/append"
+  mkdir -p "$append_root/knowledge/wiki"
+  printf '# Knowledge Log\n\n---\n' > "$append_root/knowledge/wiki/LOG.md"
+  awk 'BEGIN { for (i = 1; i <= 999; i++) print "2026-08-01  ingest      knowledge/wiki/topics/example.md  fixture" }' \
+    >> "$append_root/knowledge/wiki/LOG.md"
+  append_output="$(AGENT_DIRECTORY_ROOT="$append_root" bash "$repo_root/tools/append-knowledge-log.sh" \
+    --date 2026-08-19 --type ingest --target knowledge/wiki/topics/final.md --summary fixture 2>&1)" || \
+    fail "append-knowledge-log.sh self-check failed: $append_output"
+  printf '%s\n' "$append_output" | grep -Fq 'ROTATED: knowledge/wiki/logs/2026-Q3.md' || \
+    fail 'append-knowledge-log.sh did not rotate at the documented threshold'
+  grep -Fq 'knowledge/wiki/topics/final.md' "$append_root/knowledge/wiki/logs/2026-Q3.md" 2>/dev/null || \
+    fail 'append-knowledge-log.sh rotation lost the appended record'
+  [[ "$(grep -Ec '^[0-9]{4}-[0-9]{2}-[0-9]{2}[[:space:]]+' "$append_root/knowledge/wiki/LOG.md" || true)" == '0' ]] || \
+    fail 'append-knowledge-log.sh did not reset the current log after rotation'
+
+  # Git boundary: install only committed snapshots, allow an ordinary commit, reject a
+  # forbidden path, and exercise both managed hook entrypoints.
+  control_root="$fixture_root/control"
+  mkdir -p "$control_root/tools/hooks" "$control_root/projects"
+  cp "$repo_root/tools/install-git-hooks.sh" "$control_root/tools/install-git-hooks.sh"
+  cp "$repo_root/tools/check-boundary.sh" "$control_root/tools/check-boundary.sh"
+  cp "$repo_root/tools/control-policy.tsv" "$control_root/tools/control-policy.tsv"
+  cp "$repo_root/tools/hooks/pre-commit" "$control_root/tools/hooks/pre-commit"
+  cp "$repo_root/tools/hooks/pre-push" "$control_root/tools/hooks/pre-push"
+  git -C "$control_root" init -q
+  git -C "$control_root" config user.name 'Agent Directory Fixture'
+  git -C "$control_root" config user.email 'fixture@example.invalid'
+  git -C "$control_root" add tools
+  git -C "$control_root" commit -qm 'Create control fixture'
+  hook_output="$(AGENT_DIRECTORY_ROOT="$control_root" bash "$control_root/tools/install-git-hooks.sh" --install 2>&1)" || \
+    fail "install-git-hooks.sh install self-check failed: $hook_output"
+  printf '%s\n' "$hook_output" | grep -Fqx 'HOOKS_INSTALLED hooks=2 independent=0' || \
+    fail 'install-git-hooks.sh did not install both managed hooks'
+  hook_output="$(AGENT_DIRECTORY_ROOT="$control_root" bash "$control_root/tools/install-git-hooks.sh" --status 2>&1)" || \
+    fail "install-git-hooks.sh status self-check failed: $hook_output"
+  printf '%s\n' "$hook_output" | grep -Fq 'pre-commit=managed pre-push=managed' || \
+    fail 'install-git-hooks.sh did not report managed hooks'
+
+  printf 'ordinary\n' > "$control_root/ordinary.txt"
+  git -C "$control_root" add ordinary.txt
+  control_output="$(cd "$control_root" && AGENT_DIRECTORY_ROOT="$control_root" \
+    /bin/bash tools/check-boundary.sh --staged --policy tools/control-policy.tsv 2>&1)" || \
+    fail "check-boundary.sh ordinary self-check failed: $control_output"
+  printf '%s\n' "$control_output" | grep -Fq 'BOUNDARY_OK' || \
+    fail 'check-boundary.sh did not allow an ordinary staged path'
+  control_output="$(git -C "$control_root" commit -qm 'Add ordinary fixture' 2>&1)" || \
+    fail "managed pre-commit ordinary self-check failed: $control_output"
+
+  head_sha="$(git -C "$control_root" rev-parse HEAD)"
+  zero_sha='0000000000000000000000000000000000000000'
+  push_output="$(cd "$control_root" && \
+    printf 'refs/heads/main %s refs/heads/main %s\n' "$head_sha" "$zero_sha" | \
+    .git/hooks/pre-push origin 2>&1)" || \
+    fail "managed pre-push self-check failed: $push_output"
+
+  printf 'fixture-secret-value-1234567890\n' > "$control_root/.env"
+  git -C "$control_root" add -f .env
+  if control_output="$(cd "$control_root" && AGENT_DIRECTORY_ROOT="$control_root" \
+      /bin/bash tools/check-boundary.sh --staged --policy tools/control-policy.tsv 2>&1)"; then
+    fail 'check-boundary.sh allowed the forbidden .env path'
+  elif ! printf '%s\n' "$control_output" | grep -Fq 'BOUNDARY_BLOCKED'; then
+    fail "check-boundary.sh returned an unexpected forbidden-path result: $control_output"
+  fi
+  if git -C "$control_root" commit -qm 'Must be rejected' >/dev/null 2>&1; then
+    fail 'managed pre-commit allowed the forbidden .env path'
+  fi
+
+  # Independent Project: clone one local fixture at the exact registered revision,
+  # then verify that a second --check observes the same clean attachment.
+  materialize_root="$fixture_root/materialize"
+  upstream_work="$fixture_root/upstream-work"
+  upstream_bare="$fixture_root/upstream.git"
+  mkdir -p "$upstream_work"
+  git -C "$upstream_work" init -q
+  git -C "$upstream_work" config user.name 'Agent Directory Fixture'
+  git -C "$upstream_work" config user.email 'fixture@example.invalid'
+  printf '%s\n' '---' 'name: sample' 'status: active' '---' '# Sample' > "$upstream_work/PROJECT.md"
+  printf '%s\n' '---' 'status: active' '---' '# State' > "$upstream_work/STATE.md"
+  git -C "$upstream_work" add PROJECT.md STATE.md
+  git -C "$upstream_work" commit -qm 'Create independent fixture'
+  adopted_sha="$(git -C "$upstream_work" rev-parse HEAD)"
+  git clone -q --bare "$upstream_work" "$upstream_bare"
+
+  mkdir -p "$materialize_root/projects" "$materialize_root/tools"
+  printf '# Fixture Agent\n' > "$materialize_root/AGENTS.md"
+  printf '#!/bin/sh\nexit 0\n' > "$materialize_root/tools/validate-agent-directory.sh"
+  chmod 755 "$materialize_root/tools/validate-agent-directory.sh"
+  printf '%s\n' '# Independent repositories' '' '## `sample`' \
+    "- repository_url: \`$upstream_bare\`" '- repository_reason: `distribution`' \
+    "- revision: \`$adopted_sha\`" > "$materialize_root/projects/REPOSITORIES.md"
+  printf '%s\n' '# BEGIN INDEPENDENT PROJECTS' '/sample/' '# END INDEPENDENT PROJECTS' \
+    > "$materialize_root/projects/.gitignore"
+  git -C "$materialize_root" init -q
+  git -C "$materialize_root" config user.name 'Agent Directory Fixture'
+  git -C "$materialize_root" config user.email 'fixture@example.invalid'
+  git -C "$materialize_root" add AGENTS.md projects tools
+  git -C "$materialize_root" commit -qm 'Create materialization fixture'
+  materialize_output="$(AGENT_DIRECTORY_ROOT="$materialize_root" AGENT_ALLOW_LOCAL_REPOSITORY_URL=true \
+    bash "$repo_root/tools/materialize-project-repositories.sh" --all 2>&1)" || \
+    fail "materialize-project-repositories.sh clone self-check failed: $materialize_output"
+  printf '%s\n' "$materialize_output" | grep -Fq 'MATERIALIZATION_OK total=1 cloned=1 verified=0' || \
+    fail 'materialize-project-repositories.sh did not clone the registered revision'
+  materialize_output="$(AGENT_DIRECTORY_ROOT="$materialize_root" AGENT_ALLOW_LOCAL_REPOSITORY_URL=true \
+    bash "$repo_root/tools/materialize-project-repositories.sh" --all --check 2>&1)" || \
+    fail "materialize-project-repositories.sh verify self-check failed: $materialize_output"
+  printf '%s\n' "$materialize_output" | grep -Fq 'MATERIALIZATION_OK total=1 cloned=0 verified=1' || \
+    fail 'materialize-project-repositories.sh did not verify the adopted revision'
+
+  rm -rf "$fixture_root"
+  tool_fixture_root=''
 }
 
 required_files=(
@@ -347,6 +495,9 @@ if [[ "$full" == true ]]; then
   if (( failures == 0 )); then
     eval_output="$(cd "$repo_root" && python3 tools/run-evals.py score --case evals/fixtures/eval-runtime/case.yaml --trace evals/fixtures/eval-runtime/pass.jsonl 2>&1)" || fail "Core eval runner self-check failed: $eval_output"
     printf '%s\n' "$eval_output" | grep -Fq 'status=PASS' || fail 'Core eval runner self-check did not report PASS'
+  fi
+  if (( failures == 0 )); then
+    validate_tool_behaviors
   fi
 fi
 

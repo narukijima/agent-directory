@@ -496,95 +496,9 @@ printf 'schema_version=1\ngenerator_hash=%s\ncontent_fingerprint=%s\n' \
 printf 'catalog_rows=%s\nknowledge_rows=%s\nsearch_backend=%s\n' \
   "$catalog_rows" "$knowledge_rows" "$search_backend" >> "$cat_meta"
 
-# --- workspace inventory (manifest) ---------------------------------------------
-# The manifest is a Slow Path audit artifact for full validation and
-# boundary work. A routing-only rebuild never scans or hashes the whole workspace.
-
-if [[ "$mode" != 'routing' ]]; then
-  # An Independent Project's Project root sits outside the root cache boundary. Prune the whole
-  # directory, not just `.git`, so child-side changes cannot leak into the root fingerprint. Only
-  # registry-registered names are targeted, so Embedded Projects, `projects/REPOSITORIES.md` and `projects/.gitignore` are not swept up.
-  manifest_prune=( -name '.git' -o -name '.agent-cache' -o -name '.tmp' )
-  independent_index=0
-  while (( independent_index < independent_count )); do
-    manifest_prune+=( -o -path "$repo_root/projects/${independent_names[$independent_index]}" )
-    independent_index=$((independent_index + 1))
-  done
-
-  # Enumerate and classify first without spawning per-file processes; sizes and hashes
-  # are attached afterwards in single batch passes.
-  manifest_pending="$tmp_root/manifest.pending"
-  : > "$manifest_pending"
-  manifest_files="$tmp_root/manifest.files"
-  : > "$manifest_files"
-  while IFS= read -r -d '' file; do
-    relative_path="${file#"$repo_root"/}"
-    case "$relative_path" in
-      .git/*|*/.git/*|.agent-cache/*|*/.agent-cache/*|.tmp/*|*/.tmp/*|.DS_Store|*/.DS_Store|.env|.env.*|*/.env|*/.env.*) continue ;;
-    esac
-
-    kind='file'
-    immutable='false'
-    case "$relative_path" in
-      knowledge/raw/internal/*) kind='internal-record'; immutable='true' ;;
-      knowledge/raw/external/*) kind='external-source'; immutable='true' ;;
-      knowledge/raw/*) kind='raw-record'; immutable='true' ;;
-      knowledge/wiki/logs/*) kind='closed-log'; immutable='true' ;;
-      knowledge/wiki/sources/*|knowledge/wiki/topics/*) kind='knowledge' ;;
-      skills/*/SKILL.md) kind='skill' ;;
-      projects/*/PROJECT.md) kind='project-contract' ;;
-      projects/*/STATE.md) kind='project-state' ;;
-      projects/*/ARCHITECTURE.md) kind='project-architecture' ;;
-      projects/*/docs/*) kind='project-doc' ;;
-      evals/cases/*.yaml) kind='eval' ;;
-      tools/*) kind='tool' ;;
-      *.md|*/*.md) kind='policy-or-document' ;;
-    esac
-
-    printf '%s\t%s\t%s\n' "$relative_path" "$kind" "$immutable" >> "$manifest_pending"
-    printf '%s\0' "$file" >> "$manifest_files"
-  done < <(
-    find "$repo_root" \
-      \( -type d \( "${manifest_prune[@]}" \) \) -prune -o \
-      -type f -print0
-  )
-
-  manifest_hashes="$tmp_root/manifest.hashes"
-  batch_hash < "$manifest_files" > "$manifest_hashes"
-  manifest_stats="$tmp_root/manifest.stats"
-  : > "$manifest_stats"
-  manifest_batch=()
-  while IFS= read -r -d '' file; do
-    manifest_batch+=("$file")
-    if (( ${#manifest_batch[@]} >= 512 )); then
-      stat_lines_for "${manifest_batch[@]}" >> "$manifest_stats" || true
-      manifest_batch=()
-    fi
-  done < "$manifest_files"
-  if (( ${#manifest_batch[@]} > 0 )); then
-    stat_lines_for "${manifest_batch[@]}" >> "$manifest_stats" || true
-  fi
-
-  manifest="$generated_dir/manifest.tsv"
-  printf 'path\tkind\tsize_bytes\tcontent_hash\trouteable\timmutable\n' > "$manifest"
-  awk -F '\t' -v root="$repo_root/" '
-    BEGIN { OFS = "\t" }
-    FILENAME == ARGV[1] { hash[$1] = $2; next }
-    FILENAME == ARGV[2] { size[$1] = $2; next }
-    FILENAME == ARGV[3] { routeable[root $1] = 1; next }
-    {
-      file = root $1
-      if (!(file in hash) || !(file in size)) next
-      print $1, $2, size[file], hash[file], (file in routeable) ? "true" : "false", $3
-    }
-  ' "$manifest_hashes" "$manifest_stats" \
-    <(tail -n +2 "$catalog" | awk -F '\t' '{print $8}' | LC_ALL=C sort -u) \
-    "$manifest_pending" | LC_ALL=C sort -t $'\t' -k1,1 >> "$manifest"
-fi
-
 if [[ "$mode" == 'check' ]]; then
   stale=false
-  for name in catalog.tsv manifest.tsv cache.meta; do
+  for name in catalog.tsv cache.meta; do
     if [[ ! -f "$cache_dir/$name" ]] || ! cmp -s "$generated_dir/$name" "$cache_dir/$name"; then
       stale=true
     fi
@@ -605,10 +519,12 @@ fi
 
 mkdir -p "$cache_dir"
 install_names=(catalog.tsv cache.meta)
-[[ "$mode" == 'routing' ]] || install_names+=(manifest.tsv)
 for name in "${install_names[@]}"; do
   cp "$generated_dir/$name" "$cache_dir/$name"
 done
+# manifest.tsv was a generated workspace inventory with no consumer. Remove the retired
+# artifact during the next cache rebuild instead of leaving stale data behind.
+rm -f "$cache_dir/manifest.tsv"
 if [[ -f "$generated_dir/search.sqlite" ]]; then
   cp "$generated_dir/search.sqlite" "$cache_dir/search.sqlite"
 elif [[ -f "$cache_dir/search.sqlite" ]]; then
