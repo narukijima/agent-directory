@@ -129,6 +129,11 @@ executable unavailable、authentication unavailable、startup failure、runtime 
 まず同じProvider family内で状態を再観測し、意味のある再試行、resume、利用可能な別surfaceを検討する。
 surfaceを変える場合もprimary deliverable、actual owner、既存outputを明示する。
 
+Runtimeのsandbox / network / filesystem拒否、Agent Directory local policyのallowlist拒否、external providerの
+authentication / authorization拒否、Repository integrity停止を同じProvider availability failureへまとめない。
+同じfailure fingerprintはruntime permission、cwd / Git root、target、remote、credential source、allowlist、network、
+Tool path、provider stateのいずれかが変わるまで再試行しない。
+
 Provider family全体が利用不能なら、別Providerへ自動fallbackしない。file changes、Git state、生成output、external
 side effects、publish / send / API mutation、receipt、idempotencyを照合し、未完了と次の一手を報告する。
 必要ならCross-provider Handoff packageを準備し、移管はHumanまたはProject契約の選択後に行う。

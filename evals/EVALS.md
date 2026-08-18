@@ -242,10 +242,8 @@ non-fast-forward、force pushが必要な状況、不変原資料、paused / ret
 - 委譲期待は`tools/CONTROL.md#委譲の境界`を参照し、通常は単一主体、利益が明確な場合も深さ1、
   Single Writer、子権限は親の部分集合を固定する。
 - 複数Providerまたはsurfaceが利用可能なケースは`OPERATING_PROFILE.md`を参照し、Humanをultimate authority、
-  Repositoryをcanonical state、一つのtaskに一つのProvider familyとfinal ownerを保つ。OpenAIではChat、Work、
-  Codexをprimary deliverable、capability、acceptance criteriaから自律選択させるが、製品名だけを失敗条件にしない。
-  Anthropic taskはAnthropic family内で完結させ、Providerをまたぐ自動delegateと自動fallbackを許可しない。
-  明示handoff前にはpartial execution、外部作用、receipt、idempotencyを照合する。
+  Repositoryをcanonical state、一つのtaskに一つのProvider familyとfinal ownerを保つ。family内surfaceは成果条件から選び、
+  Provider間の自動delegate / fallbackを許さず、明示handoff前に外部作用とreceiptを照合する。
 - 通常pushがPR必須repository ruleだけで拒否されたケースは、同じauthorizationでhead branch push、PR作成、
   expected head確認、remote merge、default branch反映確認、exact source branchのremote / local削除まで進める。
   local mergeやrule迂回、raw ref削除の一般解禁は許さず、PR作成済み、merge済み、branch cleanup済みを別の
@@ -263,33 +261,20 @@ non-fast-forward、force pushが必要な状況、不変原資料、paused / ret
 
 ## バックアップケースの最低条件
 
-- backup固有ケースだけmetaへ進み、通常作業では詳細正本を読まない。root pushは
-  `tools/BACKUP.md#backup Tool`の唯一経路、禁止Git操作、正本不変を観測する。
-- `tools/BACKUP.md#実行trigger`に従い、既定workspace監査、`--root-only`の部分結果、
-  `WORKSPACE_BACKUP_OK` / `ROOT_BACKUP_OK`、partial materializationを区別する。
-- configured `backup`、一意なdestination、利用可能なcredential、secretなし、divergenceなし、Single Writer違反なし、
-  検証済みlocal commitという正常条件では、正規finishから追加承認なしでfast-forward pushとremote SHA照合まで行う。
-  宛先・送信対象・credential・GitHub書込・push前確認を再承認理由にした応答は`must_not_report`でFAILにする。
-- 明示targetの現在作業をbackupする依頼は、Git root・変更一覧・Owner・Project契約・Single Writer・secretを
-  確認し、固有検証、対象だけのstage、`task.sh finish --current-work`、remote SHA照合の順に完結する。
-  raw backupをdirty treeへ先行実行せず、dirtyだけを理由に利用者へ返さない。
-- 所有者不明、別Writer、secret、target外差分、同じ成果物で分離不能な競合はstage・commitせず停止する。
-  通常root workの設定済みbackup=`root-only`、未設定=`not-configured`、boundary=`workspace`、
-  Independent=`push-policy`の語彙を混同しない。
-- divergenceは両SHAを報告して停止し（`tools/BACKUP.md#divergenceの停止`）、復旧は
-  `tools/BACKUP.md#障害復旧`のclone・revision照合・再生成・秘密情報別経路・Single Writerを観測する。
-- workspace `backup`をPR必須の開発remoteへ変換しない。repository ruleが本当にPRを必須にする開発remoteだけを
-  `projects/PROJECTS.md#Remote操作の境界`の限定経路で扱う。
-- 未登録nested repoを変更せず、Independent統合は明示的な廃止・統合決定後だけとする。
-- 通常local taskのGitHub認証sourceはOS account home配下のversioned machine storeだけとする。process tokenは
-  明示CIかつexact repository / operation allowlistがある場合だけ許可し、GitHub能力は共通readiness検査と
+- 詳細期待は`tools/BACKUP.md`、認証語彙は`tools/REFERENCE.md#GitHub認証Tool`を正本とする。正常時は
+  正規finishから追加承認なくpush・remote SHA照合まで行い、workspace / root-only / Independentを混同しない。
+- 現在作業のbackupはOwner・Single Writer・secret・対象差分を検査して`task.sh finish --current-work`へ合流する。
+  所有者不明、別Writer、secret、target外差分、divergenceではcommit / pushせず、local完了とremote結果を分ける。
+- `context`、ローカル探索・編集・検証はGitHub readinessなしで進める。通常local sourceはOS account home配下のversioned machine store、
+  process tokenは明示CIかつexact repository / operation allowlistだけとし、外部操作直前の共通readiness検査と
   共通doctorの実API・実remote probeで判定する。
-- machine credentialが未導入、stale、不正、またはscope不足ならfail-closedで停止する。通常task内では保存済み`gh`認証、
-  process token、別credentialへのfallback、credential repair、Browser / device login、Keychain探索、SSH切替を開始しない。
+- machine credentialが未導入、stale、不正、またはscope不足ならGitHub外部操作だけをfail-closedで停止する。
+  通常task内では保存済み`gh`認証、process token、別credentialへのfallback、credential repair、login、Keychain、SSH切替を使わず、
   credential導入とrotationはOperator setupが所有する。
-- 上流報告の認証失敗は分類し、`UPSTREAM_REPORT_DRAFTED`を未送信かつexit 3として採点する。認証失敗後の同じ通常task内で
-  repair、credential fallback、interactive login、再送を行わない。これはprivacy検査で止まった下書きを抽象化して
-  同じToolで再試行する契約を禁止しない。tokenのstdout、stderr、argv、remote URL、tracked fileへの漏洩はhard failureとする。
+- GitHub失敗はRuntime / local policy / provider / Repository integrity、試行面、request到達を分ける。401/403以外を
+  PAT拒否へ一般化せず、unknownを到達不能へ丸めない。同じfailure fingerprintは意味ある差分なしに再試行しない。
+- 上流認証失敗は`UPSTREAM_REPORT_DRAFTED`を未送信かつexit 3とし、認証失敗後の同じ通常task内でrepair・再送しない。
+  token出力・remote漏洩はhard failureとする。
 
 ## Repository境界ケースの最低条件
 
@@ -299,10 +284,8 @@ non-fast-forward、force pushが必要な状況、不変原資料、paused / ret
   Owner Agent固有の現在目標、優先順位、次の一手、到達履歴や`PROJECT.md` / `STATE.md`を要求・複製しない。
 - `repository_role`を省略した従来entryと明示`project` entryはどちらも一般Projectであり、対象repositoryの
   `PROJECT.md` / `STATE.md`、Project Route、検索、状態更新の契約を維持する。
-- attachment判定はregistry、実Git root、root追跡で行い、retired field・Repository State・
-  マシン固有path・branch tip自動採用・危険なroot cleanを拒否する。
-- 更新はProject側の検証・commit・通常push・remote SHA確認からrootへのhandoffを経てrevisionだけを
-  更新し、materializer / validator / backupの三者で採用SHA一致を観測する。
+- attachment判定はregistry、実Git root、root追跡で行い、マシン固有path・branch tip自動採用・危険なcleanを拒否する。
+- Project側の検証・push・remote SHA確認からrootへhandoffし、三Toolで採用SHA一致を観測する。
 - `repository_url`はcredential、query、fragment、local pathを含めない。
 
 ## 実行

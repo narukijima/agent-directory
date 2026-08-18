@@ -5,6 +5,8 @@
 
 shell、filesystem、network、sandbox、tool approval、Providerのpermission modeはRuntime側が所有し、
 本安全核は許可・拒否しない。本書が扱うのは操作の意味、対象、Repository整合性だけである。
+Runtime拒否、Agent Directory local policy拒否、external provider拒否、Repository integrity拒否は別の発生層として
+報告し、一般的な「権限問題」へ統合しない。ローカル作業は任意の外部capability不足で開始前停止させない。
 
 ## 六つの不変条件
 

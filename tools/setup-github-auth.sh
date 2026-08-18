@@ -19,14 +19,21 @@ remote_url=''
 install_resource_owner=''
 install_repositories=''
 install_operations=''
+diagnostic_repository='unknown'
+diagnostic_operation='git-read'
 
 usage() {
-  printf 'Usage: %s (--install-token|--install-from-gh|--machine-ready|--check) [--expected-login <login>] [--remote <name>] [--repository <owner/repo>]... [--operation <operation>]...\n' "${0##*/}" >&2
+  printf 'Usage: %s (--install-token|--install-from-gh|--enroll-existing|--machine-ready|--check) [--expected-login <login>] [--remote <name>] [--repository <owner/repo>]... [--operation <operation>]...\n' "${0##*/}" >&2
   exit 2
 }
 
 blocked() {
-  printf 'GITHUB_AUTH_BLOCKED reason=%s\n' "$1" >&2
+  GITHUB_AUTH_REASON="$1"
+  if [[ "$mode" == enroll-existing || "$mode" == machine-ready || "$mode" == check ]]; then
+    github_auth_diagnostic "$diagnostic_operation" "$diagnostic_repository" \
+      "${remote_name:-none}" "$(github_auth_remote_kind "${remote_url:-}")" "${GITHUB_AUTH_LAST_STATUS:-1}" >&2
+  fi
+  printf 'GITHUB_AUTH_BLOCKED reason=%s\n' "$GITHUB_AUTH_REASON" >&2
   exit 1
 }
 
@@ -38,7 +45,7 @@ trap cleanup EXIT HUP INT TERM
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --install-token|--install-from-gh|--machine-ready|--check)
+    --install-token|--install-from-gh|--enroll-existing|--machine-ready|--check)
       [[ -z "$mode" ]] || usage
       mode="${1#--}"
       shift
@@ -71,6 +78,7 @@ resolve_remote() {
   [[ -n "$remote_name" ]] || blocked remote-not-configured
   remote_url="$(git -C "$repo_root" remote get-url "$remote_name" 2>/dev/null || true)"
   [[ -n "$remote_url" ]] || blocked remote-not-configured
+  GITHUB_AUTH_REMOTE_RESOLVED='yes'
 }
 
 prepare_install_policy() {
@@ -82,7 +90,7 @@ prepare_install_policy() {
   fi
   resolve_remote
   if (( ${#repositories[@]} == 0 )); then
-    repository="$(github_auth_repository_from_url "$remote_url")" || blocked github-destination-not-allowed
+    repository="$(github_auth_repository_from_url "$remote_url")" || blocked github-remote-invalid
     repositories+=("$repository")
   fi
   operations=(metadata-read git-read git-push)
@@ -90,7 +98,7 @@ prepare_install_policy() {
     operations+=("${requested_operations[@]}")
   fi
   for item in "${repositories[@]}"; do
-    github_auth_repository_valid "$item" || blocked github-destination-not-allowed
+    github_auth_repository_valid "$item" || blocked github-destination-invalid
     if [[ -z "$resource_owner" ]]; then
       resource_owner="${item%%/*}"
     else
@@ -102,7 +110,7 @@ prepare_install_policy() {
       joined_repositories="${joined_repositories:+$joined_repositories,}$item"
   done
   for item in "${operations[@]}"; do
-    github_auth_operation_valid "$item" || blocked github-operation-not-allowed
+    github_auth_operation_valid "$item" || blocked github-operation-invalid
     github_auth_list_has "$joined_operations" "$item" 2>/dev/null || \
       joined_operations="${joined_operations:+$joined_operations,}$item"
   done
@@ -193,34 +201,94 @@ install_from_gh() {
   candidate=''
 }
 
-machine_ready() {
-  local repository
+enroll_existing() {
+  local repository item joined_repositories joined_operations normalized_owner normalized_repository_owner
   resolve_remote
-  repository="$(github_auth_repository_from_url "$remote_url")" || blocked github-destination-not-allowed
+  repository="$(github_auth_repository_from_url "$remote_url")" || blocked github-remote-invalid
+  diagnostic_repository="$repository"
+  GITHUB_AUTH_MACHINE_FILE_PRESENT='no'
+  [[ ! -e "$machine_file" && ! -L "$machine_file" ]] || GITHUB_AUTH_MACHINE_FILE_PRESENT='yes'
   github_auth_read_machine_file "$machine_file" || {
     [[ "$GITHUB_AUTH_REASON" == auth-store-missing ]] && blocked machine-credential-not-installed
     blocked "${GITHUB_AUTH_REASON:-machine-credential-invalid}"
   }
-  github_auth_require_capability "$repository" git-read || blocked "${GITHUB_AUTH_REASON:-machine-credential-invalid}"
+  GITHUB_AUTH_MACHINE_FILE_VALID='yes'
+  GITHUB_AUTH_SOURCE='machine-file'
+  normalized_owner="$(printf '%s' "$GITHUB_AUTH_RESOURCE_OWNER" | tr '[:upper:]' '[:lower:]')"
+  normalized_repository_owner="$(printf '%s' "${repository%%/*}" | tr '[:upper:]' '[:lower:]')"
+  [[ "$normalized_owner" == "$normalized_repository_owner" ]] || blocked multiple-resource-owners
+
+  joined_repositories="$GITHUB_AUTH_REPOSITORIES"
+  github_auth_list_has "$joined_repositories" "$repository" || \
+    joined_repositories="$joined_repositories,$repository"
+  joined_operations="$GITHUB_AUTH_OPERATIONS"
+  if (( ${#operations[@]} == 0 )); then
+    operations=(metadata-read git-read git-push)
+  fi
+  for item in "${operations[@]}"; do
+    diagnostic_operation="$item"
+    github_auth_operation_valid "$item" || blocked github-operation-invalid
+    github_auth_list_has "$joined_operations" "$item" || joined_operations="$joined_operations,$item"
+  done
+  install_resource_owner="$GITHUB_AUTH_RESOURCE_OWNER"
+  install_repositories="$joined_repositories"
+  install_operations="$joined_operations"
+  write_machine_token "$GITHUB_AUTH_TOKEN"
+  printf 'GITHUB_MACHINE_ENROLLED source=machine-file repository=%s operations=%s atomic=yes token_reused=yes\n' \
+    "$repository" "$(IFS=,; printf '%s' "${operations[*]}")"
+}
+
+machine_ready() {
+  local repository operation
+  resolve_remote
+  repository="$(github_auth_repository_from_url "$remote_url")" || blocked github-remote-invalid
+  diagnostic_repository="$repository"
+  if (( ${#operations[@]} == 0 )); then
+    operations=(git-read)
+  fi
+  GITHUB_AUTH_MACHINE_FILE_PRESENT='no'
+  [[ ! -e "$machine_file" && ! -L "$machine_file" ]] || GITHUB_AUTH_MACHINE_FILE_PRESENT='yes'
+  github_auth_read_machine_file "$machine_file" || {
+    [[ "$GITHUB_AUTH_REASON" == auth-store-missing ]] && blocked machine-credential-not-installed
+    blocked "${GITHUB_AUTH_REASON:-machine-credential-invalid}"
+  }
+  GITHUB_AUTH_MACHINE_FILE_VALID='yes'
+  GITHUB_AUTH_SOURCE='machine-file'
+  for operation in "${operations[@]}"; do
+    diagnostic_operation="$operation"
+    github_auth_require_capability "$repository" "$operation" || blocked "${GITHUB_AUTH_REASON:-machine-credential-invalid}"
+  done
   GITHUB_AUTH_TOKEN=''
-  printf 'GITHUB_MACHINE_READY source=machine-file repository=%s\n' "$repository"
+  printf 'GITHUB_MACHINE_READY source=machine-file machine_file_present=yes machine_file_valid=yes process_token=%s repository_enrolled=yes operation_enrolled=yes remote_resolved=yes api_probe_attempted=no git_probe_attempted=no repository=%s operation=%s\n' \
+    "$(github_auth_process_token_state)" "$repository" "$(IFS=,; printf '%s' "${operations[*]}")"
 }
 
 case "$mode" in
   install-token) install_token ;;
   install-from-gh) install_from_gh ;;
+  enroll-existing) enroll_existing; exit 0 ;;
   machine-ready) machine_ready; exit 0 ;;
   check) resolve_remote ;;
   *) usage ;;
 esac
 
-repository="$(github_auth_repository_from_url "$remote_url")" || blocked github-destination-not-allowed
-if ! github_auth_probe_api "$expected_login" "$repo_root" "$repository"; then
-  blocked "${GITHUB_AUTH_REASON:-github-auth-unavailable}"
+repository="$(github_auth_repository_from_url "$remote_url")" || blocked github-remote-invalid
+diagnostic_repository="$repository"
+if (( ${#operations[@]} > 0 )); then
+  for operation in "${operations[@]}"; do
+    diagnostic_operation="$operation"
+    github_auth_resolve "$repo_root" "$repository" "$operation" || \
+      blocked "${GITHUB_AUTH_REASON:-machine-credential-invalid}"
+  done
 fi
+diagnostic_operation='metadata-read'
+if ! github_auth_probe_api "$expected_login" "$repo_root" "$repository"; then
+  blocked "${GITHUB_AUTH_REASON:-github-unknown-failure}"
+fi
+diagnostic_operation='git-read'
 if ! github_auth_probe_git "$repo_root" "$remote_url"; then
-  blocked "${GITHUB_AUTH_REASON:-git-credential-unavailable}"
+  blocked "${GITHUB_AUTH_REASON:-github-unknown-failure}"
 fi
 GITHUB_AUTH_TOKEN=''
-printf 'GITHUB_AUTH_OK source=%s login=%s api=ok git=ok repository=%s\n' \
-  "$GITHUB_AUTH_SOURCE" "$GITHUB_AUTH_LOGIN" "$repository"
+printf 'GITHUB_AUTH_OK source=%s login=%s api=ok git=ok repository=%s remote=%s transport=%s remote_resolved=yes network_attempted=yes api_attempted=yes git_attempted=yes\n' \
+  "$GITHUB_AUTH_SOURCE" "$GITHUB_AUTH_LOGIN" "$repository" "$remote_name" "$(github_auth_remote_kind "$remote_url")"

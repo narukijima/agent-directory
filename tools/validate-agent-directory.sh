@@ -1858,7 +1858,7 @@ required_cases=(
   upstream-issue-allowlisted-destination
   github-auth-env-absence-is-not-failure github-auth-machine-credential
   github-auth-real-capability-probe github-auth-no-token-leak upstream-drafted-is-not-success
-  github-machine-readiness-before-work
+  github-machine-readiness-before-work github-failure-fingerprint-no-identical-retry
   upstream-auth-no-runtime-repair backup-shared-github-auth backup-https-credential-helper
   backup-ssh-does-not-require-token
   decay-knowledge-current-clean decay-knowledge-current-aged
@@ -2059,7 +2059,9 @@ for required_auth_contract in \
   'machine credentialが未導入、stale、不正、またはscope不足' \
   '通常task内では保存済み`gh`認証' \
   '別credentialへのfallback、credential repair' \
-  'fail-closedで停止する' \
+  'GitHub外部操作だけをfail-closedで停止' \
+  '`context`、ローカル探索・編集・検証は' \
+  '同じfailure fingerprint' \
   'credential導入とrotationはOperator setupが所有する' \
   '`UPSTREAM_REPORT_DRAFTED`を未送信かつexit 3' \
   '認証失敗後の同じ通常task内'; do
@@ -2076,12 +2078,15 @@ for retired_auth_contract in \
 done
 grep -Fq 'blocked interactive-setup-required' "$repo_root/tools/setup-github-auth.sh" || \
   fail 'setup-github-auth.sh must distinguish Operator migration from ordinary auth failure'
-grep -Fq -- '--machine-ready' "$repo_root/tools/task.sh" || \
-  fail 'task.sh context must enforce cross-process GitHub machine readiness'
+if grep -Fq -- '--machine-ready' "$repo_root/tools/task.sh"; then
+  fail 'task.sh context must not require optional GitHub readiness before local work'
+fi
 grep -Fq 'blocked machine-credential-not-installed' "$repo_root/tools/setup-github-auth.sh" || \
   fail 'setup-github-auth.sh must classify a missing cross-process machine credential'
 grep -Fq -- '--install-token' "$repo_root/tools/setup-github-auth.sh" || \
   fail 'setup-github-auth.sh must support direct machine PAT installation'
+grep -Fq -- '--enroll-existing' "$repo_root/tools/setup-github-auth.sh" || \
+  fail 'setup-github-auth.sh must atomically align a valid existing local enrollment without token re-entry'
 github_auth_lib="$repo_root/tools/lib/github-auth.sh"
 grep -Fq 'pwd.getpwuid(os.getuid()).pw_dir' "$github_auth_lib" || \
   fail 'GitHub resolver must derive one store from the OS account rather than process HOME/XDG values'
@@ -2091,6 +2096,13 @@ grep -Fq 'machine-token-not-fine-grained' "$github_auth_lib" || \
   fail 'GitHub resolver must reject non-fine-grained machine tokens'
 grep -Fq 'AGENT_DIRECTORY_GITHUB_CI' "$github_auth_lib" || \
   fail 'process token fallback must require an explicit CI context'
+for diagnostic_contract in GITHUB_AUTH_DIAGNOSTIC github-authentication-failed \
+  github-authorization-failed github-repository-not-enrolled github-operation-not-enrolled \
+  github-dns-failure github-network-failure github-timeout runtime-denied \
+  credential-helper-missing git-transport-mismatch github-unknown-failure; do
+  grep -Fq "$diagnostic_contract" "$github_auth_lib" || \
+    fail "GitHub resolver is missing diagnostic contract: $diagnostic_contract"
+done
 for forbidden_resolver_fallback in 'workspace-env' 'gh-stored' 'repair-from-gh'; do
   if grep -Fq "$forbidden_resolver_fallback" "$github_auth_lib" \
     "$repo_root/tools/backup-to-github.sh" "$repo_root/tools/report-upstream-issue.sh"; then
@@ -2108,6 +2120,11 @@ for forbidden_machine_command in 'gh auth login' 'git credential-osxkeychain get
   grep -Fqx "    - $forbidden_machine_command" "$github_machine_case" || \
     fail "github-machine-readiness-before-work must reject auth divergence: $forbidden_machine_command"
 done
+grep -Fq -- '--operation git-push' "$github_machine_case" || \
+  fail 'github-machine-readiness-before-work must defer the capability gate until backup'
+grep -Fq 'github-failure-fingerprint-no-identical-retry' \
+  "$repo_root/evals/cases/github-failure-fingerprint-no-identical-retry.yaml" || \
+  fail 'Core evals must reject identical GitHub retries without a meaningful delta'
 
 # The executable eval runtime is model-independent. Its fixture pins trusted PASS, observed
 # FAIL, forbidden-report rejection, agent-only UNVERIFIED, malformed input, regression comparison,
@@ -2347,6 +2364,10 @@ if [[ -f "$materialize_tool" ]]; then
     fail 'tools/materialize-project-repositories.sh does not emit MATERIALIZATION_OK'
   grep -Fq 'MATERIALIZATION_BLOCKED' "$materialize_tool" || \
     fail 'tools/materialize-project-repositories.sh does not emit MATERIALIZATION_BLOCKED'
+  grep -Fq 'lib/github-auth.sh' "$materialize_tool" || \
+    fail 'GitHub materialization must use the shared capability resolver'
+  grep -Fq 'github_git_run' "$materialize_tool" || \
+    fail 'GitHub materialization must isolate credentials at the clone/fetch boundary'
 fi
 
 report_tool="$repo_root/tools/report-upstream-issue.sh"
@@ -2672,6 +2693,7 @@ if [[ "$full" == true && -z "${AGENT_VALIDATOR_NESTED_FIXTURE:-}" ]]; then
     "$runtime_readiness_fixture/work/tools/check-runtime-readiness.sh"
   chmod 755 "$runtime_readiness_fixture/work/tools/check-runtime-readiness.sh"
   git -C "$runtime_readiness_fixture/work" init -q
+  printf '%s\n' '# Fixture Agent Workspace' > "$runtime_readiness_fixture/work/AGENTS.md"
   printf '%s\n' '#!/bin/bash' \
     'if [[ "${1:-}" == "--version" ]]; then printf "codex-cli fixture\\n"; exit 0; fi' \
     'if [[ "${1:-}" == "login" && "${2:-}" == "status" ]]; then exit 0; fi' \
@@ -2690,8 +2712,9 @@ if [[ "$full" == true && -z "${AGENT_VALIDATOR_NESTED_FIXTURE:-}" ]]; then
   runtime_readiness_status=$?
   set -e
   if (( runtime_readiness_status != 0 )) || \
-    [[ "$runtime_readiness_output" != *'workspace=ready codex=ready'* || \
-      "$runtime_readiness_output" != *'claude=ready'* || \
+    [[ "$runtime_readiness_output" != *'workspace_root=observed filesystem_read=observed filesystem_write=not-probed'* || \
+      "$runtime_readiness_output" != *'codex_executable=available codex_authentication=authenticated'* || \
+      "$runtime_readiness_output" != *'claude_executable=available claude_authentication=authenticated'* || \
       "$runtime_readiness_output" != *'claude_oauth_env=present'* ]]; then
     fail "runtime readiness fixture: ready runtimes were not reported: $runtime_readiness_output"
   fi
@@ -2716,8 +2739,8 @@ if [[ "$full" == true && -z "${AGENT_VALIDATOR_NESTED_FIXTURE:-}" ]]; then
   runtime_readiness_status=$?
   set -e
   if (( runtime_readiness_status == 0 )) || \
-    [[ "$runtime_readiness_output" != *'claude=auth-unavailable'* || \
-      "$runtime_readiness_output" != *'reason=claude-auth-unavailable'* ]]; then
+    [[ "$runtime_readiness_output" != *'claude_authentication=unavailable'* || \
+      "$runtime_readiness_output" != *'reason=claude-authentication-unavailable'* ]]; then
     fail "runtime readiness fixture: missing Claude auth was accepted: $runtime_readiness_output"
   fi
 fi
@@ -3602,6 +3625,7 @@ if [[ -f "$materialize_tool" ]] && command -v git >/dev/null 2>&1; then
   printf '%s\n' '# Owner active state' > "$foundation_root/STATE.md"
   printf '#!/usr/bin/env bash\nexit 0\n' > "$foundation_root/tools/validate-agent-directory.sh"
   cp "$repo_root/tools/lib/project-registry.sh" "$foundation_root/tools/lib/"
+  cp "$repo_root/tools/lib/github-auth.sh" "$foundation_root/tools/lib/"
   cp "$repo_root/tools/materialize-project-repositories.sh" "$foundation_root/tools/"
   cp "$repo_root/tools/prepare-context.sh" "$foundation_root/tools/"
   cp "$repo_root/tools/build-context-cache.sh" "$foundation_root/tools/"
