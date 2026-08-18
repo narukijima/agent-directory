@@ -135,8 +135,9 @@ registry_names=()
 registry_urls=()
 registry_reasons=()
 registry_revisions=()
+registry_roles=()
 
-while IFS=$'\t' read -r record_kind field_a field_b field_c field_d; do
+while IFS=$'\t' read -r record_kind field_a field_b field_c field_d field_e; do
   [[ -n "$record_kind" ]] || continue
   if [[ "$record_kind" == 'E' ]]; then
     blocked 'invalid-registry' '-' "$registry_path: $field_a"
@@ -145,6 +146,7 @@ while IFS=$'\t' read -r record_kind field_a field_b field_c field_d; do
   registry_urls+=("$field_b")
   registry_reasons+=("$field_c")
   registry_revisions+=("$field_d")
+  registry_roles+=("$field_e")
 done < <(agent_registry_records "$repo_root/$registry_path")
 
 registry_count="${#registry_names[@]}"
@@ -160,6 +162,7 @@ while (( entry_index < registry_count )); do
   entry_url="${registry_urls[$entry_index]}"
   entry_reason="${registry_reasons[$entry_index]}"
   entry_revision="${registry_revisions[$entry_index]}"
+  entry_role="${registry_roles[$entry_index]}"
 
   case "$entry_reason" in
     automation|distribution|collaboration|access|identity|upstream|retention) ;;
@@ -172,6 +175,11 @@ while (( entry_index < registry_count )); do
   fi
   [[ "$entry_revision" =~ ^[0-9a-f]{40}$ ]] || blocked 'invalid-registry' "$entry_name" \
     "$registry_path revision must be a 40-character lowercase commit SHA"
+  case "$entry_role" in
+    project|public-foundation) ;;
+    *) blocked 'invalid-registry' "$entry_name" \
+      "$registry_path has an invalid repository_role: ${entry_role:-<empty>}" ;;
+  esac
   printf '%s\n' "$ignore_entries" | grep -Fqx "/$entry_name/" || \
     blocked 'invalid-ignore-projection' "$entry_name" \
       "$ignore_path managed block must contain the exact line: /$entry_name/"
@@ -214,6 +222,7 @@ while (( entry_index < registry_count )); do
   project_name="${registry_names[$entry_index]}"
   repository_url="${registry_urls[$entry_index]}"
   state_revision="${registry_revisions[$entry_index]}"
+  repository_role="${registry_roles[$entry_index]}"
   entry_index=$((entry_index + 1))
   [[ -z "$only_project" || "$project_name" == "$only_project" ]] || continue
 
@@ -277,11 +286,13 @@ while (( entry_index < registry_count )); do
     [[ "$child_head" == "$state_revision" ]] || \
       blocked 'repository-head-not-adopted' "$project_name" \
         "$project_dir HEAD is ${child_head:-none}, but $registry_path adopts $state_revision"
-    for contract_file in PROJECT.md STATE.md; do
-      git -C "$target" cat-file -e "${state_revision}:${contract_file}" 2>/dev/null || \
-        blocked 'repository-contract-missing' "$project_name" \
-          "$project_dir does not carry $contract_file at the adopted revision $state_revision"
-    done
+    if [[ "$repository_role" == 'project' ]]; then
+      for contract_file in PROJECT.md STATE.md; do
+        git -C "$target" cat-file -e "${state_revision}:${contract_file}" 2>/dev/null || \
+          blocked 'repository-contract-missing' "$project_name" \
+            "$project_dir does not carry $contract_file at the adopted revision $state_revision"
+      done
+    fi
 
     verified=$((verified + 1))
     continue
@@ -332,10 +343,12 @@ while (( entry_index < registry_count )); do
   cloned_head="$(git -C "$target" rev-parse --verify --quiet HEAD || true)"
   [[ "$cloned_head" == "$state_revision" ]] || blocked 'repository-head-not-adopted' "$project_name" \
     "$project_dir HEAD is ${cloned_head:-none}, but $registry_path adopts $state_revision"
-  for contract_file in PROJECT.md STATE.md; do
-    [[ -f "$target/$contract_file" ]] || blocked 'repository-contract-missing' "$project_name" \
-      "$project_dir does not carry $contract_file at the adopted revision $state_revision"
-  done
+  if [[ "$repository_role" == 'project' ]]; then
+    for contract_file in PROJECT.md STATE.md; do
+      [[ -f "$target/$contract_file" ]] || blocked 'repository-contract-missing' "$project_name" \
+        "$project_dir does not carry $contract_file at the adopted revision $state_revision"
+    done
+  fi
 
   pending_target=''
   cloned=$((cloned + 1))

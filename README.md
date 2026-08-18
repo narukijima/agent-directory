@@ -9,6 +9,20 @@ Knowledge、Skill、Projectを正本として育てながら、1タスクの読�
 `AGENTS.md`は百科事典ではなく、ブートローダー兼ルーター兼目次である。Routeを一つ決めたら、その領域を
 所有する正本へ引き継ぐ。詳細契約は各正本が持ち、READMEはそこへの入口だけを持つ。
 
+## 公開製品の契約
+
+本製品の継続的使命は、一体のAgentごとに検証可能で移植可能なdurable Agent Workspace仕様と決定的Toolを
+提供することである。公開製品として次を安定した合格条件とする。
+
+- Workspaceのidentity、Knowledge、Skill、Project、Runtime Permissionの責務境界が正本と実装で一致する。
+- 通常検証と対象変更のtestが、外部AIやHosted CIを必須にせず決定的に合格する。
+- 利用者がテンプレートからAgentを導入し、一般Projectを`PROJECT.md` / `STATE.md`で管理できる。
+- Independent repositoryを別Git・別remoteのままmaterializeし、固定revisionで再現・検証できる。
+
+本製品は複数製品のmonorepo、Runtime独自のsandbox / approval database、Provider別permission wrapper、
+Scheduler Engineを所有しない。公開仕様、テンプレート、validator、test、fixture、互換性契約、利用者向け文書を
+このrepositoryが所有し、特定Owner Agentの現在目標、優先順位、次の一手、長い運用履歴は所有しない。
+
 ## 利用開始
 
 1. このリポジトリをエージェント1体につき1つコピーまたはクローンする。
@@ -58,7 +72,6 @@ agent-directory/
 ├── CLAUDE.md                     # @AGENTS.md
 ├── SETUP.md                      # Operator / machine側setupの正本
 ├── OPERATING_PROFILE.md          # Provider分離とOpenAI surface選択の推奨運用モデル
-├── PROJECT.md / STATE.md         # このリポジトリ自身の開発契約と状態（テンプレート機能ではない）
 ├── .codex/environments/          # Codex DesktopのLocal Environment
 ├── .claude/settings.json         # Claude Codeの共有project hook
 ├── .agent-cache/                 # Git管理外の派生物
@@ -150,6 +163,11 @@ projects/<independent-project>/   # Git top-level = このディレクトリ自�
 root側の正本は`projects/REPOSITORIES.md`のattachment registryだけで、`projects/.gitignore`のmanaged block
 はその派生projectionである。所有境界の完全な表、昇格条件、`repository_reason`、session rootとSHA handoff、
 remote操作の境界とpush policy（`auto` / `gated`）は[projects/PROJECTS.md](projects/PROJECTS.md)が所有する。
+
+Owner Agentがこの公開テンプレートや再利用Capability配布元のような公開基盤製品を開発する場合は、registryへ
+`repository_role: public-foundation`を明示する。製品repositoryは公開目的、仕様、repository-local規約、検証、
+配布文書を所有し、Owner Agent固有の現在目標、優先順位、次の一手、到達履歴はOwner Agent rootの単一active正本が
+所有する。一般Projectの`PROJECT.md` / `STATE.md`契約は変わらず、公開基盤製品だけを`meta` Routeで扱う。
 
 ```bash
 bash tools/materialize-project-repositories.sh --all --check

@@ -1,0 +1,29 @@
+name: public-foundation-owner-state-boundary
+
+fixture: public-foundation
+
+request: |
+  Owner Agentとしてagent-directoryの現在優先順位を確認し、次の開発作業へRouteして。
+
+expect:
+  route: meta
+  must_read:
+    - AGENTS.md
+    - STATE.md
+    - projects/PROJECTS.md
+    - projects/REPOSITORIES.md
+    - projects/agent-directory/AGENTS.md
+    - projects/agent-directory/README.md
+  must_not_read:
+    - projects/agent-directory/PROJECT.md
+    - projects/agent-directory/STATE.md
+  must_report:
+    - public-foundation-is-an-independent-product-repository
+    - owner-agent-root-is-the-single-active-state-canon
+    - product-repository-owns-public-contracts-validation-and-distribution
+    - route-is-meta-not-a-general-project
+    - no-owner-agent-current-state-is-copied-into-the-product-repository
+  must_not_write:
+    - projects/agent-directory/PROJECT.md
+    - projects/agent-directory/STATE.md
+    - projects/REPOSITORIES.md

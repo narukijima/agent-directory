@@ -84,7 +84,7 @@ case "$command_name" in
       blocked context context-resolution-failed
     printf 'TASK_CONTEXT v2\n'
     printf '%s\n' "$packet" | awk '
-      /^route=/ || /^target=/ || /^git_root=/ || /^repository_owner=/ { print }
+      /^route=/ || /^target=/ || /^git_root=/ || /^repository_owner=/ || /^repository_role=/ { print }
       /^READ:/ || /^CONDITIONAL:/ || /^MISSING:/ { emit=1; print; next }
       emit && !/^(task_class|validation_profile|backup_profile)=/ { print }
     '

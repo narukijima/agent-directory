@@ -20,11 +20,24 @@ set -euo pipefail
 
 tool_root="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo_root="${AGENT_DIRECTORY_ROOT:-$(cd "$tool_root/.." && pwd)}"
+. "$tool_root/lib/project-registry.sh"
 route=''
 target=''
 task_class=''
 message=''
 current_work=false
+
+repository_role_for() {
+  local wanted="$1"
+  local kind name url reason revision role
+  [[ -f "$repo_root/projects/REPOSITORIES.md" ]] || return 1
+  while IFS=$'\t' read -r kind name url reason revision role; do
+    [[ "$kind" == 'R' && "$name" == "$wanted" ]] || continue
+    printf '%s\n' "$role"
+    return 0
+  done < <(agent_registry_records "$repo_root/projects/REPOSITORIES.md")
+  return 1
+}
 
 usage() {
   printf 'Usage: %s --route knowledge|skill|project|meta --class work|state [--target <repo-relative-path>] --message <commit message> [--current-work]\n' \
@@ -106,6 +119,9 @@ if [[ "$route" == 'project' ]]; then
   project_name="${target#projects/}"
   project_name="${project_name%%/*}"
   project_dir="projects/$project_name"
+  project_role="$(repository_role_for "$project_name" || true)"
+  [[ "$project_role" != 'public-foundation' ]] || \
+    blocked 'usage' "public foundation repositories use --route meta: $project_dir"
   [[ -d "$repo_root/$project_dir" ]] || blocked 'usage' "project does not exist: $project_dir"
   if toplevel="$(git -C "$repo_root/$project_dir" rev-parse --show-toplevel 2>/dev/null)"; then
     if [[ "$(cd "$toplevel" && pwd -P)" == "$(cd "$repo_root/$project_dir" && pwd -P)" ]]; then
@@ -117,14 +133,31 @@ if [[ "$route" == 'project' ]]; then
     blocked 'usage' "cannot resolve a Git root for $project_dir"
   fi
 fi
+if [[ "$route" == 'meta' && "$target" == projects/* ]]; then
+  foundation_name="${target#projects/}"
+  foundation_name="${foundation_name%%/*}"
+  foundation_dir="projects/$foundation_name"
+  foundation_role="$(repository_role_for "$foundation_name" || true)"
+  if [[ "$foundation_role" == 'public-foundation' ]]; then
+    [[ -d "$repo_root/$foundation_dir" ]] || blocked 'usage' "repository does not exist: $foundation_dir"
+    if toplevel="$(git -C "$repo_root/$foundation_dir" rev-parse --show-toplevel 2>/dev/null)" && \
+      [[ "$(cd "$toplevel" && pwd -P)" == "$(cd "$repo_root/$foundation_dir" && pwd -P)" ]]; then
+      repository_owner='independent'
+      git_root_rel="$foundation_dir"
+      path_prefix="$foundation_dir/"
+    else
+      blocked 'usage' "cannot resolve an Independent Git root for $foundation_dir"
+    fi
+  fi
+fi
 
 validation_profile='scoped'
 backup_profile='root-only'
 [[ "$route" != 'meta' ]] || validation_profile='full'
 if [[ "$repository_owner" == 'independent' ]]; then
-  # The workspace validator does not see Independent diffs; the Project's own fixed
-  # verification (owned by PROJECT.md) must have run before finalize. Push follows the
-  # Project's Push Policy and is never issued from here.
+  # The workspace validator does not see Independent diffs; repository-owned fixed
+  # verification must have run before finalize. Push follows the repository's Push Policy
+  # and is never issued from here.
   validation_profile='project-owned'
   backup_profile='push-policy'
 fi

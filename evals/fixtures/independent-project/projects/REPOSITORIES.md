@@ -1,4 +1,4 @@
-# REPOSITORIES — Independent Project Registry
+# REPOSITORIES — Independent Repository Registry
 
 Independent Projectのattachmentと復旧情報だけを持つ。
 Projectの目的、成果契約、status、mode、現在状態は各Project自身の

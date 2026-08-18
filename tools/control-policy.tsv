@@ -67,6 +67,8 @@ guarded	evals/cases/canon-conflict-escalation.yaml	Core canon invariant
 guarded	evals/cases/restore-single-writer.yaml	Core writer invariant
 guarded	evals/cases/backup-divergence-refusal.yaml	Core remote invariant
 guarded	evals/cases/independent-root-content-boundary.yaml	Core root invariant
+guarded	evals/cases/public-foundation-owner-state-boundary.yaml	Core public foundation ownership invariant
+guarded	evals/cases/general-project-state-contract-retained.yaml	Core general Project state invariant
 guarded	evals/cases/control-policy-tamper.yaml	Core control invariant
 guarded	evals/cases/control-mixed-scope-commit-split.yaml	Core commit invariant
 guarded	evals/cases/control-ordinary-failure-no-penalty.yaml	Core recovery invariant
@@ -83,7 +85,6 @@ guarded	projects/LIFECYCLE.md	状態遷移正本
 guarded	projects/RECOVERY.md	復旧正本
 guarded	projects/REPOSITORIES.md	attachment registry
 guarded	projects/.gitignore	registry projection
-contract	PROJECT.md	このrepository自身の成果契約（人間が決める）
 contract	projects/*/PROJECT.md	Project成果契約（人間が決める）
 guarded	projects/*/AGENTS.md	Project個別契約
 guarded	projects/*/CLAUDE.md	bridge

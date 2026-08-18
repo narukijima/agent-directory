@@ -8,6 +8,7 @@ set -euo pipefail
 
 tool_root="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo_root="${AGENT_DIRECTORY_ROOT:-$(cd "$tool_root/.." && pwd)}"
+. "$tool_root/lib/project-registry.sh"
 route=''
 target=''
 task_class=''
@@ -127,8 +128,21 @@ docs_route_refs() {
   ' "$1"
 }
 
+repository_role_for() {
+  local wanted="$1"
+  local kind name url reason revision role
+  [[ -f "$repo_root/projects/REPOSITORIES.md" ]] || return 1
+  while IFS=$'\t' read -r kind name url reason revision role; do
+    [[ "$kind" == 'R' && "$name" == "$wanted" ]] || continue
+    printf '%s\n' "$role"
+    return 0
+  done < <(agent_registry_records "$repo_root/projects/REPOSITORIES.md")
+  return 1
+}
+
 git_root='.'
 repository_owner='root'
+repository_role='workspace'
 
 queue_read 'AGENTS.md'
 
@@ -141,6 +155,11 @@ case "$route" in
     project_name="${target#projects/}"
     project_name="${project_name%%/*}"
     project_dir="projects/$project_name"
+    project_role="$(repository_role_for "$project_name" || true)"
+    if [[ "$project_role" == 'public-foundation' ]]; then
+      printf 'ERROR: public foundation repositories use --route meta: %s\n' "$project_dir" >&2
+      exit 2
+    fi
     if [[ ! -d "$repo_root/$project_dir" ]]; then
       printf 'ERROR: project does not exist: %s\n' "$project_dir" >&2
       exit 2
@@ -152,6 +171,7 @@ case "$route" in
     if toplevel="$(git -C "$repo_root/$project_dir" rev-parse --show-toplevel 2>/dev/null)"; then
       if [[ "$(cd "$toplevel" && pwd -P)" == "$(cd "$repo_root/$project_dir" && pwd -P)" ]]; then
         repository_owner='independent'
+        repository_role='project'
         git_root="$project_dir"
       fi
     else
@@ -182,7 +202,7 @@ case "$route" in
     ;;
   knowledge)
     queue_read 'knowledge/KNOWLEDGE.md'
-    [[ -n "$target" ]] && queue_read "$target"
+    [[ -z "$target" || -d "$repo_root/$target" ]] || queue_read "$target"
     ;;
   skill)
     queue_read 'skills/SKILLS.md'
@@ -198,7 +218,27 @@ case "$route" in
     case "$target" in
       tools/*) queue_read 'tools/TOOLS.md' ;;
       evals/*) queue_read 'evals/EVALS.md' ;;
-      projects/*) queue_read 'projects/PROJECTS.md' ;;
+      projects/*)
+        queue_read 'projects/PROJECTS.md'
+        foundation_name="${target#projects/}"
+        foundation_name="${foundation_name%%/*}"
+        foundation_role="$(repository_role_for "$foundation_name" || true)"
+        if [[ "$foundation_role" == 'public-foundation' ]]; then
+          foundation_dir="projects/$foundation_name"
+          queue_read 'STATE.md'
+          queue_read 'projects/REPOSITORIES.md'
+          queue_read "$foundation_dir/AGENTS.md"
+          queue_read "$foundation_dir/README.md"
+          repository_role='public-foundation'
+          if toplevel="$(git -C "$repo_root/$foundation_dir" rev-parse --show-toplevel 2>/dev/null)" && \
+            [[ "$(cd "$toplevel" && pwd -P)" == "$(cd "$repo_root/$foundation_dir" && pwd -P)" ]]; then
+            repository_owner='independent'
+            git_root="$foundation_dir"
+          else
+            repository_owner='unresolved'
+          fi
+        fi
+        ;;
       knowledge/*) queue_read 'knowledge/KNOWLEDGE.md' ;;
     esac
     [[ -n "$target" ]] && queue_read "$target"
@@ -233,6 +273,7 @@ printf 'route=%s\n' "$route"
 printf 'task_class=%s\n' "$task_class"
 printf 'git_root=%s\n' "$git_root"
 printf 'repository_owner=%s\n' "$repository_owner"
+printf 'repository_role=%s\n' "$repository_role"
 printf 'validation_profile=%s\n' "$validation_profile"
 printf 'backup_profile=%s\n' "$backup_profile"
 printf 'READ:\n'
