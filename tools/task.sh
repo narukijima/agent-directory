@@ -22,24 +22,6 @@ blocked() {
   exit "${3:-1}"
 }
 
-require_backup_machine_ready() {
-  local backup_url output rc
-  backup_url="$(git -C "$repo_root" remote get-url backup 2>/dev/null || true)"
-  case "$backup_url" in
-    https://github.com/*)
-      set +e
-      output="$(bash "$tool_root/setup-github-auth.sh" --machine-ready --remote backup 2>&1)"
-      rc=$?
-      set -e
-      if (( rc != 0 )); then
-        printf '%s\n' "$output" >&2
-        blocked context github-machine-not-ready "$rc"
-      fi
-      printf '%s\n' "$output" >&2
-      ;;
-  esac
-}
-
 command_name="${1:-}"
 [[ -n "$command_name" ]] || { usage; exit 2; }
 shift
@@ -77,7 +59,6 @@ case "$command_name" in
   context)
     [[ "$current_work" == false ]] || { usage; exit 2; }
     case "$route" in knowledge|skill|project|meta) ;; *) usage; exit 2 ;; esac
-    require_backup_machine_ready
     args=(--route "$route" --class work)
     [[ -z "$target" ]] || args+=(--target "$target")
     packet="$(bash "$tool_root/prepare-context.sh" "${args[@]}")" || \

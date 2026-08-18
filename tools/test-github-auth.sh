@@ -42,6 +42,16 @@ resolve_result() {
     auth-test "$tool_root/lib/github-auth.sh" "$fixture/workspace"
 }
 
+classify_api_result() {
+  auth_env /bin/bash -c '. "$1"; github_auth_classify_api_error "$2"' \
+    classify-test "$tool_root/lib/github-auth.sh" "$1"
+}
+
+classify_git_result() {
+  auth_env /bin/bash -c '. "$1"; github_auth_classify_git_error "$2" "$3"' \
+    classify-test "$tool_root/lib/github-auth.sh" "$1" "$2"
+}
+
 mkdir -p "$fixture/account-home" "$fixture/workspace" "$fixture/bin" "$fixture/tmp"
 git -C "$fixture/workspace" init -q
 git -C "$fixture/workspace" remote add backup https://github.com/fixture/repository.git
@@ -75,12 +85,12 @@ output="$(resolve_result CI=true AGENT_DIRECTORY_GITHUB_CI=true GITHUB_REPOSITOR
 [[ "$output" == 'OK:ci-process-token' ]] || fail "explicit CI token was not accepted: $output"
 output="$(resolve_result CI=true AGENT_DIRECTORY_GITHUB_CI=true GITHUB_REPOSITORY=fixture/other \
   AGENT_DIRECTORY_GITHUB_CI_OPERATIONS=git-read GH_TOKEN="$ci_fixture")"
-[[ "$output" == 'BLOCKED:github-destination-not-allowed' ]] || fail "CI destination allowlist failed: $output"
+[[ "$output" == 'BLOCKED:github-repository-not-enrolled' ]] || fail "CI destination allowlist failed: $output"
 output="$(auth_env CI=true AGENT_DIRECTORY_GITHUB_CI=true GITHUB_REPOSITORY=fixture/repository \
   AGENT_DIRECTORY_GITHUB_CI_OPERATIONS=metadata-read GH_TOKEN="$ci_fixture" /bin/bash -c \
   '. "$1"; github_auth_resolve "$2" fixture/repository git-push || printf "%s" "$GITHUB_AUTH_REASON"' \
   auth-test "$tool_root/lib/github-auth.sh" "$fixture/workspace")"
-[[ "$output" == github-operation-not-allowed ]] || fail "CI operation allowlist failed: $output"
+[[ "$output" == github-operation-not-enrolled ]] || fail "CI operation allowlist failed: $output"
 write_store
 
 # Permissions, links, and paths fail closed.
@@ -101,6 +111,11 @@ ln -s "$fixture/account-home/.config/real-agent-directory" "$fixture/account-hom
 [[ "$(resolve_result)" == 'BLOCKED:auth-store-missing' ]] || fail 'symlinked credential directory was accepted'
 rm "$fixture/account-home/.config/agent-directory"
 mv "$fixture/account-home/.config/real-agent-directory" "$fixture/account-home/.config/agent-directory"
+
+owner_output="$(auth_env /bin/bash -c \
+  '. "$1"; github_auth_current_uid() { printf 999999; }; github_auth_read_machine_file "$2" || printf "%s" "$GITHUB_AUTH_REASON"' \
+  owner-test "$tool_root/lib/github-auth.sh" "$credential_file")"
+[[ "$owner_output" == auth-store-owner ]] || fail "foreign-owned credential was accepted: $owner_output"
 
 # Exact five-line parsing rejects empty, whitespace, extra, duplicate, and classic-token inputs.
 for malformed_case in empty blank extra duplicate classic; do
@@ -132,6 +147,40 @@ case "${1:-} ${2:-}" in
 esac
 GHSTUB
 chmod 700 "$fixture/bin/gh"
+
+# Provider, network, runtime, helper, transport, and unknown failures retain distinct reasons.
+while IFS='|' read -r kind evidence expected; do
+  [[ -n "$kind" ]] || continue
+  if [[ "$kind" == api ]]; then
+    classified="$(classify_api_result "$evidence")"
+  else
+    classified="$(classify_git_result "$evidence" 1)"
+  fi
+  [[ "$classified" == "$expected" ]] || fail "classification mismatch: $evidence -> $classified, expected $expected"
+done <<'CLASSIFICATIONS'
+api|HTTP 401: Bad credentials|github-authentication-failed
+api|HTTP 403: Resource not accessible by personal access token|github-authorization-failed
+api|Could not resolve host: api.github.com|github-dns-failure
+api|Failed to connect to github.com port 443|github-network-failure
+api|error connecting to api.github.com|github-network-failure
+api|operation timed out|github-timeout
+api|Permission denied by sandbox policy|runtime-denied
+api|surprising gh failure code ZX-7|github-unknown-failure
+git|Permission denied (publickey)|git-transport-mismatch
+git|Write access to repository not granted|github-authorization-failed
+git|auth git-credential helper not found|credential-helper-missing
+CLASSIFICATIONS
+[[ "$(classify_git_result 'ignored' 91)" == credential-helper-missing ]] || fail 'missing helper status was not classified'
+
+probe_split_output="$(auth_env /bin/bash -c '
+  . "$1"
+  github_auth_probe_api "" "$2" fixture/repository || exit 20
+  github_git_run() { printf "Failed to connect to github.com port 443"; return 7; }
+  github_auth_probe_git "$2" https://github.com/fixture/repository.git ||
+    printf "api=%s git=%s reason=%s" "$GITHUB_AUTH_API_ATTEMPTED" "$GITHUB_AUTH_GIT_ATTEMPTED" "$GITHUB_AUTH_REASON"
+' probe-test "$tool_root/lib/github-auth.sh" "$fixture/workspace")"
+[[ "$probe_split_output" == 'api=yes git=yes reason=github-network-failure' ]] || \
+  fail "valid API plus failed Git probe was not separated: $probe_split_output"
 
 # Upstream API calls use the shared resolver and do not persist the token in drafts,
 # cache files, temporary report bodies, or output.
@@ -165,10 +214,13 @@ grep -R -Fq "$fixture_pat" "$fixture/report/.agent-cache" "$fixture/tmp" 2>/dev/
 # Readiness is local-only; capability is a separate API + Git probe.
 machine_output="$(auth_env /bin/bash "$tool_root/setup-github-auth.sh" --machine-ready --remote backup 2>&1)" || \
   fail "machine readiness rejected a valid store: $machine_output"
-[[ "$machine_output" == 'GITHUB_MACHINE_READY source=machine-file repository=fixture/repository' ]] || \
+[[ "$machine_output" == *'GITHUB_MACHINE_READY source=machine-file'* && \
+  "$machine_output" == *'repository=fixture/repository operation=git-read'* && \
+  "$machine_output" == *'api_probe_attempted=no git_probe_attempted=no'* ]] || \
   fail "unexpected readiness result: $machine_output"
 
-# The normal task entrance checks the shared store before context resolution or writes.
+# Local context is independent of optional GitHub readiness, including absent/malformed
+# stores and repository/operation allowlist mismatches. External gates remain fail-closed.
 mkdir -p "$fixture/task-workspace/tools/lib" "$fixture/task-home"
 cp "$tool_root/task.sh" "$fixture/task-workspace/tools/task.sh"
 cp "$tool_root/setup-github-auth.sh" "$fixture/task-workspace/tools/setup-github-auth.sh"
@@ -180,16 +232,79 @@ printf 'route=project\ntarget=projects/demo\ngit_root=.\nrepository_owner=embedd
 PREPARE
 chmod 700 "$fixture/task-workspace/tools/"*.sh
 git -C "$fixture/task-workspace" init -q
-git -C "$fixture/task-workspace" remote add backup https://github.com/fixture/repository.git
+for context_case in no-remote no-store repository-mismatch operation-mismatch; do
+  rm -f "$fixture/prepare.marker"
+  git -C "$fixture/task-workspace" remote remove backup >/dev/null 2>&1 || true
+  rm -rf "$fixture/task-home/.config"
+  case "$context_case" in
+    no-remote) ;;
+    no-store) git -C "$fixture/task-workspace" remote add backup https://github.com/fixture/repository.git ;;
+    repository-mismatch|operation-mismatch)
+      git -C "$fixture/task-workspace" remote add backup https://github.com/fixture/repository.git
+      mkdir -p "$fixture/task-home/.config/agent-directory"
+      chmod 700 "$fixture/task-home/.config/agent-directory"
+      {
+        printf 'AGENT_DIRECTORY_GITHUB_CREDENTIAL_V1\nresource_owner=fixture\n'
+        if [[ "$context_case" == repository-mismatch ]]; then
+          printf 'repositories=fixture/other\noperations=metadata-read,git-read,git-push\n'
+        else
+          printf 'repositories=fixture/repository\noperations=metadata-read\n'
+        fi
+        printf 'GH_TOKEN=%s\n' "$fixture_pat"
+      } > "$fixture/task-home/.config/agent-directory/github.env"
+      chmod 600 "$fixture/task-home/.config/agent-directory/github.env"
+      ;;
+  esac
+  task_output="$(env -i PATH="$PATH" AGENT_DIRECTORY_GITHUB_TESTING=true \
+    AGENT_DIRECTORY_GITHUB_HOME_OVERRIDE="$fixture/task-home" AGENT_DIRECTORY_ROOT="$fixture/task-workspace" \
+    GH_TOKEN="$process_fixture" TASK_PREPARE_MARKER="$fixture/prepare.marker" \
+    /bin/bash "$fixture/task-workspace/tools/task.sh" context --route project --target projects/demo 2>&1)" || \
+    fail "local context was blocked by $context_case GitHub state: $task_output"
+  [[ "$task_output" == *'TASK_CONTEXT v2'* && -e "$fixture/prepare.marker" ]] || \
+    fail "local context did not resolve under $context_case: $task_output"
+done
+
+# Capability-specific gates execute immediately before external backup, Issue, or PR work.
+rm -rf "$fixture/task-home/.config"
 set +e
-task_output="$(env -i PATH="$PATH" AGENT_DIRECTORY_GITHUB_TESTING=true \
+gate_output="$(env -i PATH="$PATH" AGENT_DIRECTORY_GITHUB_TESTING=true \
   AGENT_DIRECTORY_GITHUB_HOME_OVERRIDE="$fixture/task-home" AGENT_DIRECTORY_ROOT="$fixture/task-workspace" \
-  GH_TOKEN="$process_fixture" TASK_PREPARE_MARKER="$fixture/prepare.marker" \
-  /bin/bash "$fixture/task-workspace/tools/task.sh" context --route project --target projects/demo 2>&1)"
-task_status=$?
+  GH_TOKEN="$process_fixture" /bin/bash "$fixture/task-workspace/tools/setup-github-auth.sh" \
+  --machine-ready --remote backup --operation git-push 2>&1)"
+gate_status=$?
 set -e
-[[ "$task_status" != 0 && "$task_output" == *'reason=machine-credential-not-installed'* &&
-  ! -e "$fixture/prepare.marker" ]] || fail "task entrance accepted process-only readiness: $task_output"
+[[ "$gate_status" != 0 && "$gate_output" == *'reason=machine-credential-not-installed'* && \
+  "$gate_output" == *'process_token=present-not-consumed'* && "$gate_output" == *'api_attempted=no git_attempted=no'* ]] || \
+  fail "backup capability gate did not fail closed with diagnostics: $gate_output"
+
+write_store "$fixture_pat" fixture/repository metadata-read
+for external_operation in issues-write pull-requests-write; do
+  set +e
+  gate_output="$(auth_env /bin/bash "$tool_root/setup-github-auth.sh" --machine-ready --remote backup \
+    --operation "$external_operation" 2>&1)"
+  gate_status=$?
+  set -e
+  [[ "$gate_status" != 0 && "$gate_output" == *'reason=github-operation-not-enrolled'* && \
+    "$gate_output" == *"operation=$external_operation"* && \
+    "$gate_output" == *'credential_source=machine-file'* && \
+    "$gate_output" == *'exit_status=1'* ]] || \
+    fail "$external_operation capability gate did not fail closed: $gate_output"
+done
+
+# A valid existing store can atomically add one same-owner repository and operation
+# without re-entering or printing the PAT. Provider-side scope is verified separately by --check.
+git -C "$fixture/workspace" remote set-url backup https://github.com/fixture/second.git
+enroll_output="$(auth_env /bin/bash "$tool_root/setup-github-auth.sh" --enroll-existing --remote backup \
+  --operation pull-requests-write 2>&1)" || fail "existing enrollment update failed: $enroll_output"
+[[ "$enroll_output" == *'GITHUB_MACHINE_ENROLLED source=machine-file repository=fixture/second'* && \
+  "$enroll_output" == *'atomic=yes token_reused=yes'* && "$enroll_output" != *"$fixture_pat"* ]] || \
+  fail "existing enrollment result was unsafe or incomplete: $enroll_output"
+machine_output="$(auth_env /bin/bash "$tool_root/setup-github-auth.sh" --machine-ready --remote backup \
+  --operation pull-requests-write 2>&1)" || fail "enrolled PR capability was not ready: $machine_output"
+[[ "$machine_output" == *'repository=fixture/second operation=pull-requests-write'* ]] || \
+  fail "enrolled repository/operation was not preserved: $machine_output"
+git -C "$fixture/workspace" remote set-url backup https://github.com/fixture/repository.git
+write_store
 
 # Installation accepts exactly one stdin line, writes atomically under a lock, and never
 # prints the candidate even when the caller enables xtrace.

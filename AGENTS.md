@@ -48,6 +48,11 @@ Operator / Runtime側が所有する。agent-directoryはsemantic safetyとWorks
 通常経路は`Route → Target → Work → Verify`だけとし、`tools/task.sh`へRouteとTargetを渡す。
 書込Git rootはsession毎に1つとする（`projects/AGENTS.md`）。
 
+`context`、ローカル探索・編集・検証は任意のGitHub readinessに依存させない。GitHub capabilityはbackup、
+push、Issue、PR、remote materialization等の外部操作直前にrepository / operation単位で要求し、そこでだけ
+fail-closedにする。失敗はRuntime、Agent Directory local policy、external provider、Repository integrityへ分け、
+同じfingerprintを状態・入力・経路の差分なしに再試行しない。
+
 Triggerの起点にかかわらず実行契約は同一である。scheduled executionはOperator / Runtime / OSが所有し、
 通常の`Route → Target → Work → Verify`を起動する。
 

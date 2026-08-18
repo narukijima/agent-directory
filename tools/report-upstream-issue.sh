@@ -89,7 +89,7 @@ gh_ready() {
     github_auth_resolve "$repo_root" "$upstream_repo" issues-read; then
     return 0
   fi
-  github_unready_reason="${GITHUB_AUTH_REASON:-github-auth-unavailable}"
+  github_unready_reason="${GITHUB_AUTH_REASON:-github-unknown-failure}"
   return 1
 }
 
@@ -102,16 +102,22 @@ ensure_github_ready() {
 
 github_unready_hint() {
   case "$github_unready_reason" in
-    machine-credential-not-installed|auth-store-missing|github-auth-unavailable)
+    machine-credential-not-installed|auth-store-missing|github-authentication-failed)
       printf 'complete the Operator-only machine setup in SETUP.md, then run tools/setup-github-auth.sh --check; normal tasks do not repair or start login' ;;
     auth-store-permissions)
       printf 'the machine credential store must be directory mode 700 and file mode 600' ;;
     account-mismatch)
       printf 'the active credential does not match the configured expected GitHub login' ;;
-    github-permission-denied)
+    github-authorization-failed)
       printf 'the credential reaches the API but lacks permission; grant the fine-grained PAT Issues: Read and write on the allowlisted repositories (tools/UPSTREAM.md#認証)' ;;
+    github-repository-not-enrolled|github-operation-not-enrolled)
+      printf 'the machine credential is valid but the target repository or Issues operation is not enrolled in the local allowlist' ;;
+    github-dns-failure|github-network-failure|github-timeout)
+      printf 'the credential was selected, but the runtime could not reach GitHub; inspect the reported runtime/network category before retrying' ;;
+    runtime-denied)
+      printf 'the runtime denied the attempted network/tool path; this is not evidence that the PAT is invalid' ;;
     *)
-      printf 'the GitHub API is unreachable from this environment; retry when the network is available' ;;
+      printf 'GitHub readiness failed with an unclassified redacted category; do not retry without a meaningful state, input, or route change' ;;
   esac
 }
 
@@ -337,6 +343,9 @@ save_auth_draft() {
 auth_exit() {
   local reason="$1"
   shift
+  GITHUB_AUTH_REASON="$reason"
+  github_auth_diagnostic "$([[ -n "$search_terms" ]] && printf issues-read || printf issues-write)" \
+    "$upstream_repo" none github-api "${issue_status:-1}" >&2
   if [[ -n "$search_terms" ]]; then
     printf 'UPSTREAM_REPORT_BLOCKED reason=%s\n' "$reason" >&2
   else
@@ -450,7 +459,7 @@ fi
 
 if [[ -n "$comment_issue" ]]; then
   github_auth_resolve "$repo_root" "$upstream_repo" issues-write || \
-    auth_exit "${GITHUB_AUTH_REASON:-github-operation-not-allowed}" "$(github_unready_hint)"
+    auth_exit "${GITHUB_AUTH_REASON:-github-operation-not-enrolled}" "$(github_unready_hint)"
   set +e
   issue_url="$(github_auth_gh_run "$repo_root" "$upstream_repo" issues-write \
     issue comment "$comment_issue" --repo "$upstream_repo" --body-file "$send_body" 2>&1)"
@@ -463,7 +472,7 @@ if [[ -n "$comment_issue" ]]; then
   printf 'UPSTREAM_REPORT_COMMENTED issue=%s\n' "$issue_url"
 else
   github_auth_resolve "$repo_root" "$upstream_repo" issues-write || \
-    auth_exit "${GITHUB_AUTH_REASON:-github-operation-not-allowed}" "$(github_unready_hint)"
+    auth_exit "${GITHUB_AUTH_REASON:-github-operation-not-enrolled}" "$(github_unready_hint)"
   set +e
   issue_url="$(github_auth_gh_run "$repo_root" "$upstream_repo" issues-write \
     issue create --repo "$upstream_repo" --title "$title" --body-file "$send_body" 2>&1)"

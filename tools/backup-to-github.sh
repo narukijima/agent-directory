@@ -52,13 +52,15 @@ ensure_github_remote_auth() {
   local workspace_root="$1" remote_name="$2" remote_url_value="$3" repository reason
   [[ "$(github_auth_remote_kind "$remote_url_value")" == 'github-https' ]] || return 0
   repository="$(github_auth_repository_from_url "$remote_url_value")" || \
-    blocked github-destination-not-allowed
+    blocked github-remote-invalid
   if github_auth_probe_api "$expected_login" "$workspace_root" "$repository" && \
     github_auth_resolve "$workspace_root" "$repository" git-push && \
     github_auth_probe_git "$workspace_root" "$remote_url_value"; then
     return 0
   fi
-  reason="${GITHUB_AUTH_REASON:-github-auth-unavailable}"
+  reason="${GITHUB_AUTH_REASON:-github-unknown-failure}"
+  github_auth_diagnostic "${GITHUB_AUTH_OPERATION:-git-push}" "$repository" "$remote_name" github-https \
+    "${GITHUB_AUTH_LAST_STATUS:-1}" >&2
   blocked "$reason" 'machine setup and normal tasks are separate; run the documented Operator setup/check without starting an interactive login or fallback'
 }
 

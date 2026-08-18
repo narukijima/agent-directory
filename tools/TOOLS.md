@@ -29,7 +29,9 @@ tools/task.sh status
 ```
 
 Agentが渡すのはRouteとTargetであり、必要な読込、Git root、検証、終了処理は既存の決定的Toolが
-解決する。read-only回答は入口Toolを必須とせず、明示対象を必要最小限だけ読む。
+解決する。`context`、ローカル探索・編集・検証はGitHub capabilityを要求しない。read-only回答は入口Toolを
+必須とせず、明示対象を必要最小限だけ読む。backup、push、Issue、PR、remote materialization、成果条件に含む
+GitHub readbackだけが、各外部操作直前に共有resolverでrepository / operation capabilityを要求する。
 
 安全境界の要約は`tools/SAFETY.md`が所有する。通常作業では`tools/CONTROL.md`、`tools/BACKUP.md`、
 本書の互換実装節を読まず、Toolが返した停止reasonに該当するときだけ読む。
@@ -99,9 +101,13 @@ remote / local削除まで完了する。このPR経路は開発remote専用で�
 サイズ超過、参照切れ、lint/format失敗、stale cache、validatorが示した構造違反、再生成漏れ、
 Toolへの決定的な入力不備、自分の変更が壊したtestである。
 
-失敗原因は観測が直接示す範囲だけ確定し、timeout、接続断、一つの経路の失敗から能力・権限全体の欠如を
+失敗原因は`runtime`、`agent-directory-local-policy`、`external-provider`、`repository-integrity`の発生層と、
+network / API / Gitを試行したかを先に分類する。観測が直接示す範囲だけ確定し、timeout、接続断、一つの経路の失敗から能力・権限全体の欠如を
 推論しない。利用者の訂正または新しい検証結果と矛盾した旧推論は失効させる。再試行前に状態、入力、手段、
-接続のいずれかを再観測し、前回からの意味ある差分を一つ以上作る。差分のない同一試行は繰り返さない。
+接続のいずれかを再観測し、前回からの意味ある差分を一つ以上作る。failure fingerprintはruntime permission、
+cwd / Git root、target repository、remote、credential source、repository / operation allowlist、network state、
+command / Tool path、external provider stateからsecretなしで構成する。差分のない同一fingerprintは繰り返さず、
+安全に修復できなければ利用者が決定すべき不足一点だけを報告する。
 
 検証は終端の1回に集約する。変更の途中でvalidatorを反復実行せず、編集直後の確認は対象の最小検査
 （構文、lint、対象test）に限る。finalize検証の失敗後の再finalizeは1回まで。2回目の失敗は停止し、
