@@ -22,7 +22,6 @@ guarded	tools/install-git-hooks.sh	hook installer
 guarded	tools/hooks/*	managed hooks
 guarded	tools/validate-agent-directory.sh	構造validator
 guarded	tools/validator/*	validator内部checker
-guarded	tools/task.sh	legacy entrypoint removal boundary
 guarded	tools/lib/project-registry.sh	Git rootとOwner解決
 guarded	tools/materialize-project-repositories.sh	Independent Project再現
 guarded	tools/run-evals.py	Core behavioral eval runner
