@@ -11,16 +11,16 @@ Projectは「何を作り残すか」を所有する。再利用可能な研究�
 ## 共有Skillライブラリ
 
 Agent間で再利用する汎用Skillは、別リポジトリの [`agent-skills`](https://github.com/claudagt/agent-skills) が配布元である。
-このWorkspaceへSkillを標準で自動導入・自動同期はしない。必要なタスクで利用者が明示したときだけ、配布元のimport toolで
-`skills/<skill-name>/`をコピーし、取り込んだSkillをこのWorkspaceの正本にする。
+このWorkspaceへSkillを標準で自動導入・自動同期はしない。必要なタスクで利用者が明示したときだけ、target側のimport
+transactionで`skills/<skill-name>/`をコピーし、取り込んだSkillをこのWorkspaceの正本にする。
 
 ```bash
-bash /path/to/agent-skills/tools/import-skill.sh <skill-name> \
-  --target /path/to/agent-directory
+bash tools/import-skill.sh <skill-name> --source /path/to/agent-skills
 ```
 
 インポート先には `skills/<skill-name>/agents/upstream.yaml` が作られ、配布元repository、commit SHA、Skill version、
-インポート時刻を記録する。既存Skillは上書きせず、更新時は上流との差分を確認してから明示的に再インポートする。
+インポート時刻を記録する。target側はfrontmatterをAgent Skills標準の6 fieldへ正規化し、CodexとClaude Codeの標準pathへ
+同じ正本のsymlinkを作る。既存Skillは上書きせず、更新時は上流との差分を確認してから明示的に再インポートする。
 
 ## Runtime接続
 
@@ -28,6 +28,7 @@ bash /path/to/agent-skills/tools/import-skill.sh <skill-name> \
 - Runtimeが発見する配置、発動条件、invocation policyはRuntime側設定が所有する。
 - Codex用`.agents/skills/<name>`とClaude Code用`.claude/skills/<name>`は、必要なSkillだけを
   `../../skills/<name>`へ結ぶper-Skill symlink adapterとする。Skill本文、references、scriptsを複製しない。
+- 共有Skillのadapterは`tools/import-skill.sh`がimportと同じtransactionで作る。固有Skillはsource作成後に同じlinkを作る。
 - adapterを利用できないRuntimeでは、そのRuntime自身の標準導入経路をconsumerが所有する。Core独自の
   discovery、同期、copy daemon、fallbackを追加しない。
 - Skillを実行するときはRuntimeが選んだ`SKILL.md`を最後まで読み、descriptionだけで代用しない。
@@ -37,7 +38,7 @@ bash /path/to/agent-skills/tools/import-skill.sh <skill-name> \
 ```yaml
 ---
 name: skill-name
-description: 発動条件が分かる200文字以内の一行説明
+description: 発動条件が分かる簡潔な一行説明
 metadata:
   agent-directory.status: "active"
   agent-directory.aliases: "別名1,別名2"
@@ -45,6 +46,7 @@ metadata:
 ```
 
 - `name`はSkillディレクトリ名と一致させる。
+- `description`のhard limitはAgent Skills標準の1,024文字とし、発見時の短縮に耐えるよう200文字以内を推奨する。
 - top-levelはAgent Skills標準の`name`、`description`、任意の`license`、`compatibility`、`metadata`、
   experimental `allowed-tools`だけを使う。`allowed-tools`は対応Runtimeを確認したSkillだけが宣言でき、
   CoreのRuntime Permissionやapprovalの代替にはしない。
@@ -53,7 +55,7 @@ metadata:
 - deprecatedはactiveな後継`SKILL.md`への`metadata.agent-directory.replaced-by`を持たせる。
 - retiredは実行しない。deprecatedは明示的な互換性確認以外では後継を使う。
 - 状態変更のために物理移動せず、パスを維持する。
-- 旧consumerのtop-level `status` / `aliases`は移行互換として読めるが、新規作成・更新では書かない。
+- 旧consumerのtop-level `status` / `aliases`は非strict検証で移行互換として読めるが、新規作成・更新・importでは書かない。
 
 ## Knowledge参照
 

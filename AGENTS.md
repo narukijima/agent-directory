@@ -58,20 +58,21 @@ target / destination / credential、目的・契約、不可逆対象、lifecycl
 
 ## 禁止事項
 
-- APIキー、token、password、外部サービス設定の実値をcommitしない。保存と注入は各Agent / Runtimeが所有する。
+- APIキー、token、password、外部サービス設定の実値をcommitしない。Agent固有の環境変数は未追跡のroot
+  `.env`を既定とし、保存と注入は各Agent / Runtimeが所有する。OS共有設定はOperatorが明示選択した場合だけ使う。
 - remoteを書込正本にしない。push、divergence、privacy訂正、PR必須ruleは対象Project / Repository契約に従う。
 - 未依頼の機能・抽象化・依存を足さず、未検証を完了報告しない。
 - 一意な削除・移動だけを実行し、paused / retiredとProject削除は`projects/LIFECYCLE.md`に従う。
 - 下位`AGENTS.md`で上位規則・`PROJECT.md`を弱めない。
 
-上記の判断を支える安全核は`tools/SAFETY.md`の6項目だけとする。commit境界の実装を変更するときだけ
-`tools/CONTROL.md`を読む。
+上記の判断を支える安全核は`tools/SAFETY.md`の5項目だけとする。Git、commit、push、approvalは
+Runtime、Operator、対象Repositoryの標準機能を使い、Core独自のhookや承認層を持たない。
 
 ## 詳細正本
 
 - Project: `projects/PROJECTS.md`、`projects/LIFECYCLE.md`、`projects/RECOVERY.md`
 - Tool: `tools/TOOLS.md`
-- Safety: `tools/SAFETY.md`、`tools/CONTROL.md`
+- Safety: `tools/SAFETY.md`
 - Eval: `evals/EVALS.md`、`evals/TRACE.md`
 
 ## 参照順序
