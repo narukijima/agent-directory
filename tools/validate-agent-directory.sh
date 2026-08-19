@@ -93,6 +93,26 @@ frontmatter_value() {
   ' "$file"
 }
 
+frontmatter_metadata_value() {
+  local file="$1" key="$2"
+  awk -v key="$key" '
+    NR == 1 && $0 == "---" { in_frontmatter = 1; next }
+    in_frontmatter && $0 == "---" { exit }
+    in_frontmatter && $0 == "metadata:" { in_metadata = 1; next }
+    in_metadata && /^[^[:space:]]/ { in_metadata = 0 }
+    in_metadata && /^[[:space:]]/ {
+      value = $0
+      sub(/^[[:space:]]+/, "", value)
+      if (index(value, key ":") != 1) next
+      value = substr(value, length(key) + 2)
+      sub(/^[[:space:]]*/, "", value)
+      gsub(/^['\''\"]|['\''\"]$/, "", value)
+      print value
+      exit
+    }
+  ' "$file"
+}
+
 validate_status_file() {
   local file="$1" status
   [[ -f "$file" ]] || return 0
@@ -105,6 +125,27 @@ validate_status_file() {
     active|paused|completed|deprecated|retired|superseded|archived) ;;
     '') fail "${file#"$repo_root"/} is missing frontmatter status" ;;
     *) fail "${file#"$repo_root"/} has invalid status: $status" ;;
+  esac
+}
+
+validate_skill_frontmatter() {
+  local file="$1" status legacy_status
+  [[ -f "$file" ]] || return 0
+  [[ "$(sed -n '1p' "$file")" == '---' ]] || {
+    fail "${file#"$repo_root"/} must start with YAML frontmatter"
+    return 0
+  }
+  status="$(frontmatter_metadata_value "$file" agent-directory.status)"
+  legacy_status="$(frontmatter_value "$file" status)"
+  if [[ -n "$status" && -n "$legacy_status" && "$status" != "$legacy_status" ]]; then
+    fail "${file#"$repo_root"/} has conflicting standard and legacy status metadata"
+    return 0
+  fi
+  [[ -n "$status" ]] || status="$legacy_status"
+  case "$status" in
+    active|deprecated|retired) ;;
+    '') fail "${file#"$repo_root"/} is missing metadata agent-directory.status" ;;
+    *) fail "${file#"$repo_root"/} has invalid Skill status: $status" ;;
   esac
 }
 
@@ -347,6 +388,7 @@ for heading in '## 自己定義' '## 共通判断原則' '## Route' '## Context 
   grep -Fqx "$heading" "$repo_root/AGENTS.md" || fail "AGENTS.md is missing heading: $heading"
 done
 grep -Fq '新しいTool、Skill、恒久的な仕組み、抽象化、依存は原則追加しない' "$repo_root/AGENTS.md" || fail 'AGENTS.md lost the owner gate for permanent additions'
+grep -Fq 'Provider / Runtimeの公式仕様、標準配置、読込順、native capabilityを優先する' "$repo_root/AGENTS.md" || fail 'AGENTS.md lost the native Runtime compatibility boundary'
 grep -Fq 'Skillの新設は既存Skillの更新・統合で目的を満たせない場合だけ候補' "$repo_root/skills/SKILLS.md" || fail 'skills/SKILLS.md lost the owner gate'
 grep -Fq '新しいToolは原則追加しない' "$repo_root/tools/TOOLS.md" || fail 'tools/TOOLS.md lost the Tool owner gate'
 grep -Fq 'validatorはそれらを' "$repo_root/README.md" || fail 'README.md must allow downstream Runtime adapters'
@@ -384,7 +426,7 @@ for skill_dir in "$repo_root"/skills/*; do
   [[ "${skill_dir##*/}" != '_template' ]] || continue
   skill_file="$skill_dir/SKILL.md"
   [[ -f "$skill_file" ]] || { fail "Skill directory is missing SKILL.md: ${skill_dir##*/}"; continue; }
-  validate_status_file "$skill_file"
+  validate_skill_frontmatter "$skill_file"
   skill_name="$(frontmatter_value "$skill_file" name)"
   [[ "$skill_name" == "${skill_dir##*/}" ]] || fail "${skill_file#"$repo_root"/} name must match its directory"
   [[ -n "$(frontmatter_value "$skill_file" description)" ]] || fail "${skill_file#"$repo_root"/} is missing description"
