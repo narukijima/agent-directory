@@ -113,6 +113,32 @@ frontmatter_metadata_value() {
   ' "$file"
 }
 
+frontmatter_has_key() {
+  local file="$1" key="$2"
+  awk -v key="$key" '
+    NR == 1 && $0 == "---" { in_frontmatter = 1; next }
+    in_frontmatter && $0 == "---" { exit }
+    in_frontmatter && index($0, key ":") == 1 { found = 1; exit }
+    END { exit !found }
+  ' "$file"
+}
+
+frontmatter_metadata_has_key() {
+  local file="$1" key="$2"
+  awk -v key="$key" '
+    NR == 1 && $0 == "---" { in_frontmatter = 1; next }
+    in_frontmatter && $0 == "---" { exit }
+    in_frontmatter && $0 == "metadata:" { in_metadata = 1; next }
+    in_metadata && /^[^[:space:]]/ { in_metadata = 0 }
+    in_metadata && /^[[:space:]]/ {
+      value = $0
+      sub(/^[[:space:]]+/, "", value)
+      if (index(value, key ":") == 1) { found = 1; exit }
+    }
+    END { exit !found }
+  ' "$file"
+}
+
 validate_status_file() {
   local file="$1" status
   [[ -f "$file" ]] || return 0
@@ -129,7 +155,7 @@ validate_status_file() {
 }
 
 validate_skill_frontmatter() {
-  local file="$1" status legacy_status key name description
+  local file="$1" status legacy_status aliases legacy_aliases key name description compatibility
   [[ -f "$file" ]] || return 0
   [[ "$(sed -n '1p' "$file")" == '---' ]] || {
     fail "${file#"$repo_root"/} must start with YAML frontmatter"
@@ -141,12 +167,33 @@ validate_skill_frontmatter() {
     fail "${file#"$repo_root"/} has conflicting standard and legacy status metadata"
     return 0
   fi
+  if frontmatter_has_key "$file" status || frontmatter_has_key "$file" aliases || \
+    frontmatter_has_key "$file" replaced_by; then
+    if [[ "$strict" == true ]]; then
+      fail "${file#"$repo_root"/} uses legacy top-level Skill lifecycle fields"
+    else
+      warn "${file#"$repo_root"/} uses legacy top-level Skill lifecycle fields"
+    fi
+  fi
   [[ -n "$status" ]] || status="$legacy_status"
   case "$status" in
     active|deprecated|retired) ;;
     '') fail "${file#"$repo_root"/} is missing metadata agent-directory.status" ;;
     *) fail "${file#"$repo_root"/} has invalid Skill status: $status" ;;
   esac
+
+  aliases="$(frontmatter_metadata_value "$file" agent-directory.aliases)"
+  legacy_aliases="$(frontmatter_value "$file" aliases)"
+  if ! frontmatter_metadata_has_key "$file" agent-directory.aliases; then
+    if frontmatter_has_key "$file" aliases && [[ "$strict" != true ]]; then
+      aliases="$legacy_aliases"
+    else
+      fail "${file#"$repo_root"/} is missing metadata agent-directory.aliases"
+    fi
+  fi
+  if [[ "$aliases" == ,* || "$aliases" == *, || "$aliases" == *,,* ]]; then
+    fail "${file#"$repo_root"/} has invalid comma-separated Skill aliases"
+  fi
 
   while IFS= read -r key; do
     case "$key" in
@@ -162,10 +209,15 @@ validate_skill_frontmatter() {
 
   name="$(frontmatter_value "$file" name)"
   description="$(frontmatter_value "$file" description)"
+  compatibility="$(frontmatter_value "$file" compatibility)"
   [[ "$name" =~ ^[a-z0-9]+(-[a-z0-9]+)*$ && ${#name} -le 64 ]] || \
     fail "${file#"$repo_root"/} name does not follow the Agent Skills standard"
   (( ${#description} >= 1 && ${#description} <= 1024 )) || \
     fail "${file#"$repo_root"/} description must be 1-1024 characters"
+  (( ${#description} <= 200 )) || \
+    warn "${file#"$repo_root"/} description exceeds the 200-character discovery recommendation"
+  [[ -z "$compatibility" || ${#compatibility} -le 500 ]] || \
+    fail "${file#"$repo_root"/} compatibility must be at most 500 characters"
 }
 
 validate_skill_adapter() {
@@ -177,7 +229,11 @@ validate_skill_adapter() {
   elif [[ -e "$repo_root/$adapter/$skill_name" ]]; then
     fail "$adapter/$skill_name must be a symlink, not a second Skill copy"
   else
-    warn "$adapter/$skill_name is missing; legacy consumer should add the native Runtime adapter"
+    if [[ "$strict" == true ]]; then
+      fail "$adapter/$skill_name is missing; import or bridge the Skill through the native Runtime adapter"
+    else
+      warn "$adapter/$skill_name is missing; import or bridge the Skill through the native Runtime adapter"
+    fi
   fi
 }
 
@@ -185,6 +241,7 @@ validate_tool_behaviors() {
   local fixture_root append_root append_output
   local control_root control_output hook_output head_sha zero_sha push_output
   local materialize_root upstream_work upstream_bare adopted_sha materialize_output
+  local skill_source_root skill_target_root skill_import_output second_import_output
 
   fixture_root="$(mktemp -d "${TMPDIR:-/tmp}/agent-directory-tool-test.XXXXXX")"
   tool_fixture_root="$fixture_root"
@@ -205,6 +262,50 @@ validate_tool_behaviors() {
     fail 'append-knowledge-log.sh rotation lost the appended record'
   [[ "$(grep -Ec '^[0-9]{4}-[0-9]{2}-[0-9]{2}[[:space:]]+' "$append_root/knowledge/wiki/LOG.md" || true)" == '0' ]] || \
     fail 'append-knowledge-log.sh did not reset the current log after rotation'
+
+  # Skill import: preserve provenance, normalize portable frontmatter, and create
+  # exactly one native symlink adapter for each supported Runtime.
+  skill_source_root="$fixture_root/skill-source"
+  skill_target_root="$fixture_root/skill-target"
+  mkdir -p "$skill_source_root/tools" "$skill_target_root/tools"
+  cp "$repo_root/AGENTS.md" "$skill_target_root/AGENTS.md"
+  cp "$repo_root/tools/validate-agent-directory.sh" "$skill_target_root/tools/validate-agent-directory.sh"
+  printf '%s\n' \
+    '#!/usr/bin/env bash' \
+    'set -euo pipefail' \
+    'skill_name="$1"' \
+    'shift' \
+    '[[ "$1" == "--target" && $# -eq 2 ]]' \
+    'target_root="$2"' \
+    'mkdir -p "$target_root/skills/$skill_name/agents"' \
+    'printf '\''%s\n'\'' '\''---'\'' '\''name: sample-skill'\'' '\''description: Portable fixture Skill'\'' '\''status: active'\'' '\''aliases: ["sample", "fixture"]'\'' '\''metadata:'\'' '\''  claudagt.version: "1.0.0"'\'' '\''  claudagt.status: "active"'\'' '\''  claudagt.aliases: "sample,fixture"'\'' '\''---'\'' '\'''\'' '\''# Sample'\'' > "$target_root/skills/$skill_name/SKILL.md"' \
+    'printf '\''%s\n'\'' '\''source_commit: "0123456789abcdef"'\'' > "$target_root/skills/$skill_name/agents/upstream.yaml"' \
+    > "$skill_source_root/tools/import-skill.sh"
+  chmod 755 "$skill_source_root/tools/import-skill.sh"
+  skill_import_output="$(AGENT_DIRECTORY_ROOT="$skill_target_root" \
+    bash "$repo_root/tools/import-skill.sh" sample-skill --source "$skill_source_root" 2>&1)" || \
+    fail "import-skill.sh self-check failed: $skill_import_output"
+  printf '%s\n' "$skill_import_output" | grep -Fq \
+    'SKILL_IMPORT_OK skill=sample-skill source_commit=0123456789abcdef adapters=2' || \
+    fail 'import-skill.sh did not emit its deterministic success receipt'
+  grep -Fq 'agent-directory.status: "active"' "$skill_target_root/skills/sample-skill/SKILL.md" || \
+    fail 'import-skill.sh did not normalize lifecycle metadata'
+  grep -Fq 'agent-directory.aliases: "sample,fixture"' "$skill_target_root/skills/sample-skill/SKILL.md" || \
+    fail 'import-skill.sh did not normalize aliases metadata'
+  ! grep -Eq '^(status|aliases|replaced_by):' "$skill_target_root/skills/sample-skill/SKILL.md" || \
+    fail 'import-skill.sh retained non-standard top-level lifecycle fields'
+  [[ "$(readlink "$skill_target_root/.agents/skills/sample-skill")" == '../../skills/sample-skill' ]] || \
+    fail 'import-skill.sh did not create the Codex Skill adapter'
+  [[ "$(readlink "$skill_target_root/.claude/skills/sample-skill")" == '../../skills/sample-skill' ]] || \
+    fail 'import-skill.sh did not create the Claude Code Skill adapter'
+  if second_import_output="$(AGENT_DIRECTORY_ROOT="$skill_target_root" \
+      bash "$repo_root/tools/import-skill.sh" sample-skill --source "$skill_source_root" 2>&1)"; then
+    fail 'import-skill.sh overwrote an existing Skill'
+  fi
+  [[ -f "$skill_target_root/skills/sample-skill/SKILL.md" && \
+     -L "$skill_target_root/.agents/skills/sample-skill" && \
+     -L "$skill_target_root/.claude/skills/sample-skill" ]] || \
+    fail 'import-skill.sh damaged existing canon or adapters after a rejected reimport'
 
   # Git boundary: install only committed snapshots, allow an ordinary commit, reject a
   # forbidden path, and exercise both managed hook entrypoints.
@@ -338,6 +439,7 @@ required_files=(
   'tools/control-policy.tsv'
   'tools/hooks/pre-commit'
   'tools/hooks/pre-push'
+  'tools/import-skill.sh'
   'tools/install-git-hooks.sh'
   'tools/lib/project-registry.sh'
   'tools/materialize-project-repositories.sh'
@@ -358,6 +460,7 @@ tools/check-boundary.sh
 tools/control-policy.tsv
 tools/hooks/pre-commit
 tools/hooks/pre-push
+tools/import-skill.sh
 tools/install-git-hooks.sh
 tools/lib/project-registry.sh
 tools/materialize-project-repositories.sh
@@ -371,7 +474,7 @@ actual_tools="$(
   find tools -type f -not -name '.DS_Store' -not -path '*/__pycache__/*' -print | LC_ALL=C sort
 )"
 if [[ "$actual_tools" != "$expected_tools" ]]; then
-  fail 'tools/ differs from the 14-file owner-approved allowlist'
+  fail 'tools/ differs from the 15-file owner-approved allowlist'
   diff -u <(printf '%s\n' "$expected_tools") <(printf '%s\n' "$actual_tools") >&2 || true
 fi
 
@@ -469,6 +572,21 @@ for skill_dir in "$repo_root"/skills/*; do
   [[ -n "$(frontmatter_value "$skill_file" description)" ]] || fail "${skill_file#"$repo_root"/} is missing description"
   validate_skill_adapter "$skill_name" '.agents/skills'
   validate_skill_adapter "$skill_name" '.claude/skills'
+  skill_status="$(frontmatter_metadata_value "$skill_file" agent-directory.status)"
+  [[ -n "$skill_status" ]] || skill_status="$(frontmatter_value "$skill_file" status)"
+  if [[ "$skill_status" == 'deprecated' ]]; then
+    replacement="$(frontmatter_metadata_value "$skill_file" agent-directory.replaced-by)"
+    [[ -n "$replacement" ]] || replacement="$(frontmatter_value "$skill_file" replaced_by)"
+    if [[ ! "$replacement" =~ ^[a-z0-9]+(-[a-z0-9]+)*$ ]]; then
+      fail "${skill_file#"$repo_root"/} deprecated Skill is missing a valid metadata agent-directory.replaced-by"
+    elif [[ ! -f "$repo_root/skills/$replacement/SKILL.md" ]]; then
+      fail "${skill_file#"$repo_root"/} replacement Skill does not exist: $replacement"
+    else
+      replacement_status="$(frontmatter_metadata_value "$repo_root/skills/$replacement/SKILL.md" agent-directory.status)"
+      [[ "$replacement_status" == 'active' ]] || \
+        fail "${skill_file#"$repo_root"/} replacement Skill is not active: $replacement"
+    fi
+  fi
   bytes="$(wc -c < "$skill_file" | tr -d ' ')"
   (( bytes <= 20480 )) || fail "${skill_file#"$repo_root"/} exceeds 20KiB"
 done
@@ -495,7 +613,7 @@ if [[ -f "$repo_root/tools/control-policy.tsv" ]]; then
     $1 !~ /^(exempt|forbidden|frozen|guarded|contract)$/ || $2 == "" || NF > 3 { bad = 1 }
     END { exit bad }
   ' "$repo_root/tools/control-policy.tsv" || fail 'tools/control-policy.tsv has an invalid row'
-  pins=('forbidden:.env*' 'frozen:knowledge/raw/*' 'frozen:knowledge/wiki/logs/*' 'guarded:AGENTS.md' 'guarded:skills/SKILLS.md' 'guarded:tools/SAFETY.md' 'guarded:tools/CONTROL.md' 'guarded:tools/TOOLS.md' 'guarded:tools/control-policy.tsv' 'guarded:tools/check-boundary.sh' 'guarded:tools/install-git-hooks.sh' 'guarded:tools/validate-agent-directory.sh' 'guarded:tools/run-evals.py' 'guarded:evals/*' 'contract:projects/*/PROJECT.md')
+  pins=('forbidden:.env*' 'frozen:knowledge/raw/*' 'frozen:knowledge/wiki/logs/*' 'guarded:AGENTS.md' 'guarded:skills/SKILLS.md' 'guarded:tools/SAFETY.md' 'guarded:tools/CONTROL.md' 'guarded:tools/TOOLS.md' 'guarded:tools/control-policy.tsv' 'guarded:tools/check-boundary.sh' 'guarded:tools/import-skill.sh' 'guarded:tools/install-git-hooks.sh' 'guarded:tools/validate-agent-directory.sh' 'guarded:tools/run-evals.py' 'guarded:evals/*' 'contract:projects/*/PROJECT.md')
   for pin in "${pins[@]}"; do
     tier="${pin%%:*}"
     pattern="${pin#*:}"
@@ -509,7 +627,7 @@ done < <(cd "$repo_root" && find tools -type f -name '*.sh' -print | LC_ALL=C so
 
 python3 -c 'import sys; compile(open(sys.argv[1], encoding="utf-8").read(), sys.argv[1], "exec")' "$repo_root/tools/run-evals.py" || fail 'tools/run-evals.py has invalid Python syntax'
 
-executables=(tools/append-knowledge-log.sh tools/check-boundary.sh tools/install-git-hooks.sh tools/materialize-project-repositories.sh tools/validate-agent-directory.sh)
+executables=(tools/append-knowledge-log.sh tools/check-boundary.sh tools/import-skill.sh tools/install-git-hooks.sh tools/materialize-project-repositories.sh tools/validate-agent-directory.sh)
 executables+=(tools/run-evals.py)
 for executable in "${executables[@]}"; do
   [[ -x "$repo_root/$executable" ]] || fail "$executable is not executable"

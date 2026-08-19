@@ -1,6 +1,6 @@
 # TOOLS.md — Core Tool契約
 
-`tools/`はPortable Canonの構造検証、Git境界、Independent Project再現、Knowledge logだけを所有する。
+`tools/`はPortable Canonの構造検証、Git境界、Skill import、Independent Project再現、Knowledge logだけを所有する。
 shell、検索、Runtime Skill、Git / GitHub操作、認証、backup、PR、deploy、publishを再包装しない。
 
 ## 原則
@@ -16,13 +16,24 @@ shell、検索、Runtime Skill、Git / GitHub操作、認証、backup、PR、dep
 |---|---|---|
 | `validate-agent-directory.sh` | Workspace schemaと構造的不変条件 | Runtime / Provider診断 |
 | `check-boundary.sh` | secret、immutable source、protected pathのGit差分検査 | commit / push実行 |
+| `import-skill.sh` | provenance付きSkill import、標準frontmatter、native symlink | discovery、invocation、自動同期 |
 | `install-git-hooks.sh` | approved boundary snapshotとmanaged hookの導入 | Git設定全般、認証 |
 | `materialize-project-repositories.sh` | registry URL / revisionからIndependent cloneを再現・検査 | remote作成、push、merge |
 | `append-knowledge-log.sh` | Knowledge LOG追記と決定的rotation | Knowledge本文生成 |
 | `run-evals.py` | 保存済みbehavior traceの採点 | Runtime adapterやAIの起動 |
 
 内部実装は`control-policy.tsv`、`hooks/{pre-commit,pre-push}`、`lib/project-registry.sh`、
-`validator/check-markdown-references.sh`の5ファイルである。説明正本3ファイルを含め、`tools/`は14ファイル固定。
+`validator/check-markdown-references.sh`の5ファイルである。説明正本3ファイルを含め、`tools/`は15ファイル固定。
+
+## Skill import
+
+```bash
+bash tools/import-skill.sh <skill-name> --source /path/to/agent-skills
+```
+
+配布元のprovenance付きimporterで一時領域へcopyし、Agent Skills標準frontmatterへ正規化してから
+`skills/<name>/`へ確定する。同じtransactionで`.agents/skills/<name>`と`.claude/skills/<name>`のsymlinkを作る。
+既存Skill、既存adapter、配布元の未commit変更を上書きせず、networkやRuntimeを起動しない。
 
 ## Validator
 
