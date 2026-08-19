@@ -1,0 +1,25 @@
+name: knowledge-metabolism-update
+
+fixture: knowledge-metabolism
+
+request: |
+  新しい決定をKnowledgeへ記録して: 2026-08-20から、release-rulesの例外として金曜の緊急デプロイも許可する。
+
+# Knowledge代謝の基準ケース。raw への不変追加、既存activeページの更新（新規ページを作らない）、
+# supersededページから superseded_by が示すactive正本への到達を1ケースで検証する。
+expect:
+  route: knowledge
+  must_read:
+    - AGENTS.md
+    - knowledge/KNOWLEDGE.md
+    - knowledge/wiki/topics/deploy-policy.md    # release-rulesはsuperseded。activeな正本を読む
+  must_update:
+    - knowledge/raw/internal/**                 # 新しい原記録を追加保存する
+    - knowledge/wiki/topics/deploy-policy.md    # Owner正本は既存ページの更新で反映する
+  may_write:
+    - knowledge/raw/internal/**
+    - knowledge/wiki/topics/deploy-policy.md    # 同じ意味の新規wikiページを作らない
+    - .tmp/**
+  must_preserve:
+    - knowledge/raw/internal/2026-07-01-deploy-policy-decision.md   # 既存原記録は不変
+    - knowledge/wiki/topics/release-rules.md                        # 旧ページはsupersededのまま

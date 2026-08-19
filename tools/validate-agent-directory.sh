@@ -72,6 +72,12 @@ check_size() {
   (( bytes <= limit )) || fail "$label exceeds ${limit}B: $path (${bytes}B)"
 }
 
+# Character count independent of the caller's locale: ${#var} degrades to a byte
+# count under LC_ALL=C, so UTF-8 code points are counted by dropping continuation bytes.
+char_length() {
+  printf '%s' "$1" | LC_ALL=C tr -d '\200-\277' | LC_ALL=C wc -c | tr -d ' '
+}
+
 frontmatter_value() {
   local file="$1" key="$2"
   awk -v key="$key" '
@@ -158,7 +164,7 @@ require_headings() {
 }
 
 validate_skill_frontmatter() {
-  local file="$1" status legacy_status aliases legacy_aliases key name description compatibility
+  local file="$1" status legacy_status aliases legacy_aliases key name description compatibility description_length
   [[ -f "$file" ]] || return 0
   [[ "$(sed -n '1p' "$file")" == '---' ]] || {
     fail "${file#"$repo_root"/} must start with YAML frontmatter"
@@ -215,11 +221,12 @@ validate_skill_frontmatter() {
   compatibility="$(frontmatter_value "$file" compatibility)"
   [[ "$name" =~ ^[a-z0-9]+(-[a-z0-9]+)*$ && ${#name} -le 64 ]] || \
     fail "${file#"$repo_root"/} name does not follow the Agent Skills standard"
-  (( ${#description} >= 1 && ${#description} <= 1024 )) || \
+  description_length="$(char_length "$description")"
+  (( description_length >= 1 && description_length <= 1024 )) || \
     fail "${file#"$repo_root"/} description must be 1-1024 characters"
-  (( ${#description} <= 200 )) || \
+  (( description_length <= 200 )) || \
     warn "${file#"$repo_root"/} description exceeds the 200-character discovery recommendation"
-  [[ -z "$compatibility" || ${#compatibility} -le 500 ]] || \
+  [[ -z "$compatibility" || "$(char_length "$compatibility")" -le 500 ]] || \
     fail "${file#"$repo_root"/} compatibility must be at most 500 characters"
 }
 
@@ -244,9 +251,45 @@ validate_tool_behaviors() {
   local fixture_root
   local materialize_root upstream_work upstream_bare adopted_sha materialize_output
   local skill_source_root skill_target_root skill_import_output second_import_output
+  local locale_skill_dir locale_output reference_fixture reference_scope_output
 
   fixture_root="$(mktemp -d "${TMPDIR:-/tmp}/agent-directory-tool-test.XXXXXX")"
   tool_fixture_root="$fixture_root"
+
+  # SKILL.md length checks count characters in every locale: an in-budget Japanese
+  # description must stay clean under LC_ALL=C, and an over-budget one must still warn.
+  locale_skill_dir="$fixture_root/locale-skill"
+  mkdir -p "$locale_skill_dir"
+  printf '%s\n' '---' 'name: locale-fixture' \
+    "description: $(printf '案%.0s' {1..89})" \
+    'metadata:' '  agent-directory.status: "active"' '  agent-directory.aliases: ""' '---' \
+    > "$locale_skill_dir/SKILL.md"
+  locale_output="$( (export LC_ALL=C; validate_skill_frontmatter "$locale_skill_dir/SKILL.md") 2>&1 )"
+  [[ -z "$locale_output" ]] || \
+    fail "SKILL.md character checks must be locale-independent: $locale_output"
+  printf '%s\n' '---' 'name: locale-fixture' \
+    "description: $(printf '案%.0s' {1..201})" \
+    'metadata:' '  agent-directory.status: "active"' '  agent-directory.aliases: ""' '---' \
+    > "$locale_skill_dir/SKILL.md"
+  locale_output="$( (export LC_ALL=C; validate_skill_frontmatter "$locale_skill_dir/SKILL.md") 2>&1 )"
+  printf '%s\n' "$locale_output" | grep -Fq '200-character' || \
+    fail 'SKILL.md description discovery recommendation check was lost'
+
+  # Reference validation covers the current canon but never immutable knowledge/raw/ records.
+  reference_fixture="$fixture_root/reference-scope"
+  mkdir -p "$reference_fixture/knowledge/raw/internal" "$reference_fixture/knowledge/wiki/topics"
+  printf '%s\n' 'See `tools/removed.md#gone`.' \
+    > "$reference_fixture/knowledge/raw/internal/2026-01-01-record.md"
+  printf '%s\n' 'See `tools/removed.md#gone`.' \
+    > "$reference_fixture/knowledge/wiki/topics/broken.md"
+  if reference_scope_output="$(bash "$repo_root/tools/validator/check-markdown-references.sh" "$reference_fixture" 2>&1)"; then
+    fail 'check-markdown-references.sh missed a broken wiki reference'
+  fi
+  printf '%s\n' "$reference_scope_output" | grep -Fq \
+    'knowledge/wiki/topics/broken.md references a missing file: tools/removed.md' || \
+    fail 'check-markdown-references.sh lost the broken wiki reference failure'
+  ! printf '%s\n' "$reference_scope_output" | grep -Fq 'knowledge/raw/' || \
+    fail 'check-markdown-references.sh must not require resolution inside immutable knowledge/raw records'
 
   # Skill import: preserve provenance, normalize portable frontmatter, and create
   # exactly one native symlink adapter for each supported Runtime.
@@ -417,6 +460,20 @@ check_size 'knowledge/wiki/INDEX.md' 8192 'knowledge/wiki/INDEX.md'
 
 while IFS= read -r -d '' page; do
   validate_status_file "$page" 'active|superseded|archived|retired'
+  page_summary="$(frontmatter_value "$page" summary)"
+  if [[ -z "$page_summary" ]]; then
+    fail "${page#"$repo_root"/} is missing frontmatter summary"
+  elif [[ "$page_summary" == *$'\t'* ]] || (( $(char_length "$page_summary") > 200 )); then
+    fail "${page#"$repo_root"/} summary must be a tab-free line of at most 200 characters"
+  fi
+  if [[ "$page" == "$repo_root/knowledge/wiki/sources/"* ]]; then
+    page_source="$(frontmatter_value "$page" source)"
+    if [[ "$page_source" != knowledge/raw/internal/* && "$page_source" != knowledge/raw/external/* ]]; then
+      fail "${page#"$repo_root"/} source must be a repository-relative path under knowledge/raw/"
+    elif [[ ! -f "$repo_root/$page_source" ]]; then
+      fail "${page#"$repo_root"/} source raw record does not exist: $page_source"
+    fi
+  fi
   if [[ "$(frontmatter_value "$page" status)" == 'superseded' ]]; then
     replacement="$(frontmatter_value "$page" superseded_by)"
     if [[ -z "$replacement" ]]; then
