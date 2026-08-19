@@ -45,7 +45,9 @@ metadata:
 ```
 
 - `name`はSkillディレクトリ名と一致させる。
-- top-levelはAgent Skills標準の`name`、`description`、任意の`license`、`compatibility`、`metadata`だけを使う。
+- top-levelはAgent Skills標準の`name`、`description`、任意の`license`、`compatibility`、`metadata`、
+  experimental `allowed-tools`だけを使う。`allowed-tools`は対応Runtimeを確認したSkillだけが宣言でき、
+  CoreのRuntime Permissionやapprovalの代替にはしない。
 - `metadata.agent-directory.status`は`active | deprecated | retired`だけを使う。
 - `metadata.agent-directory.aliases`はcomma-separated stringとし、別名がなければ空文字列にする。
 - deprecatedはactiveな後継`SKILL.md`への`metadata.agent-directory.replaced-by`を持たせる。
