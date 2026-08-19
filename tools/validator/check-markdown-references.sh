@@ -7,6 +7,8 @@ set -euo pipefail
 # Usage: check-markdown-references.sh [<repo_root> [<repo-relative .md file>...]]
 # Without file arguments every tracked Markdown file is scanned (--full). With file
 # arguments only the outgoing references of those files are checked (--changed scope).
+# Immutable knowledge/raw/ records are never scanned: they capture what was true at
+# recording time, so resolution against the current canon is not a valid requirement.
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo_root="${1:-$(cd "${script_dir}/../.." && pwd)}"
@@ -64,6 +66,7 @@ fi
 
 while IFS= read -r reference_md_rel; do
   [[ -n "$reference_md_rel" ]] || continue
+  [[ "$reference_md_rel" != knowledge/raw/* ]] || continue # Immutable records; corrections land in wiki.
   reference_md_abs="$repo_root/$reference_md_rel"
   [[ -f "$reference_md_abs" ]] || continue
   while IFS= read -r markdown_reference; do

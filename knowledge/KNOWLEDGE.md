@@ -148,7 +148,8 @@ aliases: [別名, English alias]
 - statusは`active | superseded | archived | retired`だけを使う。
 - `superseded`は存在するactiveページへの`superseded_by`（リポジトリ相対パス）を必須とする。
 - `review_after`を使う場合は`YYYY-MM-DD`とする。日付到達は自動失効ではなく見直しの合図である。
-- sourcesの`source`は`knowledge/raw/internal/`または`knowledge/raw/external/`の相対パスとする。
+- sourcesの`source`は`knowledge/raw/internal/`または`knowledge/raw/external/`配下の存在するファイルへの
+  リポジトリ相対パスとする。
 
 ## 情報の区別
 
@@ -208,4 +209,5 @@ Wikiでは次を混ぜずに書く。
 ## lint
 
 `bash tools/validate-agent-directory.sh --full`でmetadata、状態、参照、サイズを検査する。
+参照検査は現行正本側だけを対象とし、不変の`raw/`原記録には適用しない。原記録の訂正はWiki側で行う。
 意味的な重複は自動削除しない。統合先が一意なら非破壊のsupersedeで統合し、一意でなければ候補として報告する。
