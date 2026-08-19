@@ -5,8 +5,8 @@ Projectは「何を作り残すか」を所有する。再利用可能な研究�
 具体的な研究活動と研究中の仮説はProjectが所有する。
 
 このディレクトリはSkill discovery、選択、起動、subagent実行を行わない。それらは各Runtimeが所有する。
-`skills/<name>/`はProvider間で共有できるsourceであり、consumerはRuntime標準のSkill配置へ薄いadapterまたは
-明示importで接続する。Provider固有frontmatterは共有sourceの必須契約にしない。
+`skills/<name>/`はAgent Skills公開標準に従うProvider間共有sourceであり、consumerはRuntime標準のSkill配置へ
+薄いadapterまたは明示importで接続する。Provider固有frontmatterは共有sourceの必須契約にしない。
 
 ## 共有Skillライブラリ
 
@@ -24,9 +24,12 @@ bash /path/to/agent-skills/tools/import-skill.sh <skill-name> \
 
 ## Runtime接続
 
+- root `CLAUDE.md`は`@AGENTS.md`だけをimportし、Claude Code用の規則本文を複製しない。
 - Runtimeが発見する配置、発動条件、invocation policyはRuntime側設定が所有する。
-- Coreはsymlink、copy、plugin、importのいずれも強制せず、同じSkill本文の二重正本を作らない。
-- Runtime adapterはsourceを参照するだけの薄い層とし、手順本文やKnowledge参照を複製しない。
+- Codex用`.agents/skills/<name>`とClaude Code用`.claude/skills/<name>`は、必要なSkillだけを
+  `../../skills/<name>`へ結ぶper-Skill symlink adapterとする。Skill本文、references、scriptsを複製しない。
+- adapterを利用できないRuntimeでは、そのRuntime自身の標準導入経路をconsumerが所有する。Core独自の
+  discovery、同期、copy daemon、fallbackを追加しない。
 - Skillを実行するときはRuntimeが選んだ`SKILL.md`を最後まで読み、descriptionだけで代用しない。
 
 ## frontmatterと状態
@@ -35,16 +38,20 @@ bash /path/to/agent-skills/tools/import-skill.sh <skill-name> \
 ---
 name: skill-name
 description: 発動条件が分かる200文字以内の一行説明
-status: active
-aliases: [別名]
+metadata:
+  agent-directory.status: "active"
+  agent-directory.aliases: "別名1,別名2"
 ---
 ```
 
 - `name`はSkillディレクトリ名と一致させる。
-- `status`は`active | deprecated | retired`だけを使う。
-- deprecatedはactiveな後継`SKILL.md`への`replaced_by`を持たせる。
+- top-levelはAgent Skills標準の`name`、`description`、任意の`license`、`compatibility`、`metadata`だけを使う。
+- `metadata.agent-directory.status`は`active | deprecated | retired`だけを使う。
+- `metadata.agent-directory.aliases`はcomma-separated stringとし、別名がなければ空文字列にする。
+- deprecatedはactiveな後継`SKILL.md`への`metadata.agent-directory.replaced-by`を持たせる。
 - retiredは実行しない。deprecatedは明示的な互換性確認以外では後継を使う。
 - 状態変更のために物理移動せず、パスを維持する。
+- 旧consumerのtop-level `status` / `aliases`は移行互換として読めるが、新規作成・更新では書かない。
 
 ## Knowledge参照
 
