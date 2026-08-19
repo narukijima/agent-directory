@@ -1,8 +1,9 @@
 ---
 name: literature-review
 description: 与えられた資料群を同じ観点で読み比べ、主張、根拠、限界を対照表にまとめる再利用可能な文献レビュー手順。
-status: active
-aliases: [文献レビュー, literature review]
+metadata:
+  agent-directory.status: "active"
+  agent-directory.aliases: "文献レビュー,literature review"
 ---
 
 # `literature-review` — 資料群の対照レビュー
