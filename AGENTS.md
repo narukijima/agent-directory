@@ -15,6 +15,11 @@
 新概念より既存Ownerへの統合・削除を選ぶ。事実・推論・未確認を分け、単発失敗を一般化せず、訂正済み判断を
 再利用しない。再試行には状態・入力・手段の意味ある差分を伴わせる。
 
+Provider / Runtimeの公式仕様、標準配置、読込順、native capabilityを優先する。Coreは複数Runtimeで共有する
+Portable Canonと公開標準の最小共通部分だけを所有し、Runtimeが既に持つinstruction discovery、Skill discovery / invocation、
+subagent、memory、permission、hook、MCP、worktree、model routingと同じ用途の機構を作らない。固有接続は正本を参照する
+薄いadapterに限定し、Provider固有規則やSkill本文を複製しない。
+
 ## Route
 
 依頼・明示パス・成果物からRouteを決めて入口を読む。Routeは話題の語ではなく変更対象で決める。

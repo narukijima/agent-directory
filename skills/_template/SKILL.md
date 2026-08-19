@@ -1,8 +1,9 @@
 ---
 name: <skill-name>
 description: <このSkillが何をするかの一行説明。どんな依頼で選ばれるかが分かるように書く。>
-status: active
-aliases: []
+metadata:
+  agent-directory.status: "active"
+  agent-directory.aliases: ""
 ---
 
 # `<skill-name>` — <一行説明>
