@@ -134,18 +134,27 @@ frontmatter_metadata_has_key() {
 }
 
 validate_status_file() {
-  local file="$1" status
+  local file="$1" allowed="$2" status
   [[ -f "$file" ]] || return 0
   [[ "$(sed -n '1p' "$file")" == '---' ]] || {
     fail "${file#"$repo_root"/} must start with YAML frontmatter"
     return 0
   }
   status="$(frontmatter_value "$file" status)"
-  case "$status" in
-    active|paused|completed|deprecated|retired|superseded|archived) ;;
-    '') fail "${file#"$repo_root"/} is missing frontmatter status" ;;
-    *) fail "${file#"$repo_root"/} has invalid status: $status" ;;
-  esac
+  if [[ -z "$status" ]]; then
+    fail "${file#"$repo_root"/} is missing frontmatter status"
+  elif [[ "|$allowed|" != *"|$status|"* ]]; then
+    fail "${file#"$repo_root"/} has invalid status: $status (allowed: $allowed)"
+  fi
+}
+
+require_headings() {
+  local file="$1" label="$2" heading
+  shift 2
+  [[ -f "$file" ]] || return 0
+  for heading in "$@"; do
+    grep -Fqx "## $heading" "$file" || fail "$label is missing required heading: ## $heading"
+  done
 }
 
 validate_skill_frontmatter() {
@@ -407,7 +416,17 @@ check_size 'tools/SAFETY.md' 20480 'tools/SAFETY.md'
 check_size 'knowledge/wiki/INDEX.md' 8192 'knowledge/wiki/INDEX.md'
 
 while IFS= read -r -d '' page; do
-  validate_status_file "$page"
+  validate_status_file "$page" 'active|superseded|archived|retired'
+  if [[ "$(frontmatter_value "$page" status)" == 'superseded' ]]; then
+    replacement="$(frontmatter_value "$page" superseded_by)"
+    if [[ -z "$replacement" ]]; then
+      fail "${page#"$repo_root"/} superseded page is missing superseded_by"
+    elif [[ ! -f "$repo_root/$replacement" ]]; then
+      fail "${page#"$repo_root"/} superseded_by must be a repository-relative path to an existing page: $replacement"
+    elif [[ "$(frontmatter_value "$repo_root/$replacement" status)" != 'active' ]]; then
+      fail "${page#"$repo_root"/} superseded_by page is not active: $replacement"
+    fi
+  fi
   bytes="$(wc -c < "$page" | tr -d ' ')"
   if (( bytes > 24576 )); then
     grep -Fqx '## Retrieval Map' "$page" || fail "${page#"$repo_root"/} exceeds 24KiB without a Retrieval Map"
@@ -453,7 +472,35 @@ for project_dir in "$repo_root"/projects/*; do
   if [[ -f "$project_dir/PROJECT.md" || -f "$project_dir/STATE.md" ]]; then
     [[ -f "$project_dir/PROJECT.md" ]] || fail "projects/$project_name is missing PROJECT.md"
     [[ -f "$project_dir/STATE.md" ]] || fail "projects/$project_name is missing STATE.md"
-    validate_status_file "$project_dir/PROJECT.md"
+    validate_status_file "$project_dir/PROJECT.md" 'active|paused|completed|retired'
+    project_status=''
+    if [[ -f "$project_dir/PROJECT.md" ]]; then
+      project_status="$(frontmatter_value "$project_dir/PROJECT.md" status)"
+      project_mode="$(frontmatter_value "$project_dir/PROJECT.md" mode)"
+      case "$project_mode" in
+        finite)
+          require_headings "$project_dir/PROJECT.md" "projects/$project_name/PROJECT.md" \
+            最終ゴール 完了条件 ;;
+        continuous)
+          require_headings "$project_dir/PROJECT.md" "projects/$project_name/PROJECT.md" \
+            継続的使命 成功指標 見直し・終了条件
+          [[ "$project_status" != 'completed' ]] || \
+            fail "projects/$project_name/PROJECT.md is continuous and must not use status completed" ;;
+        '') fail "projects/$project_name/PROJECT.md is missing frontmatter mode" ;;
+        *) fail "projects/$project_name/PROJECT.md has invalid mode: $project_mode" ;;
+      esac
+      require_headings "$project_dir/PROJECT.md" "projects/$project_name/PROJECT.md" \
+        目的 判断原則 非ゴール 制約・固定決定 品質基準 入力 使用するKnowledge 使用するSkill 成果物 検証方法
+    fi
+    if [[ -f "$project_dir/STATE.md" ]]; then
+      require_headings "$project_dir/STATE.md" "projects/$project_name/STATE.md" \
+        現在の到達点 現在の目標 目標の合格条件 検証結果 未完了・ブロッカー 現在有効な決定 失敗・却下済み 次の一手
+      check_size "projects/$project_name/STATE.md" 8192 "projects/$project_name/STATE.md"
+      if [[ "$project_status" == 'completed' ]]; then
+        grep -Fq '対象契約: `PROJECT.md#status`' "$project_dir/STATE.md" || \
+          fail "projects/$project_name/STATE.md must target PROJECT.md#status for a completed Project"
+      fi
+    fi
     [[ ! -f "$project_dir/AGENTS.md" ]] || check_size "projects/$project_name/AGENTS.md" 2048 "projects/$project_name/AGENTS.md"
   fi
 done
