@@ -18,6 +18,7 @@ guarded	tools/CONTROL.md	Git境界契約
 guarded	tools/TOOLS.md	Tool allowlistと追加のOwner gate
 guarded	tools/control-policy.tsv	境界policy
 guarded	tools/check-boundary.sh	境界verifier
+guarded	tools/import-skill.sh	portable Skill import transaction
 guarded	tools/install-git-hooks.sh	hook installer
 guarded	tools/hooks/*	managed hooks
 guarded	tools/validate-agent-directory.sh	構造validator
