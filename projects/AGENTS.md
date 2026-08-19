@@ -5,9 +5,9 @@ registryで`repository_role: public-foundation`と明示した公開基盤製品
 
 ## 着手
 
-1. 対象を一つに確定する。明示パスがなければ
-   `tools/find-context.sh --route project --limit 5 -- "<query>"`を使い、明示依頼なく新設しない。
-2. `tools/task.sh context --route project --target projects/<name>`で正本とGit境界を得る。
+1. 対象を一つに確定する。明示パスがなければ`projects/`直下の名前と各`PROJECT.md`の
+   `name` / `description`だけをRuntime標準検索で確認し、明示依頼なく新設しない。
+2. `git -C projects/<name> rev-parse --show-toplevel`で書込Git rootを確定する。
 3. `AGENTS.md`（あれば）→`PROJECT.md`→`STATE.md`の順に読み、対象契約（`#PC-xx`か`#status`）と合格条件を特定。
 4. 成立したDocs Route条件の正本とRequired参照だけを読む。
 
@@ -22,7 +22,7 @@ registryで`repository_role: public-foundation`と明示した公開基盤製品
 - 成果契約内で最小かつ完全に変更する。契約変更は`projects/LIFECYCLE.md#人間が決める遷移`。
 - `PROJECT.md`の検証を実行し、未実行を合格扱いしない。
 - 状態変化と同じ作業内で`STATE.md`を更新。
-- `tools/task.sh verify`後、scoped commitまで完結し、結果、証拠、commit、未完了を区別して報告する。
+- Project固有検証とroot validatorを実行し、結果、証拠、commit、未完了を区別して報告する。
 
 ## 詳細正本を読む条件
 

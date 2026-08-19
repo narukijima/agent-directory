@@ -1,4 +1,4 @@
 .tmp/
-.agent-cache/
+__pycache__/
 .env*
 .DS_Store

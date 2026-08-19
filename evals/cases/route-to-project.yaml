@@ -29,15 +29,6 @@ expect:
     - projects/market-scan/STATE.md
   must_run:
     - bash projects/market-scan/scripts/verify-report.sh
-    - tools/task.sh verify
-    - git add -- projects/market-scan
-    - git commit
-  must_not_run:
-    - git fetch
-    - git pull
-    - git push
-  must_report:
-    - local-task-and-commit-complete
   must_set:
     - projects/market-scan/STATE.md#現在の目標=2026年第3四半期レポートを作成する
   may_write:

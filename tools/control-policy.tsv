@@ -4,8 +4,8 @@ forbidden	.env*	secretや外部サービス設定の実値
 forbidden	*/.env*	secretや外部サービス設定の実値
 forbidden	.tmp/*	一時作業
 forbidden	*/.tmp/*	一時作業
-forbidden	.agent-cache/*	再生成可能cache
-forbidden	*/.agent-cache/*	再生成可能cache
+forbidden	__pycache__/*	Python生成物
+forbidden	*/__pycache__/*	Python生成物
 forbidden	.DS_Store	OS生成物
 forbidden	*/.DS_Store	OS生成物
 frozen	knowledge/raw/*	不変原資料
@@ -22,7 +22,6 @@ guarded	tools/install-git-hooks.sh	hook installer
 guarded	tools/hooks/*	managed hooks
 guarded	tools/validate-agent-directory.sh	構造validator
 guarded	tools/validator/*	validator内部checker
-guarded	tools/task.sh	通常入口
 guarded	tools/lib/project-registry.sh	Git rootとOwner解決
 guarded	tools/materialize-project-repositories.sh	Independent Project再現
 guarded	tools/run-evals.py	Core behavioral eval runner

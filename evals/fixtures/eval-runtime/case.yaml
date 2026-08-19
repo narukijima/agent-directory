@@ -1,13 +1,12 @@
 name: eval-runtime-fixture
-fixture: eval-runtime/workspace
 
 request: |
-  隔離workspaceで評価fixtureを実行して。
+  保存済みtraceを決定的に採点して。
 
 expect:
   route: meta
   must_search:
-    command: tools/find-context.sh
+    command: rg
     status: active
   max_candidates: 5
   max_read_files: 3
@@ -29,12 +28,8 @@ expect:
     - knowledge/raw/**
   must_report:
     - validation-completed
-  must_not_report:
-    - repeated-approval-required
 
 report_match:
   validation-completed:
     - (検証|validation)
     - (完了|PASS|completed)
-  repeated-approval-required:
-    - ((push.*前|GitHub.*外部送信).*(追加承認|確認).*必要(です|である|となる|だ|がある))

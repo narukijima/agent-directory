@@ -24,8 +24,8 @@ AIが自動でactiveへ戻さない。
 
 ## 人間が決める遷移
 
-次の遷移は利用者の意思決定を必要とする。依頼にその決定が明示されていれば、それをStanding Authorization
-として実行し、同じ遷移を再確認しない。決定内容が不足する場合だけ不足点を確認する。
+次の遷移は利用者の意思決定を必要とする。意思決定の取得・approval方式はRuntimeとOperatorが所有し、
+Agent Directoryは確定した決定と状態遷移だけを正本へ記録する。
 
 - mission、vision、目的、最終ゴール、継続的使命の変更。
 - `PROJECT.md`の成果契約、`PC-xx`、成功指標、完了条件、固定制約、判断原則、非ゴールの変更。
@@ -62,8 +62,8 @@ cloneが欠けている状態はstatusの表現ではなく、復旧途中のdeg
 Project削除は次をすべて満たす場合だけ行う。
 
 1. `status: retired`である。
-2. 利用者が一意なProject削除を明示指示しており、そのStanding Authorizationを
-   `PROJECT.md`の`deletion_approved: true`として記録して一度コミットしている。記録のために再承認を求めない。
+2. 利用者が一意なProject削除を決定しており、その決定を`PROJECT.md`の`deletion_approved: true`として
+   一度コミットしている。
 3. リポジトリ内からの参照がゼロである。
 4. 保持すべき成果物と監査証拠の保存先を`artifacts_retained_at: <repository-relative-path>`として記録している。
    保持対象がなく、`outputs/`にも追跡ファイルがない場合だけ`artifacts_retained_at: none`を使う。

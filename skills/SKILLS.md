@@ -1,8 +1,12 @@
-# SKILLS.md — 分析・判定手順の正本
+# SKILLS.md — Portable Skill sourceの正本
 
-Skill Routeを確定した後に読む。Knowledgeは「何が分かっているか」、Skillは「どう処理するか」、
+Skill sourceを作成・更新するときに読む。Knowledgeは「何が分かっているか」、Skillは「どう処理するか」、
 Projectは「何を作り残すか」を所有する。再利用可能な研究方法そのものを手順として作る依頼はこのRouteであり、
 具体的な研究活動と研究中の仮説はProjectが所有する。
+
+このディレクトリはSkill discovery、選択、起動、subagent実行を行わない。それらは各Runtimeが所有する。
+`skills/<name>/`はProvider間で共有できるsourceであり、consumerはRuntime標準のSkill配置へ薄いadapterまたは
+明示importで接続する。Provider固有frontmatterは共有sourceの必須契約にしない。
 
 ## 共有Skillライブラリ
 
@@ -18,15 +22,12 @@ bash /path/to/agent-skills/tools/import-skill.sh <skill-name> \
 インポート先には `skills/<skill-name>/agents/upstream.yaml` が作られ、配布元repository、commit SHA、Skill version、
 インポート時刻を記録する。既存Skillは上書きせず、更新時は上流との差分を確認してから明示的に再インポートする。
 
-## 対象の選択
+## Runtime接続
 
-1. 利用者がSkill名または`SKILL.md`のパスを明示したらそれを優先する。
-2. 未指定なら`tools/find-context.sh --route skill --limit 5 -- <query>`で候補を得る。
-3. 通常候補は`status: active`だけとし、`_template/`を候補にしない。
-4. 実行するSkillを1件に確定してから、その`SKILL.md`を最後まで読む。
-5. catalog、検索snippet、descriptionだけでSkillを実行しない。
-
-手動の全Skill一覧は持たない。各`SKILL.md`のfrontmatterが正本で、全件catalogはそこから再生成する。
+- Runtimeが発見する配置、発動条件、invocation policyはRuntime側設定が所有する。
+- Coreはsymlink、copy、plugin、importのいずれも強制せず、同じSkill本文の二重正本を作らない。
+- Runtime adapterはsourceを参照するだけの薄い層とし、手順本文やKnowledge参照を複製しない。
+- Skillを実行するときはRuntimeが選んだ`SKILL.md`を最後まで読み、descriptionだけで代用しない。
 
 ## frontmatterと状態
 
@@ -61,7 +62,7 @@ aliases: [別名]
   明示的な新規Skill作成依頼はこの確認を満たす。将来使うかもしれないという理由では追加しない。
 - `_template/`をコピーし、frontmatter、発動条件、手順、出力契約、Knowledge参照を置換する。
 - `_template/`自体はSkillではない。`SKILL.md`だけを持ち、空の下位フォルダを常設しない。
-- 利用者向け能力のコードはSkillの`candidates/`または`scripts/`が所有する。
+- Skill固有の決定的処理はSkillの`candidates/`または`scripts/`が所有する。
   一時コードから固定コードへの段階は`tools/TOOLS.md#一時作業`に従う。
 - 同じ目的の方法を2回目に使ったタスクの差分判定（`AGENTS.md#差分判定`）では、`candidates/`への
   記録可否を判定する。単発の成功をactive Skillへ直接昇格しない。
@@ -76,7 +77,7 @@ aliases: [別名]
 ```text
 skill-name/
 ├── SKILL.md      # 入口。発動条件、手順、出力契約、Knowledge参照
-├── agents/       # import provenance等、明示契約がある場合だけ
+├── agents/       # import provenance等、配布契約が要求する場合だけ
 ├── references/   # SKILL.mdに収まらない詳細な分析方法。必要時だけ読む
 ├── assets/       # 繰り返し使うテンプレートと出力雛形
 ├── candidates/   # 同じ目的で2回目に使う未安定な再利用候補。3回目の前に固定化を判断する

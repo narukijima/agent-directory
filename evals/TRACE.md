@@ -24,14 +24,4 @@ caseが要求しないeventは省略できる。pathとcommandは実際に観測
 - traceに無い期待は`UNVERIFIED`とする。
 - secret、credential、個人情報をtraceへ入れない。
 
-## Adapter
-
-`run-evals.py run`のadapterは次を受ける。
-
-```text
---request <path>
---workspace <path>
---trace <path>
-```
-
-adapterは隔離Workspaceだけへ書き、traceを指定pathへ出力する。
+traceの生成、adapter、model実行、隔離方法はRuntimeまたは外部eval harnessが所有する。

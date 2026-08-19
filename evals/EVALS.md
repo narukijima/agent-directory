@@ -1,7 +1,7 @@
 # EVALS.md — Core behavioral eval
 
-Agent Directory固有の判断契約だけを検証する。Provider、Runtime、認証、backup、Issue / PR、publish、
-deploy、scheduler、特定AI製品の設定は対象にしない。
+Agent Directory固有の判断契約だけを検証する。Provider、Runtime、認証、permission、Git操作、backup、
+Issue / PR、publish、deploy、scheduler、特定AI製品の設定は対象にしない。
 
 ## 範囲
 
@@ -12,7 +12,6 @@ Core suiteは次だけを扱う。
 - Knowledge原資料の不変性
 - Project契約とpaused状態
 - Single WriterとIndependent ownership
-- destructive ambiguityとStanding Authorization
 - Tool / Skill / 恒久物追加のOwner gate
 
 新しいcaseは原則追加しない。既存caseへ統合できず、Agent Directoryの公開契約に直接関係する場合だけ、
@@ -57,11 +56,11 @@ PASSにせず、`UNVERIFIED`として残す。
 
 ```bash
 python3 tools/run-evals.py score --case <case-name|path> --trace <trace.jsonl> [--json]
-python3 tools/run-evals.py run --adapter <executable> --profile core [--output-dir <dir>]
+python3 tools/run-evals.py validate
 ```
 
-`score`は保存済みtraceを採点する。`run`はcaseごとの隔離Workspaceでadapterを実行し、同じ採点器へ渡す。
-生成物は`.agent-cache/evals/`へ置き、正本にしない。
+`score`はRuntimeまたは外部harnessが生成した保存済みtraceを決定的に採点する。Core自身はadapter、AI、subagent、
+worktreeを起動しない。
 
 ## Core profile
 

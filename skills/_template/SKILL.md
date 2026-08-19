@@ -30,7 +30,8 @@ aliases: []
 ## 手順
 
 1. 依頼から分析対象と前提条件を確認する。不明なら着手前に利用者へ確認する。
-2. Requiredと、条件が成立したConditionalだけを読む。追加探索は`tools/find-context.sh`で最大5候補へ絞る。
+2. Requiredと、条件が成立したConditionalだけを読む。追加Knowledge探索はRuntime標準検索でactive候補を
+   最大5件へ絞る。
 3. 中間ファイルと一時コードは`.tmp/`に置いて分析する。
 4. 結果を「出力契約」の形式でまとめ、`.tmp/`を片付ける。
 

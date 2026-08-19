@@ -17,3 +17,8 @@ expect:
     - knowledge/raw/external/**
   must_report:
     - raw-records-are-immutable-correct-via-new-file-and-wiki
+
+report_match:
+  raw-records-are-immutable-correct-via-new-file-and-wiki:
+    - (raw|原資料).*(不変|immutable|書き換えない)
+    - (新規|new).*(Wiki|wiki)

@@ -57,7 +57,7 @@ else
   reference_md_files="$(git -C "$repo_root" ls-files '*.md' 2>/dev/null || true)"
   if [[ -z "$reference_md_files" ]]; then
     reference_md_files="$(cd "$repo_root" && find . -name '*.md' -type f \
-      -not -path './.git/*' -not -path './.agent-cache/*' -not -path './.tmp/*' \
+      -not -path './.git/*' -not -path './.tmp/*' \
       -not -path './projects/*/.git/*' 2>/dev/null | sed 's|^\./||')"
   fi
 fi

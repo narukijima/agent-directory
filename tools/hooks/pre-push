@@ -1,12 +1,9 @@
 #!/bin/bash
-# agent-directory managed hook v3 — pre-push
-# ref削除と非fast-forward push（force push相当）を拒否し、さらに送信対象のcommit内容を
-# 承認済みsnapshot（.git/agent-control/）のpolicyで再検査する。pre-commitを迂回して作られた
-# forbidden / frozen違反もremoteへ出る前に止める。外部操作は起動しない（tools/CONTROL.md）。
-# stdin: "<local ref> <local sha> <remote ref> <remote sha>" を1 pushed refごとに1行受け取る。
+# agent-directory managed hook v4 — pre-push
+# 送信予定commitをapproved policyで再検査する。ref deletion、fast-forward、branch policy、
+# PR / mergeはGit、対象Repository、Runtimeが所有する。
 set -euo pipefail
 
-remote_name="${1:-}"
 repo_root="$(cd "$(git rev-parse --show-toplevel)" && pwd -P)"
 export AGENT_DIRECTORY_ROOT="$repo_root"
 
@@ -20,7 +17,7 @@ if [[ ! -f "$verifier" || ! -f "$policy" ]]; then
   exit 1
 fi
 
-# pre-commitと同じ規則でsnapshotをHEADからだけ追従させる。
+# Workspace rootだけ、commit済みHEAD blobからsnapshotを追従させる。
 refresh_source='external'
 [[ -f "$control_dir/refresh-source" ]] && refresh_source="$(head -n 1 "$control_dir/refresh-source")"
 if [[ "$refresh_source" == 'head' && -f "$control_dir/approved.sha256" ]]; then
@@ -45,69 +42,32 @@ fi
 
 path_prefix=''
 [[ -f "$control_dir/path-prefix" ]] && path_prefix="$(head -n 1 "$control_dir/path-prefix")"
-
 zero='0000000000000000000000000000000000000000'
-# A fresh repository may not have the well-known empty tree object yet. Range validation
-# resolves both endpoints from the local object database, so write the empty tree before
-# using it as the full-history fallback for a new remote ref.
 empty_tree="$(git hash-object -t tree -w /dev/null)"
 status=0
 
-nearest_remote_ancestor() {
-  # New remote refs report an all-zero remote SHA. Exclude history already represented by
-  # this named remote's tracking refs and retain a full-history fallback when no source
-  # proves an ancestor.
-  local local_sha="$1" candidate distance best='' best_distance='' namespace
-  local tracking_namespaces=()
-  [[ -n "$remote_name" ]] && git remote get-url "$remote_name" >/dev/null 2>&1 || return 1
-  tracking_namespaces+=("refs/remotes/$remote_name/")
-  for namespace in "${tracking_namespaces[@]}"; do
-    while IFS= read -r candidate; do
-      [[ -n "$candidate" ]] || continue
-      git merge-base --is-ancestor "$candidate" "$local_sha" 2>/dev/null || continue
-      distance="$(git rev-list --count "$candidate..$local_sha")"
-      if [[ -z "$best_distance" ]] || (( distance < best_distance )); then
-        best="$candidate"
-        best_distance="$distance"
-      fi
-    done < <(git for-each-ref --format='%(objectname)' "$namespace")
-  done
-  [[ -n "$best" ]] || return 1
-  printf '%s\n' "$best"
-}
-
 while read -r local_ref local_sha remote_ref remote_sha; do
   [[ -n "$local_ref" ]] || continue
-  if [[ "$local_sha" == "$zero" ]]; then
-    printf 'BOUNDARY_BLOCKED reason=ref-deletion ref=%s\n' "$remote_ref" >&2
-    status=1
-    continue
-  fi
+  # Deleting a ref sends no new blob. Its policy belongs to Git/Repository configuration.
+  [[ "$local_sha" != "$zero" ]] || continue
+
   range_base="$empty_tree"
-  if [[ "$remote_sha" == "$zero" ]]; then
-    # A new branch/tag has no target-side base in the hook input. Prefer the nearest ancestor
-    # already tracked for this remote; with no provable base, scan the entire local history.
-    range_base="$(nearest_remote_ancestor "$local_sha" || printf '%s\n' "$empty_tree")"
-  else
-    # remote先端がローカル履歴のancestorでなければfast-forwardではない。remote objectを
-    # 持っていない場合も、fast-forwardであることを証明できないため拒否する。
-    if ! git cat-file -e "$remote_sha" 2>/dev/null || \
-       ! git merge-base --is-ancestor "$remote_sha" "$local_sha" 2>/dev/null; then
-      printf 'BOUNDARY_BLOCKED reason=non-fast-forward ref=%s remote_sha=%s\n' "$remote_ref" "$remote_sha" >&2
-      status=1
-      continue
-    fi
+  if [[ "$remote_sha" != "$zero" ]] && git cat-file -e "$remote_sha^{commit}" 2>/dev/null; then
     range_base="$remote_sha"
   fi
-  # 送信対象差分の内容再検査（rangeモード: forbidden / frozenの客観的違反だけを執行する）。
+
   set +e
-  range_output="$(/bin/bash "$verifier" --range "$range_base" "$local_sha" --policy "$policy" \
-    ${path_prefix:+--path-prefix "$path_prefix"} 2>&1)"
+  if [[ -n "$path_prefix" ]]; then
+    range_output="$(/bin/bash "$verifier" --range "$range_base" "$local_sha" --policy "$policy" \
+      --path-prefix "$path_prefix" 2>&1)"
+  else
+    range_output="$(/bin/bash "$verifier" --range "$range_base" "$local_sha" --policy "$policy" 2>&1)"
+  fi
   range_status=$?
   set -e
   if (( range_status != 0 )); then
     printf '%s\n' "$range_output" >&2
-    printf 'DETAIL: outgoing commits for %s violate the approved policy\n' "$remote_ref" >&2
+    printf 'DETAIL: outgoing commits for %s violate the approved structural policy\n' "$remote_ref" >&2
     status=1
   fi
 done
