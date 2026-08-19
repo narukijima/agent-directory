@@ -16,7 +16,7 @@ Structural safetyをProvider非依存の正本として保つ。
 - 大規模Knowledgeを限定取得するbounded context契約
 - Embedded / Independent ProjectのGit所有境界
 - repository / revisionからのIndependent Project再現
-- secret、不変原資料、protected変更を守るGit境界
+- secret-bearing fileを追跡しない静的検査
 - 外部AI、Hosted CI、特定Providerを必要としない静的validator
 - Route、Context、Knowledge、Project、安全境界の小型behavioral Core eval
 
@@ -35,8 +35,7 @@ Structural safetyをProvider非依存の正本として保つ。
 3. 共有Skillは`bash tools/import-skill.sh <name> --source /path/to/agent-skills`で取り込み、固有SkillまたはProjectだけを
    各`_template/`から作る。
 4. Agent固有の環境変数を未追跡のroot `.env`へ置き、Runtime、Provider、認証、permissionをそのAgentの環境で設定する。
-5. `bash tools/install-git-hooks.sh --install`を実行する。
-6. `bash tools/validate-agent-directory.sh --strict --full`を実行する。
+5. `bash tools/validate-agent-directory.sh --strict --full`を実行する。
 
 テンプレート配布状態では通常validatorは合格し、`--strict`は自己定義置換まで失敗する。
 
@@ -91,9 +90,7 @@ agent-directory/
 └── tools/
     ├── TOOLS.md
     ├── SAFETY.md
-    ├── CONTROL.md
-    ├── control-policy.tsv
-    └── 7 executable Tools + 5 internal files
+    └── 5 executable Tools + 2 internal files
 ```
 
 ## RuntimeとProvider
@@ -153,7 +150,6 @@ Skill sourceは`skills/<name>/SKILL.md`を直接使う。検索結果や製品�
 bash tools/validate-agent-directory.sh --changed
 bash tools/validate-agent-directory.sh
 bash tools/validate-agent-directory.sh --strict --full
-bash tools/validate-agent-directory.sh --full --base main
 python3 tools/run-evals.py score --case evals/fixtures/eval-runtime/case.yaml --trace evals/fixtures/eval-runtime/pass.jsonl
 ```
 
@@ -161,12 +157,12 @@ validatorは必須構造、frontmatter、サイズ、Project / Knowledge / Skill
 Markdown参照、Independent Project整合を検査する。networkと外部AIを必要としない。
 behavioral evalは[evals/EVALS.md](evals/EVALS.md)の小型Core profileだけを扱う。
 
-commit・push境界は`tools/check-boundary.sh`とmanaged hooksが執行する。protected変更の手順は
-[tools/CONTROL.md](tools/CONTROL.md)が所有する。
+commit、push、branch、PR、merge、approvalはGit、Runtime、Operator、対象Repositoryの標準機能が所有する。
+Core独自のpre-commit / pre-push hook、ack、receipt、approval layerは持たない。
 
 ## Tool
 
-`tools/`は15ファイル固定で、実行Toolは7本、内部実装は5ファイルである。完全な一覧とCLIは
+`tools/`は9ファイル固定で、実行Toolは5本、内部実装は2ファイルである。完全な一覧とCLIは
 [tools/TOOLS.md](tools/TOOLS.md)が所有する。
 
 新しいToolを追加する前に、既存Toolまたは対象Ownerへの統合を優先する。新設が不可避な場合は、
@@ -193,8 +189,7 @@ repository / revisionによる再現性、送信対象に対するsecret・不�
 | [projects/RECOVERY.md](projects/RECOVERY.md) | Project復旧 |
 | [evals/EVALS.md](evals/EVALS.md) / [evals/TRACE.md](evals/TRACE.md) | Core behavioral evalとtrace |
 | [tools/TOOLS.md](tools/TOOLS.md) | Tool allowlistとCLI |
-| [tools/SAFETY.md](tools/SAFETY.md) | 六つの安全不変条件 |
-| [tools/CONTROL.md](tools/CONTROL.md) | Git境界、ack、receipt |
+| [tools/SAFETY.md](tools/SAFETY.md) | 五つの安全不変条件 |
 
 ## ライセンス
 

@@ -9,7 +9,6 @@ strict=false
 full=false
 changed=false
 bootstrap_status=false
-base_ref=''
 failures=0
 warnings=0
 tool_fixture_root=''
@@ -20,7 +19,7 @@ cleanup() {
 trap cleanup EXIT
 
 usage() {
-  printf 'Usage: %s [--strict] [--full] [--changed] [--base <ref>] [--bootstrap-status]\n' "${0##*/}" >&2
+  printf 'Usage: %s [--strict] [--full] [--changed] [--bootstrap-status]\n' "${0##*/}" >&2
 }
 
 fail() {
@@ -38,11 +37,6 @@ while (( $# > 0 )); do
     --strict) strict=true; shift ;;
     --full) full=true; shift ;;
     --changed) changed=true; shift ;;
-    --base)
-      [[ $# -ge 2 ]] || { usage; exit 2; }
-      base_ref="$2"
-      shift 2
-      ;;
     --bootstrap-status) bootstrap_status=true; shift ;;
     -h|--help) usage; exit 0 ;;
     *) usage; exit 2 ;;
@@ -50,7 +44,7 @@ while (( $# > 0 )); do
 done
 
 if [[ "$bootstrap_status" == true ]]; then
-  [[ "$strict" == false && "$full" == false && "$changed" == false && -z "$base_ref" ]] || {
+  [[ "$strict" == false && "$full" == false && "$changed" == false ]] || {
     usage
     exit 2
   }
@@ -239,7 +233,6 @@ validate_skill_adapter() {
 
 validate_tool_behaviors() {
   local fixture_root append_root append_output
-  local control_root control_output hook_output head_sha zero_sha push_output
   local materialize_root upstream_work upstream_bare adopted_sha materialize_output
   local skill_source_root skill_target_root skill_import_output second_import_output
 
@@ -306,58 +299,6 @@ validate_tool_behaviors() {
      -L "$skill_target_root/.agents/skills/sample-skill" && \
      -L "$skill_target_root/.claude/skills/sample-skill" ]] || \
     fail 'import-skill.sh damaged existing canon or adapters after a rejected reimport'
-
-  # Git boundary: install only committed snapshots, allow an ordinary commit, reject a
-  # forbidden path, and exercise both managed hook entrypoints.
-  control_root="$fixture_root/control"
-  mkdir -p "$control_root/tools/hooks" "$control_root/projects"
-  cp "$repo_root/tools/install-git-hooks.sh" "$control_root/tools/install-git-hooks.sh"
-  cp "$repo_root/tools/check-boundary.sh" "$control_root/tools/check-boundary.sh"
-  cp "$repo_root/tools/control-policy.tsv" "$control_root/tools/control-policy.tsv"
-  cp "$repo_root/tools/hooks/pre-commit" "$control_root/tools/hooks/pre-commit"
-  cp "$repo_root/tools/hooks/pre-push" "$control_root/tools/hooks/pre-push"
-  git -C "$control_root" init -q
-  git -C "$control_root" config user.name 'Agent Directory Fixture'
-  git -C "$control_root" config user.email 'fixture@example.invalid'
-  git -C "$control_root" add tools
-  git -C "$control_root" commit -qm 'Create control fixture'
-  hook_output="$(AGENT_DIRECTORY_ROOT="$control_root" bash "$control_root/tools/install-git-hooks.sh" --install 2>&1)" || \
-    fail "install-git-hooks.sh install self-check failed: $hook_output"
-  printf '%s\n' "$hook_output" | grep -Fqx 'HOOKS_INSTALLED hooks=2 independent=0' || \
-    fail 'install-git-hooks.sh did not install both managed hooks'
-  hook_output="$(AGENT_DIRECTORY_ROOT="$control_root" bash "$control_root/tools/install-git-hooks.sh" --status 2>&1)" || \
-    fail "install-git-hooks.sh status self-check failed: $hook_output"
-  printf '%s\n' "$hook_output" | grep -Fq 'pre-commit=managed pre-push=managed' || \
-    fail 'install-git-hooks.sh did not report managed hooks'
-
-  printf 'ordinary\n' > "$control_root/ordinary.txt"
-  git -C "$control_root" add ordinary.txt
-  control_output="$(cd "$control_root" && AGENT_DIRECTORY_ROOT="$control_root" \
-    /bin/bash tools/check-boundary.sh --staged --policy tools/control-policy.tsv 2>&1)" || \
-    fail "check-boundary.sh ordinary self-check failed: $control_output"
-  printf '%s\n' "$control_output" | grep -Fq 'BOUNDARY_OK' || \
-    fail 'check-boundary.sh did not allow an ordinary staged path'
-  control_output="$(git -C "$control_root" commit -qm 'Add ordinary fixture' 2>&1)" || \
-    fail "managed pre-commit ordinary self-check failed: $control_output"
-
-  head_sha="$(git -C "$control_root" rev-parse HEAD)"
-  zero_sha='0000000000000000000000000000000000000000'
-  push_output="$(cd "$control_root" && \
-    printf 'refs/heads/main %s refs/heads/main %s\n' "$head_sha" "$zero_sha" | \
-    .git/hooks/pre-push origin 2>&1)" || \
-    fail "managed pre-push self-check failed: $push_output"
-
-  printf 'fixture-secret-value-1234567890\n' > "$control_root/.env"
-  git -C "$control_root" add -f .env
-  if control_output="$(cd "$control_root" && AGENT_DIRECTORY_ROOT="$control_root" \
-      /bin/bash tools/check-boundary.sh --staged --policy tools/control-policy.tsv 2>&1)"; then
-    fail 'check-boundary.sh allowed the forbidden .env path'
-  elif ! printf '%s\n' "$control_output" | grep -Fq 'BOUNDARY_BLOCKED'; then
-    fail "check-boundary.sh returned an unexpected forbidden-path result: $control_output"
-  fi
-  if git -C "$control_root" commit -qm 'Must be rejected' >/dev/null 2>&1; then
-    fail 'managed pre-commit allowed the forbidden .env path'
-  fi
 
   # Independent Project: clone one local fixture at the exact registered revision,
   # then verify that a second --check observes the same clean attachment.
@@ -431,16 +372,10 @@ required_files=(
   'evals/EVALS.md'
   'evals/TRACE.md'
   'evals/profiles/core.txt'
-  'tools/CONTROL.md'
   'tools/SAFETY.md'
   'tools/TOOLS.md'
   'tools/append-knowledge-log.sh'
-  'tools/check-boundary.sh'
-  'tools/control-policy.tsv'
-  'tools/hooks/pre-commit'
-  'tools/hooks/pre-push'
   'tools/import-skill.sh'
-  'tools/install-git-hooks.sh'
   'tools/lib/project-registry.sh'
   'tools/materialize-project-repositories.sh'
   'tools/run-evals.py'
@@ -452,16 +387,10 @@ for path in "${required_files[@]}"; do
 done
 
 expected_tools="$(cat <<'TOOLS'
-tools/CONTROL.md
 tools/SAFETY.md
 tools/TOOLS.md
 tools/append-knowledge-log.sh
-tools/check-boundary.sh
-tools/control-policy.tsv
-tools/hooks/pre-commit
-tools/hooks/pre-push
 tools/import-skill.sh
-tools/install-git-hooks.sh
 tools/lib/project-registry.sh
 tools/materialize-project-repositories.sh
 tools/run-evals.py
@@ -474,7 +403,7 @@ actual_tools="$(
   find tools -type f -not -name '.DS_Store' -not -path '*/__pycache__/*' -print | LC_ALL=C sort
 )"
 if [[ "$actual_tools" != "$expected_tools" ]]; then
-  fail 'tools/ differs from the 15-file owner-approved allowlist'
+  fail 'tools/ differs from the 9-file owner-approved allowlist'
   diff -u <(printf '%s\n' "$expected_tools") <(printf '%s\n' "$actual_tools") >&2 || true
 fi
 
@@ -534,7 +463,6 @@ grep -Fq '新しいToolは原則追加しない' "$repo_root/tools/TOOLS.md" || 
 grep -Fq 'validatorはそれらを' "$repo_root/README.md" || fail 'README.md must allow downstream Runtime adapters'
 grep -Fq 'これはRuntimeが一時的なsession isolationや並列作業にGit worktreeを使うことを' "$repo_root/README.md" || fail 'README.md must allow Runtime worktrees'
 grep -Fq 'Skill discovery、選択、起動、subagent実行を行わない' "$repo_root/skills/SKILLS.md" || fail 'skills/SKILLS.md must remain a source contract, not a Skill runtime'
-grep -Fq 'if [[ "$op" == '\''delete'\'' ]]' "$repo_root/tools/check-boundary.sh" || fail 'check-boundary.sh must permit cleanup deletion of forbidden paths'
 
 if [[ "$strict" == true ]] && grep -Eq '<agent-name>|<agent-role>|<agent-mission>|<agent-vision>|<operator-language>' "$repo_root/AGENTS.md"; then
   fail 'AGENTS.md contains unresolved deployment placeholders'
@@ -548,7 +476,6 @@ check_size 'projects/PROJECTS.md' 24576 'projects/PROJECTS.md'
 check_size 'projects/DOCS.md' 24576 'projects/DOCS.md'
 check_size 'tools/TOOLS.md' 20480 'tools/TOOLS.md'
 check_size 'tools/SAFETY.md' 20480 'tools/SAFETY.md'
-check_size 'tools/CONTROL.md' 20480 'tools/CONTROL.md'
 check_size 'knowledge/wiki/INDEX.md' 8192 'knowledge/wiki/INDEX.md'
 check_size 'knowledge/wiki/LOG.md' 131072 'knowledge/wiki/LOG.md'
 
@@ -607,27 +534,13 @@ for project_dir in "$repo_root"/projects/*; do
   fi
 done
 
-if [[ -f "$repo_root/tools/control-policy.tsv" ]]; then
-  awk -F '\t' '
-    /^($|#)/ { next }
-    $1 !~ /^(exempt|forbidden|frozen|guarded|contract)$/ || $2 == "" || NF > 3 { bad = 1 }
-    END { exit bad }
-  ' "$repo_root/tools/control-policy.tsv" || fail 'tools/control-policy.tsv has an invalid row'
-  pins=('forbidden:.env*' 'frozen:knowledge/raw/*' 'frozen:knowledge/wiki/logs/*' 'guarded:AGENTS.md' 'guarded:skills/SKILLS.md' 'guarded:tools/SAFETY.md' 'guarded:tools/CONTROL.md' 'guarded:tools/TOOLS.md' 'guarded:tools/control-policy.tsv' 'guarded:tools/check-boundary.sh' 'guarded:tools/import-skill.sh' 'guarded:tools/install-git-hooks.sh' 'guarded:tools/validate-agent-directory.sh' 'guarded:tools/run-evals.py' 'guarded:evals/*' 'contract:projects/*/PROJECT.md')
-  for pin in "${pins[@]}"; do
-    tier="${pin%%:*}"
-    pattern="${pin#*:}"
-    awk -F '\t' -v tier="$tier" -v pattern="$pattern" '$1 == tier && $2 == pattern { found = 1 } END { exit !found }' "$repo_root/tools/control-policy.tsv" || fail "control policy lost: $pin"
-  done
-fi
-
 while IFS= read -r script; do
   /bin/bash -n "$repo_root/$script" || fail "$script fails bash -n"
 done < <(cd "$repo_root" && find tools -type f -name '*.sh' -print | LC_ALL=C sort)
 
 python3 -c 'import sys; compile(open(sys.argv[1], encoding="utf-8").read(), sys.argv[1], "exec")' "$repo_root/tools/run-evals.py" || fail 'tools/run-evals.py has invalid Python syntax'
 
-executables=(tools/append-knowledge-log.sh tools/check-boundary.sh tools/import-skill.sh tools/install-git-hooks.sh tools/materialize-project-repositories.sh tools/validate-agent-directory.sh)
+executables=(tools/append-knowledge-log.sh tools/import-skill.sh tools/materialize-project-repositories.sh tools/validate-agent-directory.sh)
 executables+=(tools/run-evals.py)
 for executable in "${executables[@]}"; do
   [[ -x "$repo_root/$executable" ]] || fail "$executable is not executable"
@@ -640,15 +553,6 @@ if git -C "$repo_root" rev-parse --show-toplevel >/dev/null 2>&1; then
     tracked_forbidden="${tracked_forbidden}${tracked_path}\n"
   done < <(git -C "$repo_root" ls-files | grep -E '(^|/)(\.env($|\.)|\.DS_Store$|\.tmp/|__pycache__/)' || true)
   [[ -z "$tracked_forbidden" ]] || fail "forbidden generated or secret-bearing paths are tracked"
-fi
-
-if [[ -n "$base_ref" ]]; then
-  git -C "$repo_root" rev-parse --verify "$base_ref^{commit}" >/dev/null 2>&1 || fail "base ref does not resolve: $base_ref"
-  if (( failures == 0 )); then
-    boundary_output="$(cd "$repo_root" && bash tools/check-boundary.sh --base "$base_ref" 2>&1)" || {
-      fail "boundary check failed from $base_ref: $boundary_output"
-    }
-  fi
 fi
 
 if [[ "$full" == true ]]; then
@@ -675,22 +579,6 @@ fi
 if (( failures > 0 )); then
   printf 'FAILED: %s structural issue(s), %s warning(s)\n' "$failures" "$warnings" >&2
   exit 1
-fi
-
-if [[ "$full" == true ]] && git -C "$repo_root" rev-parse --show-toplevel >/dev/null 2>&1; then
-  staged_count="$(git -C "$repo_root" diff --cached --name-only | wc -l | tr -d ' ')"
-  if (( staged_count > 0 )); then
-    receipt_tree="$(git -C "$repo_root" write-tree 2>/dev/null)" || {
-      printf 'FAILED: cannot bind full-validation receipt to the staged index\n' >&2
-      exit 1
-    }
-    receipt_root="$(git -C "$repo_root" rev-parse --git-path agent-control)"
-    case "$receipt_root" in /*) ;; *) receipt_root="$repo_root/$receipt_root" ;; esac
-    mkdir -p "$receipt_root/receipts"
-    rm -f "$receipt_root/receipts/"* 2>/dev/null || true
-    printf 'tree=%s\n' "$receipt_tree" > "$receipt_root/receipts/$receipt_tree"
-    printf 'RECEIPT: full-validation receipt issued for index tree %s\n' "$receipt_tree"
-  fi
 fi
 
 [[ "$changed" != true ]] || printf 'NOTE: --changed uses the complete static contract\n' >&2

@@ -73,7 +73,7 @@ Independent Projectでは、この削除ゲートを通るまでcloneを先に�
 `projects/REPOSITORIES.md`のentry、`projects/.gitignore`のmanaged entry、Project cloneを一体として
 削除する。削除前に採用revisionと全local refがremoteから復旧可能であることを確認する。
 
-削除は、上記metadataを持つretired状態をbase commitに残した次の変更で行う。validatorは`--base`で
-base側の状態、承認、成果物保持先、現在の参照ゼロ、ディレクトリ全削除を検査する。
+削除は、上記metadataを持つretired状態をbase commitに残した次の変更で行う。削除前にbase側の状態、承認、
+成果物保持先、現在の参照ゼロ、ディレクトリ全削除をGit差分と対象Project契約で確認する。
 
 pausedやcompletedを「古い」「動きがない」という理由だけで削除しない。
