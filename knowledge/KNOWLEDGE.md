@@ -12,7 +12,7 @@ wiki = 根拠へ遡れる現在のKnowledge
 ```
 
 `internal / external`と`sources / topics`は保存先を決める下位分類であり、Knowledge Routeの入口で
-毎回再判断しない。INDEXとLOGは本文の代替ではなく、必要時だけ使う索引・運用記録である。
+毎回再判断しない。INDEXは本文の代替ではなく、必要時だけ使う索引である。
 
 ```text
 knowledge/
@@ -22,8 +22,6 @@ knowledge/
 │   └── external/          # 外部から取得した不変の原資料
 └── wiki/
     ├── INDEX.md           # 分野・主要hubへの小型ルートマップ
-    ├── LOG.md             # 現在の変更履歴セグメント
-    ├── logs/              # 閉鎖済みの不変ログ
     ├── _template/         # SOURCE.md / TOPIC.md の雛形
     ├── sources/           # 一つの原資料を解釈したKnowledge
     └── topics/            # 複数の根拠や判断を統合したKnowledge
@@ -42,7 +40,7 @@ knowledge/
 ```text
 原資料が届く → raw/internal/ または raw/external/ へ保存
 → sources/ に資料別Knowledgeを作成 → 根拠が揃ったら topics/ へ統合
-→ frontmatterへ状態を記録 → 必要ならINDEXの入口を更新 → append-knowledge-log.shで記録
+→ frontmatterへ状態を記録 → 必要ならINDEXの入口を更新
 ```
 
 成果物はProject、手順はSkillが所有する。製品側の永続メモリは正本から派生する任意のキャッシュであり、
@@ -50,7 +48,7 @@ knowledge/
 リポジトリ内に製品側メモリ専用の並列記録領域を置かない。秘密情報はどちらにも保存しない。
 
 利用者は原文、判断、資料を提供し、知識の正しさを最終判断する。エージェントは分類、保存、ノート化、統合、
-状態管理、必要なindexとlogの更新を行う。
+状態管理、必要なINDEXの更新を行う。
 
 ## 不変規則
 
@@ -77,7 +75,7 @@ Researchは独立したRouteでも独立したルートディレクトリでも�
 Knowledge Routeが扱うのは、原資料の取り込み、記憶、照会、統合、Knowledgeの更新である。
 「新しい問いへの答えを調査・実験によって見つける」依頼はProject Routeであり、研究方法そのものを
 再利用可能な手順として作る依頼はSkill Routeである。Project内の研究文書を、昇格条件を満たさないまま
-Root Knowledgeとして扱わない。昇格条件と昇格時の責務は`projects/DOCS.md#研究文書とKnowledge昇格`が
+Root Knowledgeとして扱わない。昇格条件と昇格時の責務は`projects/PROJECTS.md#Project文書の任意拡張`が
 所有する。
 
 ## 候補探索と読込
@@ -90,7 +88,7 @@ Root Knowledgeとして扱わない。昇格条件と昇格時の責務は`proje
 - `INDEX.md`やRuntime検索indexの全件読込を候補選択に使わない。
 - `superseded`、`archived`、`retired`を通常判断に使わない。旧ページを明示された場合は
   `superseded_by`が示すactiveページを優先する。
-- `LOG.md`、`logs/`、Git履歴は、監査、復旧、過去判断の確認、利用者の明示依頼を除き読まない。
+- Git履歴は、監査、復旧、過去判断の確認、利用者の明示依頼を除き読まない。
 - 検索結果だけで回答せず、採用したKnowledge正本を読む。24KiB超の部分読込と総読込予算は
   `AGENTS.md#Context Loading`に従う。
 
@@ -101,14 +99,14 @@ Root Knowledgeとして扱わない。昇格条件と昇格時の責務は`proje
 `tools/TOOLS.md#サイズ予算`が所有する。
 
 - 見出し単位の部分読込、frontmatter metadataによる候補選択、検索による限定取得
-- `INDEX.md`とDomain Canonからの段階的開示、不変原資料と解釈済みKnowledgeの分離
+- `INDEX.md`とProject固有の入口文書からの段階的開示、不変原資料と解釈済みKnowledgeの分離
 - 全件監査時のバッチ処理
 
 24KiBを超えるactiveなWikiページは、見出しと参照先を索引する`## Retrieval Map`節を持ち、
 全文読込なしで該当節へ到達できるようにする（上限64KiBは`tools/TOOLS.md#サイズ予算`）。
 
-閾値と処理結果が決定的な保守は、AIまたはToolが確認を求めず自動実行する。`LOG.md`のローテーションが
-これに当たり、利用者が分割方法を選ばない。統合先が一意で情報損失がない統合とsupersedeも自律実行する。
+閾値と処理結果が決定的な保守は、AIまたはToolが確認を求めず自動実行する。統合先が一意で
+情報損失がない統合とsupersedeも自律実行する。
 どのページを現在有効な正本とするかが一意に決まらない場合と、内容が矛盾する場合は、
 `AGENTS.md#人間へ上げる例外`として上げる。
 
@@ -126,9 +124,8 @@ Root Knowledgeとして扱わない。昇格条件と昇格時の責務は`proje
 固定ファイルは大文字名、利用者が作るKnowledgeページは小文字ケバブケースとする。
 
 ```text
-テンプレート固定Wikiファイル = INDEX.md / LOG.md / _template/SOURCE.md / _template/TOPIC.md
+テンプレート固定Wikiファイル = INDEX.md / _template/SOURCE.md / _template/TOPIC.md
 利用者作成Knowledge          = sources/<lowercase-kebab>.md / topics/<lowercase-kebab>.md
-閉鎖済みlog                  = logs/YYYY-QN[-NN].md
 ```
 
 大文字を許すのは上記の固定ファイルだけとし、`_template/`をコピーして作る実際のページへ広げない。
@@ -164,7 +161,7 @@ Wikiでは次を混ぜずに書く。
 
 出典のない事実主張を書かない。不確実性、反対証拠、適用範囲、有効期間を失わない。
 
-この区別はWikiに限らず、`STATE.md`、Domain Canon、Skillへの保存にも適用する。確定情報として
+この区別はWikiに限らず、`STATE.md`、Project文書、Skillへの保存にも適用する。確定情報として
 扱えるのは、利用者が明示した判断と、Tool実行・検証の結果だけである。AIの推論・提案は、
 利用者が採用を明示するまで帰属付きの推論・仮説として保存する。
 
@@ -190,7 +187,7 @@ Wikiでは次を混ぜずに書く。
 3. 変更した正本のpathを参照する正本をpath検索で決定的に列挙し、直接依存だけを確認する。
    意味的に影響する依存だけを更新し、全Knowledgeを読み直さない。
 4. peer正本同士で結論が割れたら自動統合せず、`AGENTS.md#人間へ上げる例外`として上げる。
-5. 参照整合を検証し、`tools/append-knowledge-log.sh`で記録する。Runtime側cacheは正本からの派生に限定する。
+5. 参照整合を検証する。Runtime側cacheは正本からの派生に限定する。
 
 伝播を終えるまで訂正タスクを完了と報告しない。
 
@@ -202,21 +199,11 @@ Wikiでは次を混ぜずに書く。
 - `raw/`配下や全WikiをINDEXへ個別登録しない。全件探索はRuntime標準のファイル検索を使う。
 - 項目追加・削除は入口としての価値が変わる場合だけ行う。
 
-## LOG
-
-- Knowledgeの永続変更だけを`tools/append-knowledge-log.sh`で記録する。`LOG.md`を直接追記しない。
-- 実行例: `tools/append-knowledge-log.sh --type ingest --target knowledge/wiki/topics/example.md --summary "要約"`
-- 種別は`ingest | lint | migration | supersede | archive | retire`とする。通常照会は記録しない。
-- LOGと過去logは既定の読込対象にしない。
-- Toolは追記後に128KiBまたは1,000記録へ達すると、自動で`logs/YYYY-QN.md`へ閉じて現在logを初期化する。
-  同じ四半期の2本目以降は`YYYY-QN-02.md`のように採番する。利用者が手作業で分割しない。
-- 閉鎖済みlogは編集、削除、改名しない。
-
 ## archive・retire・削除
 
 - `archived`は歴史照会だけ、`retired`は判断利用禁止とする。状態変更のために物理移動しない。
 - 非activeページの削除は、参照ゼロ、代替または保持先確認、利用者の明示承認が揃った場合だけ行う。
-- `raw/`配下と閉鎖済みlogは削除しない。
+- `raw/`配下は削除しない。
 
 ## lint
 

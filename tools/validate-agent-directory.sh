@@ -232,29 +232,12 @@ validate_skill_adapter() {
 }
 
 validate_tool_behaviors() {
-  local fixture_root append_root append_output
+  local fixture_root
   local materialize_root upstream_work upstream_bare adopted_sha materialize_output
   local skill_source_root skill_target_root skill_import_output second_import_output
 
   fixture_root="$(mktemp -d "${TMPDIR:-/tmp}/agent-directory-tool-test.XXXXXX")"
   tool_fixture_root="$fixture_root"
-
-  # Knowledge LOG: the 1,000th record must rotate to a closed quarterly log and leave
-  # only the current header in LOG.md.
-  append_root="$fixture_root/append"
-  mkdir -p "$append_root/knowledge/wiki"
-  printf '# Knowledge Log\n\n---\n' > "$append_root/knowledge/wiki/LOG.md"
-  awk 'BEGIN { for (i = 1; i <= 999; i++) print "2026-08-01  ingest      knowledge/wiki/topics/example.md  fixture" }' \
-    >> "$append_root/knowledge/wiki/LOG.md"
-  append_output="$(AGENT_DIRECTORY_ROOT="$append_root" bash "$repo_root/tools/append-knowledge-log.sh" \
-    --date 2026-08-19 --type ingest --target knowledge/wiki/topics/final.md --summary fixture 2>&1)" || \
-    fail "append-knowledge-log.sh self-check failed: $append_output"
-  printf '%s\n' "$append_output" | grep -Fq 'ROTATED: knowledge/wiki/logs/2026-Q3.md' || \
-    fail 'append-knowledge-log.sh did not rotate at the documented threshold'
-  grep -Fq 'knowledge/wiki/topics/final.md' "$append_root/knowledge/wiki/logs/2026-Q3.md" 2>/dev/null || \
-    fail 'append-knowledge-log.sh rotation lost the appended record'
-  [[ "$(grep -Ec '^[0-9]{4}-[0-9]{2}-[0-9]{2}[[:space:]]+' "$append_root/knowledge/wiki/LOG.md" || true)" == '0' ]] || \
-    fail 'append-knowledge-log.sh did not reset the current log after rotation'
 
   # Skill import: preserve provenance, normalize portable frontmatter, and create
   # exactly one native symlink adapter for each supported Runtime.
@@ -355,30 +338,22 @@ required_files=(
   'README.md'
   'knowledge/KNOWLEDGE.md'
   'knowledge/wiki/INDEX.md'
-  'knowledge/wiki/LOG.md'
   'knowledge/wiki/_template/SOURCE.md'
   'knowledge/wiki/_template/TOPIC.md'
   'skills/SKILLS.md'
   'skills/_template/SKILL.md'
   'projects/AGENTS.md'
-  'projects/DOCS.md'
   'projects/LIFECYCLE.md'
   'projects/PROJECTS.md'
-  'projects/RECOVERY.md'
   'projects/REPOSITORIES.md'
   'projects/.gitignore'
   'projects/_template/PROJECT.md'
   'projects/_template/STATE.md'
-  'evals/EVALS.md'
-  'evals/TRACE.md'
-  'evals/profiles/core.txt'
   'tools/SAFETY.md'
   'tools/TOOLS.md'
-  'tools/append-knowledge-log.sh'
   'tools/import-skill.sh'
   'tools/lib/project-registry.sh'
   'tools/materialize-project-repositories.sh'
-  'tools/run-evals.py'
   'tools/validate-agent-directory.sh'
   'tools/validator/check-markdown-references.sh'
 )
@@ -389,11 +364,9 @@ done
 expected_tools="$(cat <<'TOOLS'
 tools/SAFETY.md
 tools/TOOLS.md
-tools/append-knowledge-log.sh
 tools/import-skill.sh
 tools/lib/project-registry.sh
 tools/materialize-project-repositories.sh
-tools/run-evals.py
 tools/validate-agent-directory.sh
 tools/validator/check-markdown-references.sh
 TOOLS
@@ -403,53 +376,9 @@ actual_tools="$(
   find tools -type f -not -name '.DS_Store' -not -path '*/__pycache__/*' -print | LC_ALL=C sort
 )"
 if [[ "$actual_tools" != "$expected_tools" ]]; then
-  fail 'tools/ differs from the 9-file owner-approved allowlist'
+  fail 'tools/ differs from the 7-file owner-approved allowlist'
   diff -u <(printf '%s\n' "$expected_tools") <(printf '%s\n' "$actual_tools") >&2 || true
 fi
-
-expected_evals="$(cat <<'EVALS'
-evals/EVALS.md
-evals/TRACE.md
-evals/cases/context-budget-stop.yaml
-evals/cases/independent-root-content-boundary.yaml
-evals/cases/owner-gated-permanent-addition.yaml
-evals/cases/project-goal-change-protection.yaml
-evals/cases/protect-immutable-records.yaml
-evals/cases/protect-paused-project.yaml
-evals/cases/route-to-knowledge.yaml
-evals/cases/route-to-project.yaml
-evals/cases/route-to-skill.yaml
-evals/fixtures/active-project/projects/market-scan/AGENTS.md
-evals/fixtures/active-project/projects/market-scan/PROJECT.md
-evals/fixtures/active-project/projects/market-scan/STATE.md
-evals/fixtures/active-project/projects/market-scan/inputs/quarter.csv
-evals/fixtures/active-project/projects/market-scan/outputs/quarterly-report.md
-evals/fixtures/active-project/projects/market-scan/scripts/verify-report.sh
-evals/fixtures/active-skill/skills/literature-review/SKILL.md
-evals/fixtures/eval-runtime/case.yaml
-evals/fixtures/eval-runtime/pass.jsonl
-evals/fixtures/independent-project/projects/.gitignore
-evals/fixtures/independent-project/projects/REPOSITORIES.md
-evals/fixtures/independent-project/projects/data-pipeline/AGENTS.md
-evals/fixtures/independent-project/projects/data-pipeline/PROJECT.md
-evals/fixtures/independent-project/projects/data-pipeline/STATE.md
-evals/fixtures/protect-paused-project/projects/market-scan/PROJECT.md
-evals/fixtures/protect-paused-project/projects/market-scan/STATE.md
-evals/profiles/core.txt
-EVALS
-)"
-actual_evals="$(
-  cd "$repo_root"
-  find evals -type f -print | LC_ALL=C sort
-)"
-if [[ "$actual_evals" != "$expected_evals" ]]; then
-  fail 'evals/ differs from the owner-approved 9-case Core suite'
-  diff -u <(printf '%s\n' "$expected_evals") <(printf '%s\n' "$actual_evals") >&2 || true
-fi
-
-profile_cases="$(grep -Ev '^[[:space:]]*(#|$)' "$repo_root/evals/profiles/core.txt" | LC_ALL=C sort)"
-actual_cases="$(find "$repo_root/evals/cases" -type f -name '*.yaml' -exec basename {} .yaml \; | LC_ALL=C sort)"
-[[ "$profile_cases" == "$actual_cases" ]] || fail 'evals/profiles/core.txt must list every Core case exactly once'
 
 for heading in '## 自己定義' '## 共通判断原則' '## Route' '## Context Loading' '## 自律実行' '## 差分判定' '## 人間へ上げる例外' '## 禁止事項' '## 参照順序'; do
   grep -Fqx "$heading" "$repo_root/AGENTS.md" || fail "AGENTS.md is missing heading: $heading"
@@ -473,11 +402,9 @@ check_size 'projects/AGENTS.md' 2048 'projects/AGENTS.md'
 check_size 'knowledge/KNOWLEDGE.md' 20480 'knowledge/KNOWLEDGE.md'
 check_size 'skills/SKILLS.md' 20480 'skills/SKILLS.md'
 check_size 'projects/PROJECTS.md' 24576 'projects/PROJECTS.md'
-check_size 'projects/DOCS.md' 24576 'projects/DOCS.md'
 check_size 'tools/TOOLS.md' 20480 'tools/TOOLS.md'
 check_size 'tools/SAFETY.md' 20480 'tools/SAFETY.md'
 check_size 'knowledge/wiki/INDEX.md' 8192 'knowledge/wiki/INDEX.md'
-check_size 'knowledge/wiki/LOG.md' 131072 'knowledge/wiki/LOG.md'
 
 while IFS= read -r -d '' page; do
   validate_status_file "$page"
@@ -527,9 +454,6 @@ for project_dir in "$repo_root"/projects/*; do
     [[ -f "$project_dir/PROJECT.md" ]] || fail "projects/$project_name is missing PROJECT.md"
     [[ -f "$project_dir/STATE.md" ]] || fail "projects/$project_name is missing STATE.md"
     validate_status_file "$project_dir/PROJECT.md"
-    if [[ -d "$project_dir/docs" || -f "$project_dir/ARCHITECTURE.md" ]]; then
-      [[ -f "$project_dir/AGENTS.md" ]] || fail "projects/$project_name needs AGENTS.md to route optional docs"
-    fi
     [[ ! -f "$project_dir/AGENTS.md" ]] || check_size "projects/$project_name/AGENTS.md" 2048 "projects/$project_name/AGENTS.md"
   fi
 done
@@ -538,10 +462,7 @@ while IFS= read -r script; do
   /bin/bash -n "$repo_root/$script" || fail "$script fails bash -n"
 done < <(cd "$repo_root" && find tools -type f -name '*.sh' -print | LC_ALL=C sort)
 
-python3 -c 'import sys; compile(open(sys.argv[1], encoding="utf-8").read(), sys.argv[1], "exec")' "$repo_root/tools/run-evals.py" || fail 'tools/run-evals.py has invalid Python syntax'
-
-executables=(tools/append-knowledge-log.sh tools/import-skill.sh tools/materialize-project-repositories.sh tools/validate-agent-directory.sh)
-executables+=(tools/run-evals.py)
+executables=(tools/import-skill.sh tools/materialize-project-repositories.sh tools/validate-agent-directory.sh)
 for executable in "${executables[@]}"; do
   [[ -x "$repo_root/$executable" ]] || fail "$executable is not executable"
 done
@@ -562,14 +483,6 @@ if [[ "$full" == true ]]; then
   }
   if (( failures == 0 )); then
     materialize_output="$(bash "$repo_root/tools/materialize-project-repositories.sh" --all --check 2>&1)" || fail "Independent Project check failed: $materialize_output"
-  fi
-  if (( failures == 0 )); then
-    eval_schema_output="$(cd "$repo_root" && python3 tools/run-evals.py validate 2>&1)" || fail "Core eval case validation failed: $eval_schema_output"
-    printf '%s\n' "$eval_schema_output" | grep -Fqx 'EVAL_CASES_VALID count=9' || fail 'Core eval case validation did not cover the 9-case suite'
-  fi
-  if (( failures == 0 )); then
-    eval_output="$(cd "$repo_root" && python3 tools/run-evals.py score --case evals/fixtures/eval-runtime/case.yaml --trace evals/fixtures/eval-runtime/pass.jsonl 2>&1)" || fail "Core eval runner self-check failed: $eval_output"
-    printf '%s\n' "$eval_output" | grep -Fq 'status=PASS' || fail 'Core eval runner self-check did not report PASS'
   fi
   if (( failures == 0 )); then
     validate_tool_behaviors

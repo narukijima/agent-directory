@@ -9,8 +9,6 @@ expect:
     - AGENTS.md
     - knowledge/KNOWLEDGE.md
   may_write:
-    - knowledge/raw/internal/**    # 訂正は新規ファイルの追加としてのみ許される
-    - knowledge/raw/external/**
     - knowledge/wiki/**
   must_not_write:
     - knowledge/raw/internal/**    # internalとexternalを同じ強さで保護する

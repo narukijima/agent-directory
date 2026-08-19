@@ -18,7 +18,6 @@ Structural safetyをProvider非依存の正本として保つ。
 - repository / revisionからのIndependent Project再現
 - secret-bearing fileを追跡しない静的検査
 - 外部AI、Hosted CI、特定Providerを必要としない静的validator
-- Route、Context、Knowledge、Project、安全境界の小型behavioral Core eval
 
 本製品が提供しないもの:
 
@@ -44,7 +43,7 @@ Structural safetyをProvider非依存の正本として保つ。
 - 通常経路は`Route → Target → Work → Verify`。
 - Repository正本を会話履歴、製品側memory、Runtime側cacheより優先する。
 - 全件をLLMへ渡さず、active metadataから候補を最大5件へ絞る。
-- 原資料と閉鎖済みlogを変更しない。
+- 原資料を変更しない。
 - 状態変更を物理archiveで表さない。
 - Runtimeと外部操作は各Agent / Operator / Projectが所有する。
 - 新しいTool、Skill、恒久的仕組み、抽象化、依存は原則追加しない。既存Ownerへ統合できず、
@@ -72,25 +71,25 @@ agent-directory/
 ├── knowledge/
 │   ├── KNOWLEDGE.md
 │   ├── raw/{internal,external}/
-│   └── wiki/{INDEX.md,LOG.md,logs,_template,sources,topics}/
+│   └── wiki/{INDEX.md,_template,sources,topics}/
 ├── skills/
 │   ├── SKILLS.md
 │   └── _template/
 ├── projects/
 │   ├── AGENTS.md
 │   ├── PROJECTS.md
-│   ├── DOCS.md
 │   ├── REPOSITORIES.md
 │   ├── LIFECYCLE.md
-│   ├── RECOVERY.md
 │   ├── .gitignore
 │   ├── _template/
 │   └── <project-name>/
-├── evals/                        # Core cases、最小fixture、trace契約
+├── tests/                        # repository開発用。Coreから独立
+│   ├── run-evals.py
+│   └── evals/                    # cases、fixture、trace契約
 └── tools/
     ├── TOOLS.md
     ├── SAFETY.md
-    └── 5 executable Tools + 2 internal files
+    └── 3 executable Tools + 2 internal files
 ```
 
 ## RuntimeとProvider
@@ -150,19 +149,21 @@ Skill sourceは`skills/<name>/SKILL.md`を直接使う。検索結果や製品�
 bash tools/validate-agent-directory.sh --changed
 bash tools/validate-agent-directory.sh
 bash tools/validate-agent-directory.sh --strict --full
-python3 tools/run-evals.py score --case evals/fixtures/eval-runtime/case.yaml --trace evals/fixtures/eval-runtime/pass.jsonl
+python3 tests/run-evals.py validate
+python3 tests/run-evals.py score --case tests/evals/fixtures/eval-runtime/case.yaml --trace tests/evals/fixtures/eval-runtime/pass.jsonl
 ```
 
 validatorは必須構造、frontmatter、サイズ、Project / Knowledge / Skill境界、Tool allowlist、script構文、
 Markdown参照、Independent Project整合を検査する。networkと外部AIを必要としない。
-behavioral evalは[evals/EVALS.md](evals/EVALS.md)の小型Core profileだけを扱う。
+[behavioral tests](tests/evals/README.md)は本repositoryの開発QAであり、導入済みWorkspaceのCore依存ではない。
+静的validatorでは判定できないRoute解釈を、保存済みtraceで検査する。
 
 commit、push、branch、PR、merge、approvalはGit、Runtime、Operator、対象Repositoryの標準機能が所有する。
 Core独自のpre-commit / pre-push hook、ack、receipt、approval layerは持たない。
 
 ## Tool
 
-`tools/`は9ファイル固定で、実行Toolは5本、内部実装は2ファイルである。完全な一覧とCLIは
+`tools/`は7ファイル固定で、実行Toolは3本、内部実装は2ファイルである。完全な一覧とCLIは
 [tools/TOOLS.md](tools/TOOLS.md)が所有する。
 
 新しいToolを追加する前に、既存Toolまたは対象Ownerへの統合を優先する。新設が不可避な場合は、
@@ -179,15 +180,12 @@ repository / revisionによる再現性、送信対象に対するsecret・不�
 | 正本 | 所有する内容 |
 |---|---|
 | [AGENTS.md](AGENTS.md) | 自己定義、Route、Context Loading、共通判断 |
-| [knowledge/KNOWLEDGE.md](knowledge/KNOWLEDGE.md) | Knowledge構造、不変規則、限定取得、LOG |
+| [knowledge/KNOWLEDGE.md](knowledge/KNOWLEDGE.md) | Knowledge構造、不変規則、限定取得 |
 | [skills/SKILLS.md](skills/SKILLS.md) | Skill schema、選択、Owner確認 |
 | [projects/AGENTS.md](projects/AGENTS.md) | Project作業入口 |
 | [projects/PROJECTS.md](projects/PROJECTS.md) | 成果契約、Git ownership、attachment |
-| [projects/DOCS.md](projects/DOCS.md) | 任意Project docs |
 | [projects/REPOSITORIES.md](projects/REPOSITORIES.md) | Independent registry |
 | [projects/LIFECYCLE.md](projects/LIFECYCLE.md) | 状態遷移と削除 |
-| [projects/RECOVERY.md](projects/RECOVERY.md) | Project復旧 |
-| [evals/EVALS.md](evals/EVALS.md) / [evals/TRACE.md](evals/TRACE.md) | Core behavioral evalとtrace |
 | [tools/TOOLS.md](tools/TOOLS.md) | Tool allowlistとCLI |
 | [tools/SAFETY.md](tools/SAFETY.md) | 五つの安全不変条件 |
 
