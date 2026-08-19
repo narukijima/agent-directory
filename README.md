@@ -32,8 +32,9 @@ Structural safetyをProvider非依存の正本として保つ。
 
 1. エージェント1体につき1つcopyまたはcloneする。
 2. [AGENTS.md](AGENTS.md)の自己定義placeholderを置換する。
-3. 必要なSkill sourceまたはProjectだけを各`_template/`から作る。
-4. Runtime、Provider、認証、permissionをそのAgentの環境で設定する。
+3. 共有Skillは`bash tools/import-skill.sh <name> --source /path/to/agent-skills`で取り込み、固有SkillまたはProjectだけを
+   各`_template/`から作る。
+4. Agent固有の環境変数を未追跡のroot `.env`へ置き、Runtime、Provider、認証、permissionをそのAgentの環境で設定する。
 5. `bash tools/install-git-hooks.sh --install`を実行する。
 6. `bash tools/validate-agent-directory.sh --strict --full`を実行する。
 
@@ -92,7 +93,7 @@ agent-directory/
     ├── SAFETY.md
     ├── CONTROL.md
     ├── control-policy.tsv
-    └── 6 executable Tools + 5 internal files
+    └── 7 executable Tools + 5 internal files
 ```
 
 ## RuntimeとProvider
@@ -102,6 +103,9 @@ Runtime、Provider、認証、permission、machine-local setupは各Agent / Oper
 必要なら`.codex/`、`.claude/`等の薄いadapterを追加・追跡してよい。配布済み`CLAUDE.md`は`@AGENTS.md`だけを
 importする。validatorはそれらを違反として拒否しない。Repository Knowledgeが正本で、製品側memoryは任意の
 Runtime cacheである。
+
+Agent固有の環境変数はroot `.env`を既定の未追跡注入面とする。値や変数一覧を公開templateへ持たず、OS共有、
+Keychain、外部secret storeを必須にしない。別の注入面が必要なRuntimeでは、そのAgent / Operatorが明示選択する。
 
 `skills/`はPortableなSkill sourceであり、発見・選択・起動を行うRuntimeではない。利用するRuntimeの標準配置
 （Codexの`.agents/skills/`、Claude Codeの`.claude/skills/`）から、必要なSkill directoryだけをper-Skill symlinkで
@@ -113,7 +117,8 @@ ln -s ../../skills/<skill-name> .claude/skills/<skill-name>
 ```
 
 両Runtimeの受け皿は空の構造だけをtemplateに含める。Skill実体、偽の`SKILL.md`、`_template` linkは置かず、
-Skill import時にだけ同名linkを作る。
+`tools/import-skill.sh`が共有Skillのimport時にだけ同名linkを作る。固有Skillを`_template/`から作る場合も、同じ2本の
+per-Skill linkだけを追加する。
 
 ## ProjectとGit
 
@@ -161,7 +166,7 @@ commit・push境界は`tools/check-boundary.sh`とmanaged hooksが執行する�
 
 ## Tool
 
-`tools/`は14ファイル固定で、実行Toolは6本、内部実装は5ファイルである。完全な一覧とCLIは
+`tools/`は15ファイル固定で、実行Toolは7本、内部実装は5ファイルである。完全な一覧とCLIは
 [tools/TOOLS.md](tools/TOOLS.md)が所有する。
 
 新しいToolを追加する前に、既存Toolまたは対象Ownerへの統合を優先する。新設が不可避な場合は、
