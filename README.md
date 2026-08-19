@@ -55,7 +55,7 @@ Structural safetyをProvider非依存の正本として保つ。
 |---|---|---|
 | `knowledge` | 取り込み、照会、統合 | [knowledge/KNOWLEDGE.md](knowledge/KNOWLEDGE.md) |
 | `skill` | 再利用手順・研究方法 | [skills/SKILLS.md](skills/SKILLS.md)と対象`SKILL.md` |
-| `project` | 固有作業、成果物、研究 | [projects/AGENTS.md](projects/AGENTS.md) |
+| `project` | 固有作業・成果物・研究 | [projects/AGENTS.md](projects/AGENTS.md) |
 | `meta` | 構造、規約、Tool | 対象正本 |
 | `none` | 永続変更のない回答 | 追加ロードなし |
 
