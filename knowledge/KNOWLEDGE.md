@@ -146,7 +146,7 @@ aliases: [別名, English alias]
 - `summary`は200文字以内の一行とし、タブを含めない。
 - `aliases`は一行の配列にし、タブ、改行、重複を含めない。
 - statusは`active | superseded | archived | retired`だけを使う。
-- `superseded`は存在するactiveページへの`superseded_by`を必須とする。
+- `superseded`は存在するactiveページへの`superseded_by`（リポジトリ相対パス）を必須とする。
 - `review_after`を使う場合は`YYYY-MM-DD`とする。日付到達は自動失効ではなく見直しの合図である。
 - sourcesの`source`は`knowledge/raw/internal/`または`knowledge/raw/external/`の相対パスとする。
 
@@ -207,5 +207,5 @@ Wikiでは次を混ぜずに書く。
 
 ## lint
 
-`bash tools/validate-agent-directory.sh --full`でmetadata、状態、参照、サイズ、logを検査する。
+`bash tools/validate-agent-directory.sh --full`でmetadata、状態、参照、サイズを検査する。
 意味的な重複は自動削除しない。統合先が一意なら非破壊のsupersedeで統合し、一意でなければ候補として報告する。
