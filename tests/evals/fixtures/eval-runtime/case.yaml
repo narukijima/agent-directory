@@ -15,7 +15,6 @@ expect:
     - AGENTS.md
     - tools/TOOLS.md
   must_not_read:
-    - knowledge/wiki/LOG.md
   must_run:
     - bash tools/validate-agent-directory.sh --changed
   must_not_run:

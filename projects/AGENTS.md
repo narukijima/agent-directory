@@ -1,6 +1,6 @@
 # projects/AGENTS.md — Project作業の入口
 
-成果契約・Git境界は`projects/PROJECTS.md`、文書拡張は`projects/DOCS.md`が所有する。
+成果契約・Git境界・文書拡張は`projects/PROJECTS.md`が所有する。
 registryで`repository_role: public-foundation`と明示した公開基盤製品は一般Projectではなく`meta` Routeで扱う。
 
 ## 着手
@@ -9,7 +9,7 @@ registryで`repository_role: public-foundation`と明示した公開基盤製品
    `name` / `description`だけをRuntime標準検索で確認し、明示依頼なく新設しない。
 2. `git -C projects/<name> rev-parse --show-toplevel`で書込Git rootを確定する。
 3. `AGENTS.md`（あれば）→`PROJECT.md`→`STATE.md`の順に読み、対象契約（`#PC-xx`か`#status`）と合格条件を特定。
-4. 成立したDocs Route条件の正本とRequired参照だけを読む。
+4. 個別`AGENTS.md`が示す条件付き文書とRequired参照だけを読む。
 
 ## Git所有境界
 
@@ -26,5 +26,4 @@ registryで`repository_role: public-foundation`と明示した公開基盤製品
 
 ## 詳細正本を読む条件
 
-- `PROJECTS.md`: 新設、状態・契約変更、Independent昇格・移行、remote、復旧、規約保守、明示参照。
-- `DOCS.md`: `ARCHITECTURE.md`、`docs/`、個別`AGENTS.md`、研究文書の追加・変更。
+- `PROJECTS.md`: 新設、状態・契約変更、文書拡張、Independent昇格・移行、remote、復旧、規約保守、明示参照。

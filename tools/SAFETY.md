@@ -9,7 +9,7 @@ tool approval、Provider選択、認証、remote操作はRuntime、Operator、�
    Provider adapterへ複製しない。
 2. **Write Root** — 1 sessionが書くGit rootは1つ。対象とOwnerを機械判定し、別rootへ書かない。
 3. **Lifecycle** — `paused` / `retired`領域は、確定した状態遷移なしに変更しない。
-4. **Immutable Source** — `knowledge/raw/**`と閉鎖済みlogの既存blobを変更・削除・改名しない。
+4. **Immutable Source** — `knowledge/raw/**`の既存blobを変更・削除・改名しない。
 5. **Secrets** — credential、token、password、private key、秘密情報を追跡・commit・診断出力しない。
 
 Git、commit、push、branch、PR、merge、approvalはRepository、Runtime、Operatorの標準機能が所有する。

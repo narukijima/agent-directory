@@ -164,11 +164,11 @@ def validate_case(case, repo_root):
         raise EvalError("case %s has an invalid route" % case["name"])
     fixture = case.get("fixture")
     if fixture:
-        fixture_root = (repo_root / "evals" / "fixtures" / str(fixture)).resolve()
+        fixture_root = (repo_root / "tests" / "evals" / "fixtures" / str(fixture)).resolve()
         try:
-            fixture_root.relative_to((repo_root / "evals" / "fixtures").resolve())
+            fixture_root.relative_to((repo_root / "tests" / "evals" / "fixtures").resolve())
         except ValueError:
-            raise EvalError("case %s fixture escapes evals/fixtures" % case["name"])
+            raise EvalError("case %s fixture escapes tests/evals/fixtures" % case["name"])
         if not fixture_root.is_dir():
             raise EvalError("case %s fixture does not exist: %s" % (case["name"], fixture))
     report_tokens = set(case["expect"].get("must_report", [])) | set(case["expect"].get("must_not_report", []))
@@ -318,7 +318,7 @@ def score_case(case, events):
 def resolve_case(repo_root, value):
     candidate = Path(value)
     if not candidate.is_file():
-        candidate = repo_root / "evals" / "cases" / (value if value.endswith(".yaml") else value + ".yaml")
+        candidate = repo_root / "tests" / "evals" / "cases" / (value if value.endswith(".yaml") else value + ".yaml")
     if not candidate.is_file():
         raise EvalError("case does not exist: %s" % value)
     return candidate.resolve()
@@ -331,7 +331,7 @@ def build_parser():
     score.add_argument("--case", required=True)
     score.add_argument("--trace", required=True)
     score.add_argument("--json", action="store_true")
-    subparsers.add_parser("validate", help="validate every canonical Core case schema")
+    subparsers.add_parser("validate", help="validate every repository behavioral case schema")
     return parser
 
 
@@ -340,7 +340,7 @@ def main():
     repo_root = Path(__file__).resolve().parent.parent
     try:
         if args.command == "validate":
-            case_paths = sorted((repo_root / "evals" / "cases").glob("*.yaml"))
+            case_paths = sorted((repo_root / "tests" / "evals" / "cases").glob("*.yaml"))
             for case_path in case_paths:
                 validate_case(parse_case(case_path), repo_root)
             print("EVAL_CASES_VALID count=%d" % len(case_paths))

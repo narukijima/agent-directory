@@ -43,6 +43,18 @@ registryを変更した同じroot commitで更新し、集合が完全一致し�
 # END INDEPENDENT PROJECTS
 ```
 
+### 復旧境界
+
+登録済みcloneがない場合は`bash tools/materialize-project-repositories.sh --project <name>`で採用revisionを
+`projects/<name>/`へ再現する。既存cloneは同Toolの`--check`で検査し、次の不一致を自動修正しない。
+
+- `origin`が`repository_url`と異なる
+- HEADが登録済み`revision`と異なる
+- dirty、staged、untracked、stashがある
+
+不一致時は登録値と実測値を報告して止まり、remote貼替え、reset、checkout、pull、clone削除を行わない。
+認証とremoteからの復旧は各Agent / Projectが所有する。
+
 ### repository_reason
 
 独立repoが必要になる境界だけを理由にする。

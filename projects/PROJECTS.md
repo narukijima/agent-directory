@@ -8,13 +8,11 @@
 必要が生じたときだけ追加し、空の層や将来用文書を作らない。
 
 ```text
-AGENTS.md              = 読込Route、固有コマンド、禁止事項、authorization条件
+AGENTS.md              = 条件付きの読込先、固有コマンド、禁止事項
 PROJECT.md             = なぜ行い、何を実現するか。種別、成果契約、判断原則、固定制約
 STATE.md               = 今どこにいるか。現在目標、合格条件、検証結果、有効な決定、次の一手
 ARCHITECTURE.md        = Project全体の構造地図、境界、不変条件
-docs/<DOMAIN>.md       = 分野ごとの現在有効な正本兼入口
-docs/<DOMAIN>_SENSE.md = 分野固有の定性的判断
-下位文書               = 詳細設計、仕様、研究、計画、証拠
+docs/                  = 必要になったProject固有の文書
 Root Knowledge         = Projectを越えて再利用する確定知識
 ```
 
@@ -25,11 +23,11 @@ Root Knowledge         = Projectを越えて再利用する確定知識
 
 同じ情報のactive正本を二つ持たない。次は文書全体へ適用する。
 
-- `docs/**`の一括読込とDomain Canon全件の無条件読込。
-- `AGENTS.md`へのDomain Canon、`PROJECT.md`、`STATE.md`本文の複製。
-- `PROJECT.md`や`STATE.md`へのDomain文書本文の複製。
-- `PROJECT.md`とDomain Canon、`STATE.md`と`PLANS.md`、`ARCHITECTURE.md`と詳細設計文書、
-  Project ResearchとRoot Knowledge。
+- `docs/**`の一括読込。
+- `AGENTS.md`への`PROJECT.md`、`STATE.md`、Project文書本文の複製。
+- `PROJECT.md`や`STATE.md`への補助文書本文の複製。
+- `PROJECT.md`と補助文書、`STATE.md`と計画文書、`ARCHITECTURE.md`と詳細設計文書、
+  Projectの研究結果とRoot Knowledge。
 
 ## 対象の選択
 
@@ -48,7 +46,7 @@ projects/<project-name>/
 ├── STATE.md
 ├── AGENTS.md         # 任意。作業差分がある場合だけ
 ├── ARCHITECTURE.md   # 任意。Project全体の構造地図
-├── docs/             # 任意。Domain Canonと詳細文書（構成は次節）
+├── docs/             # 任意。必要になったProject固有文書
 ├── inputs/           # Project固有の入力
 ├── outputs/          # 完成成果物
 ├── runs/             # 保存価値のある詳細履歴。既定では読まない
@@ -61,8 +59,22 @@ projects/<project-name>/
 
 ## Project文書の任意拡張
 
-`ARCHITECTURE.md`、`docs/`、個別`AGENTS.md`、研究文書は、実在する複雑さを段階的に読む必要がある場合だけ
-追加する。三層構造、命名、責務、Docs Route、Knowledge昇格は[projects/DOCS.md](DOCS.md)が所有する。
+`ARCHITECTURE.md`、`docs/`、個別`AGENTS.md`、研究文書は、実在する複雑さを分離する必要がある場合だけ追加する。
+標準の文書階層、必須名、空フォルダを先に作らず、Projectに自然な名前と構造を使う。同じ情報のactive正本を
+複製せず、必要な文書だけを個別`AGENTS.md`から条件付きで参照する。
+
+`ARCHITECTURE.md`はProject全体の構造地図が必要な場合だけ使う。個別`AGENTS.md`はProject固有の読込条件、
+build/testコマンド、編集禁止事項がある場合だけ置き、目的、成果契約、現在状態を複製しない。
+
+具体的な調査、仮説、実験、結果はProjectが所有する。Project外でも再利用でき、根拠、適用範囲、不確実性を
+示せる確定知識だけをKnowledgeへ昇格し、元の証拠へリンクする。同じ結論をProjectとKnowledgeの二つの
+active正本として保守しない。
+
+## 食い違いの訂正
+
+利用者から間違い、重複、目的不一致、過去決定の見落としを指摘された場合は、`PROJECT.md`、`STATE.md`、
+対象成果物を再読し、期待と現在結果の差を特定する。成果契約を無断で変えず、最小範囲を修正して契約の検証を
+再実行し、現在有効な結果と判断だけを`STATE.md`へ反映する。失敗・却下済みの方法は新しい根拠なしに繰り返さない。
 
 ## Attachment
 
@@ -221,9 +233,8 @@ finiteの完了条件とcontinuousの成功指標だけに、`- **PC-01** <安�
 - 詳細な試行履歴は`runs/`またはGitへ移し、8KiBを超えない。
 - 現在判断ではactiveなKnowledgeとSkillを優先する。
 
-状態遷移と削除条件は必要な場合だけ[projects/LIFECYCLE.md](LIFECYCLE.md)を読む。
-利用者から間違い、重複、目的不一致、過去決定の見落としを指摘された場合、またはIndependent
-repositoryの接続不一致を検出した場合だけ[projects/RECOVERY.md](RECOVERY.md)を読む。
+状態遷移と削除条件は必要な場合だけ[projects/LIFECYCLE.md](LIFECYCLE.md)を読む。Independent repositoryの
+接続不一致は[projects/REPOSITORIES.md](REPOSITORIES.md)の復旧境界に従う。
 
 ## 検証
 

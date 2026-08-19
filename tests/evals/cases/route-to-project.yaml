@@ -22,9 +22,6 @@ expect:
     - projects/PROJECTS.md                # 新設・状態遷移・Independent昇格のいずれでもない
     - projects/REPOSITORIES.md            # Git所有境界はtoplevelの解決で足りる
     - projects/LIFECYCLE.md
-    - projects/RECOVERY.md
-    - knowledge/wiki/LOG.md
-    - knowledge/wiki/logs/**
   must_update:
     - projects/market-scan/STATE.md
   must_run:
