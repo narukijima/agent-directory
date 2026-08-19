@@ -65,6 +65,7 @@ Structural safetyをProvider非依存の正本として保つ。
 ```text
 agent-directory/
 ├── AGENTS.md
+├── CLAUDE.md                    # @AGENTS.mdだけのClaude Code bridge
 ├── README.md
 ├── knowledge/
 │   ├── KNOWLEDGE.md
@@ -96,12 +97,13 @@ agent-directory/
 
 Runtime、Provider、認証、permission、machine-local setupは各Agent / Operatorが所有する。
 本仕様は固有adapter、推奨Profile、Provider間の分業、fallback、認証設定を持たない。導入後の各Agentは、
-必要なら`.codex/`、`.claude/`、`CLAUDE.md`等の薄いadapterを追加・追跡してよい。validatorはそれらを
-違反として拒否しない。Repository Knowledgeが正本で、製品側memoryは任意のRuntime cacheである。
+必要なら`.codex/`、`.claude/`等の薄いadapterを追加・追跡してよい。配布済み`CLAUDE.md`は`@AGENTS.md`だけを
+importする。validatorはそれらを違反として拒否しない。Repository Knowledgeが正本で、製品側memoryは任意の
+Runtime cacheである。
 
 `skills/`はPortableなSkill sourceであり、発見・選択・起動を行うRuntimeではない。利用するRuntimeの標準配置
-（例: Codexの`.agents/skills/`、Claude Codeの`.claude/skills/`）へ、consumer側の薄いadapterまたは明示importで
-接続する。同じ規則をProvider固有ファイルへ複製しない。
+（Codexの`.agents/skills/`、Claude Codeの`.claude/skills/`）から、必要なSkill directoryだけをper-Skill symlinkで
+`skills/<name>/`へ接続する。同じ規則、Skill本文、references、scriptsをProvider固有pathへ複製しない。
 
 ## ProjectとGit
 
