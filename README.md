@@ -67,6 +67,8 @@ agent-directory/
 ├── AGENTS.md
 ├── CLAUDE.md                    # @AGENTS.mdだけのClaude Code bridge
 ├── README.md
+├── .agents/skills/              # Codex用Skill bridgeの空の受け皿
+├── .claude/skills/              # Claude Code用Skill bridgeの空の受け皿
 ├── knowledge/
 │   ├── KNOWLEDGE.md
 │   ├── raw/{internal,external}/
@@ -104,6 +106,14 @@ Runtime cacheである。
 `skills/`はPortableなSkill sourceであり、発見・選択・起動を行うRuntimeではない。利用するRuntimeの標準配置
 （Codexの`.agents/skills/`、Claude Codeの`.claude/skills/`）から、必要なSkill directoryだけをper-Skill symlinkで
 `skills/<name>/`へ接続する。同じ規則、Skill本文、references、scriptsをProvider固有pathへ複製しない。
+
+```bash
+ln -s ../../skills/<skill-name> .agents/skills/<skill-name>
+ln -s ../../skills/<skill-name> .claude/skills/<skill-name>
+```
+
+両Runtimeの受け皿は空の構造だけをtemplateに含める。Skill実体、偽の`SKILL.md`、`_template` linkは置かず、
+Skill import時にだけ同名linkを作る。
 
 ## ProjectとGit
 
