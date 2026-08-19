@@ -305,6 +305,8 @@ validate_tool_behaviors() {
 
 required_files=(
   '.gitignore'
+  '.agents/skills/.gitkeep'
+  '.claude/skills/.gitkeep'
   'AGENTS.md'
   'CLAUDE.md'
   'LICENSE'
