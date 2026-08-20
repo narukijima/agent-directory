@@ -34,6 +34,7 @@ knowledge/
 ## 保存先
 
 1. 利用者や運用内部で生まれた原文、判断、決定、仮説、観測は`raw/internal/`へ新規保存する。
+   形式は`KNOWLEDGE.md#内部原記録のRecord形式`に従う。
 2. 論文、記事、契約、外部資料は取得元を記録し、内容を変えず`raw/external/`へ新規保存する。
 3. 1資料を読み解いたKnowledgeは`sources/`、複数資料・内部経験を統合したKnowledgeは`topics/`へ置く。
 
@@ -49,6 +50,35 @@ knowledge/
 
 利用者は原文、判断、資料を提供し、知識の正しさを最終判断する。エージェントは分類、保存、ノート化、統合、
 状態管理、必要なINDEXの更新を行う。
+
+## 内部原記録のRecord形式
+
+`raw/internal/`はProvider非依存の長期記憶の原記録層である。1つの独立した出来事・判断・発言・訂正を
+原則1 recordとして保存する。時系列はrecordの`recorded_at`とファイル名が持ち、Wikiは時系列ログを持たず
+現在有効なKnowledgeだけを保持する。
+
+```yaml
+---
+recorded_at: 2026-08-20T13:01:00+09:00
+kind: decision
+subjects: [agent-directory, permissions]
+---
+```
+
+- ファイル名は`raw/internal/`直下の`YYYY-MM-DD-<lowercase-kebab>.md`とし、日付は`recorded_at`の日付と
+  一致させる。パスは恒久IDであり保存後にrenameしない。同日の衝突は保存前により具体的なslugで避ける。
+- `recorded_at`はtimezone offset付きISO 8601とする。時刻が分からない情報だけ`YYYY-MM-DD`の日付のみとする。
+- `kind`は次の7種だけを使う。`instruction`（運用指示）、`decision`（決定）、`preference`（好み・傾向）、
+  `fact`（事実の陳述）、`observation`（観測・実行結果）、`hypothesis`（仮説）、`correction`（既存内部原記録の訂正）。
+- `subjects`は検索を補助する自由語の一行配列で1件以上持つ。階層taxonomyや別台帳を作らない。
+- `kind: correction`だけ`corrects`を必須とし、訂正対象の`knowledge/raw/internal/`配下recordへの
+  リポジトリ相対パスを書く。訂正対象が内部原記録に存在しない場合はcorrectionではなく通常のkindで保存する。
+- 上記以外のfrontmatter fieldを増やさない。
+- 本文は元の意味・原文・決定内容をそのまま残す。AIの一般化、後付けの解釈、推論、要約、Wiki用の結論を
+  原記録へ混ぜない。それらはWiki側が所有する。
+
+この形式は内部原記録だけの契約である。`raw/external/`は取得した内容を変えないことを最優先とし、
+この形式を強制しない。
 
 ## 不変規則
 
@@ -117,7 +147,10 @@ Root Knowledgeとして扱わない。昇格条件と昇格時の責務は`proje
 - 原資料そのものの確認
 - 正確な引用、数値、契約、仕様の確認
 - Knowledge間の衝突、またはKnowledgeの根拠不足
+- 訂正履歴・過去の時系列の確認
 - ProjectまたはSkillからの明示参照
+
+遡る場合もファイル名の日付とfrontmatter（`kind`、`subjects`）で候補を絞り、全件読込しない。
 
 ## 命名規則
 
@@ -126,6 +159,7 @@ Root Knowledgeとして扱わない。昇格条件と昇格時の責務は`proje
 ```text
 テンプレート固定Wikiファイル = INDEX.md / _template/SOURCE.md / _template/TOPIC.md
 利用者作成Knowledge          = sources/<lowercase-kebab>.md / topics/<lowercase-kebab>.md
+内部原記録                   = raw/internal/YYYY-MM-DD-<lowercase-kebab>.md
 ```
 
 大文字を許すのは上記の固定ファイルだけとし、`_template/`をコピーして作る実際のページへ広げない。
@@ -184,6 +218,7 @@ Wikiでは次を混ぜずに書く。
 利用者の訂正、反証、失効は、保存先1箇所の更新だけで終えない。
 
 1. 原記録は上書きせず、訂正の内容を新しい`raw/internal/`（外部資料は`raw/external/`）へ追加する。
+   内部原記録の訂正は`kind: correction`とし、`corrects`で訂正対象recordへ遡れるようにする。
 2. その事実のOwner正本を特定し、`update / merge / supersede`で反映する。
 3. 変更した正本のpathを参照する正本をpath検索で決定的に列挙し、直接依存だけを確認する。
    意味的に影響する依存だけを更新し、全Knowledgeを読み直さない。
@@ -208,6 +243,6 @@ Wikiでは次を混ぜずに書く。
 
 ## lint
 
-`bash tools/validate-agent-directory.sh --full`でmetadata、状態、参照、サイズを検査する。
-参照検査は現行正本側だけを対象とし、不変の`raw/`原記録には適用しない。原記録の訂正はWiki側で行う。
+`bash tools/validate-agent-directory.sh --full`でmetadata、状態、参照、サイズ、内部原記録のRecord形式を
+検査する。参照検査は現行正本側だけを対象とし、不変の`raw/`原記録には適用しない。原記録の訂正はWiki側で行う。
 意味的な重複は自動削除しない。統合先が一意なら非破壊のsupersedeで統合し、一意でなければ候補として報告する。
