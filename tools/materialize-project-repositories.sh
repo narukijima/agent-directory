@@ -173,22 +173,9 @@ while (( entry_index < registry_count )); do
   entry_revision="${registry_revisions[$entry_index]}"
   entry_role="${registry_roles[$entry_index]}"
 
-  case "$entry_reason" in
-    automation|distribution|collaboration|access|identity|upstream|retention) ;;
-    *) blocked 'invalid-registry' "$entry_name" \
-      "$registry_path has an invalid repository_reason: ${entry_reason:-<empty>}" ;;
-  esac
-  if agent_repository_url_is_rejected "$entry_url" "$allow_local_repository_url"; then
-    blocked 'invalid-registry' "$entry_name" \
-      "$registry_path repository_url must be a credential-free remote URL without query, fragment or local path: $(redact_repository_url "$entry_url")"
-  fi
-  [[ "$entry_revision" =~ ^[0-9a-f]{40}$ ]] || blocked 'invalid-registry' "$entry_name" \
-    "$registry_path revision must be a 40-character lowercase commit SHA"
-  case "$entry_role" in
-    project|public-foundation) ;;
-    *) blocked 'invalid-registry' "$entry_name" \
-      "$registry_path has an invalid repository_role: ${entry_role:-<empty>}" ;;
-  esac
+  entry_error="$(agent_registry_entry_error "$entry_name" "$entry_url" "$entry_reason" \
+    "$entry_revision" "$entry_role" "$allow_local_repository_url")"
+  [[ -z "$entry_error" ]] || blocked 'invalid-registry' "$entry_name" "$registry_path: $entry_error"
   printf '%s\n' "$ignore_entries" | grep -Fqx "/$entry_name/" || \
     blocked 'invalid-ignore-projection' "$entry_name" \
       "$ignore_path managed block must contain the exact line: /$entry_name/"
@@ -301,6 +288,15 @@ while (( entry_index < registry_count )); do
           blocked 'repository-contract-missing' "$project_name" \
             "$project_dir does not carry $contract_file at the adopted revision $state_revision"
       done
+    else
+      # A public foundation must not duplicate the Owner Agent's active state:
+      # projects/PROJECTS.md#Canonical Ownership forbids PROJECT.md / STATE.md there.
+      for contract_file in PROJECT.md STATE.md; do
+        if git -C "$target" cat-file -e "${state_revision}:${contract_file}" 2>/dev/null; then
+          blocked 'repository-contract-duplicated' "$project_name" \
+            "$project_dir is public-foundation and must not carry $contract_file at the adopted revision $state_revision"
+        fi
+      done
     fi
 
     verified=$((verified + 1))
@@ -358,6 +354,11 @@ while (( entry_index < registry_count )); do
     for contract_file in PROJECT.md STATE.md; do
       [[ -f "$target/$contract_file" ]] || blocked 'repository-contract-missing' "$project_name" \
         "$project_dir does not carry $contract_file at the adopted revision $state_revision"
+    done
+  else
+    for contract_file in PROJECT.md STATE.md; do
+      [[ ! -f "$target/$contract_file" ]] || blocked 'repository-contract-duplicated' "$project_name" \
+        "$project_dir is public-foundation and must not carry $contract_file at the adopted revision $state_revision"
     done
   fi
 

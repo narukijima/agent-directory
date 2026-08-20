@@ -4,11 +4,10 @@ set -euo pipefail
 # Internal checker used by validate-agent-directory.sh. Keep Markdown reference
 # resolution isolated from the rest of the workspace validator so path and heading rules can
 # be tested without coupling them to Git or external-operation fixtures.
-# Usage: check-markdown-references.sh [<repo_root> [<repo-relative .md file>...]]
-# Without file arguments every tracked Markdown file is scanned (--full). With file
-# arguments only the outgoing references of those files are checked (--changed scope).
-# Immutable knowledge/raw/ records are never scanned: they capture what was true at
-# recording time, so resolution against the current canon is not a valid requirement.
+# Usage: check-markdown-references.sh [<repo_root>]
+# Every tracked Markdown file is scanned. Immutable knowledge/raw/ records are never
+# scanned: they capture what was true at recording time, so resolution against the
+# current canon is not a valid requirement.
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo_root="${1:-$(cd "${script_dir}/../.." && pwd)}"
@@ -52,16 +51,11 @@ target_resolves() {
   ' "$reference_file"
 }
 
-if (( $# > 1 )); then
-  shift
-  reference_md_files="$(printf '%s\n' "$@")"
-else
-  reference_md_files="$(git -C "$repo_root" ls-files '*.md' 2>/dev/null || true)"
-  if [[ -z "$reference_md_files" ]]; then
-    reference_md_files="$(cd "$repo_root" && find . -name '*.md' -type f \
-      -not -path './.git/*' -not -path './.tmp/*' \
-      -not -path './projects/*/.git/*' 2>/dev/null | sed 's|^\./||')"
-  fi
+reference_md_files="$(git -C "$repo_root" ls-files '*.md' 2>/dev/null || true)"
+if [[ -z "$reference_md_files" ]]; then
+  reference_md_files="$(cd "$repo_root" && find . -name '*.md' -type f \
+    -not -path './.git/*' -not -path './.tmp/*' \
+    -not -path './projects/*/.git/*' 2>/dev/null | sed 's|^\./||')"
 fi
 
 while IFS= read -r reference_md_rel; do

@@ -6,7 +6,8 @@ shell、検索、Runtime Skill、Git / GitHub操作、認証、backup、PR、dep
 ## 原則
 
 - 明示path、Runtime標準のfile / Git機能、対象ProjectのToolを優先する。
-- Core ToolはProvider、network、外部AI、machine credentialを必要としない。
+- Core ToolはProvider、外部AI、machine credentialを必要としない。networkを使うのは
+  materializerがremote URLをclone / fetchする場合だけである。
 - Tool出力は正本ではなく、判定結果または派生証拠である。
 - 目的が既存Ownerへ統合できるなら新しいwrapperを作らない。
 
@@ -31,17 +32,26 @@ bash tools/import-skill.sh <skill-name> --source /path/to/agent-skills
 `skills/<name>/`へ確定する。同じtransactionで`.agents/skills/<name>`と`.claude/skills/<name>`のsymlinkを作る。
 既存Skill、既存adapter、配布元の未commit変更を上書きせず、networkやRuntimeを起動しない。
 
+importは配布元の`tools/import-skill.sh`を実行する。これが信頼境界であり、`--source`には内容を確認済みの
+信頼できるlocal repositoryだけを指定する。sandboxや署名検証は持たない。
+
 ## Validator
 
 ```bash
-bash tools/validate-agent-directory.sh [--strict] [--full] [--changed] [--bootstrap-status]
+bash tools/validate-agent-directory.sh [--strict] [--full] [--base <ref>] [--bootstrap-status] [--version]
 ```
 
-- 通常: 必須構造、frontmatter、Project、Knowledge、Skill source、Tool allowlist、script構文を検査
-- `--changed`: 変更範囲の入口。現在は完全な静的契約を実行
+- 通常: 必須構造、frontmatter、Project / Knowledge / Skill schema、registry整合、Independent二重所有、
+  Tool allowlist、script構文、HEADに対するraw不変性を検査
+- `--base <ref>`: 指定revisionから現在までの差分で、commit済みを含むraw不変性、paused / retired Projectの
+  変更禁止、Project削除gateを追加検査
 - `--strict`: 導入済みWorkspaceとして自己定義placeholderを拒否
-- `--full`: 全Markdown参照、Independent Project整合、Tool behaviorを追加
+- `--full`: 全Markdown参照、Independent Project整合、Tool behaviorと負条件の自己検査を追加
 - `--bootstrap-status`: `template|deployed`だけを返す
+- `--version`: contract versionだけを返す
+
+rawの削除は`knowledge/KNOWLEDGE.md#Secret・privacy削除の限定例外`に限り、
+`AGENT_ALLOW_RAW_ERASURE=true`を明示した実行だけが許容する。
 
 公開テンプレートmainは自己定義placeholderを意図的に持つため、製品自身の検証は`--full`を使う。
 consumer導入後は`--strict --full`を使う。

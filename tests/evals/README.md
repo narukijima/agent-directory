@@ -23,8 +23,9 @@ traceはJSON Linesの1行1eventで、実際に観測した値だけを記録す�
 - `final_response` — 利用者向け報告
 - `summary` — tool_calls、wall_time_ms
 
-harnessまたは決定的Toolの観測を優先し、traceにない期待は`UNVERIFIED`とする。Agentの説明から未観測eventを
-補完せず、secret、credential、個人情報を入れない。trace生成、adapter、model実行、隔離はRuntimeまたは外部harnessが
+traceの先頭eventは`trace`でなければならない。`route` eventが複数ある場合は、すべてが期待Routeと
+一致しない限り不合格とする。harnessまたは決定的Toolの観測を優先し、traceにない期待は`UNVERIFIED`とする。
+Agentの説明から未観測eventを補完せず、secret、credential、個人情報を入れない。trace生成、adapter、model実行、隔離はRuntimeまたは外部harnessが
 所有する。
 
 ## 実行

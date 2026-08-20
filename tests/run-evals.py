@@ -160,7 +160,7 @@ def validate_case(case, repo_root):
     unknown = sorted(set(case["expect"]) - SUPPORTED_EXPECTATIONS)
     if unknown:
         raise EvalError("case %s has unsupported expectations: %s" % (case["name"], unknown))
-    if case["expect"].get("route") not in {"knowledge", "skill", "project", "meta"}:
+    if case["expect"].get("route") not in {"knowledge", "skill", "project", "meta", "none"}:
         raise EvalError("case %s has an invalid route" % case["name"])
     fixture = case.get("fixture")
     if fixture:
@@ -189,10 +189,9 @@ def command_matches(expected, actual):
 
 
 def score_case(case, events):
-    trace_headers = [event for event in events if event["event"] == "trace"]
-    if not trace_headers:
+    if events[0]["event"] != "trace":
         raise EvalError("trace must begin with a trace event")
-    header = trace_headers[0]
+    header = events[0]
     if header.get("case") != case["name"]:
         raise EvalError("trace case does not match: %s" % header.get("case"))
     coverage = set(header.get("coverage", []))
@@ -215,8 +214,11 @@ def score_case(case, events):
 
     for key, expected in case["expect"].items():
         if key == "route":
+            # Multiple conflicting route events are an ambiguous run, not a pass:
+            # every observed route decision must equal the expected one.
             values = [event.get("route") for event in events if event["event"] == "route"]
-            status, detail = observed_or_unverified("route", expected in values, "observed=%s expected=%s" % (values, expected))
+            unambiguous = bool(values) and set(values) == {expected}
+            status, detail = observed_or_unverified("route", unambiguous, "observed=%s expected=%s" % (values, expected))
             add(key, status, detail)
         elif key == "must_search":
             matched = [event for event in searches if all(str(event.get(name, "")) == str(value) for name, value in expected.items())]

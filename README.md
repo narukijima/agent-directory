@@ -146,15 +146,17 @@ Skill sourceは`skills/<name>/SKILL.md`を直接使う。検索結果や製品�
 ## 検証
 
 ```bash
-bash tools/validate-agent-directory.sh --changed
 bash tools/validate-agent-directory.sh
 bash tools/validate-agent-directory.sh --strict --full
+bash tools/validate-agent-directory.sh --base origin/main --full
 python3 tests/run-evals.py validate
 python3 tests/run-evals.py score --case tests/evals/fixtures/eval-runtime/case.yaml --trace tests/evals/fixtures/eval-runtime/pass.jsonl
 ```
 
 validatorは必須構造、frontmatter、サイズ、Project / Knowledge / Skill境界、Tool allowlist、script構文、
-Markdown参照、Independent Project整合を検査する。networkと外部AIを必要としない。
+Markdown参照、Independent Project整合を検査する。`--base <ref>`はcommit済みを含むraw不変性、
+paused / retired Projectの変更禁止、Project削除gateをbase revisionとの差分で検査する。
+networkと外部AIを必要とせず、検証は作業Agent自身がsession内で完結させる。CIやHosted checkへ依存しない。
 [behavioral tests](tests/evals/README.md)は本repositoryの開発QAであり、導入済みWorkspaceのCore依存ではない。
 静的validatorでは判定できないRoute解釈を、保存済みtraceで検査する。
 
@@ -174,6 +176,23 @@ Core独自のpre-commit / pre-push hook、ack、receipt、approval layerは持�
 remoteは稼働正本ではない。push、PR、merge、branch cleanup、公開、backup、認証の実行はRuntime、Operator、
 対象Projectが所有し、Agent Directory Coreは固有Toolや実行workflowを持たない。Coreが持つのはGit ownership、
 repository / revisionによる再現性、送信対象に対するsecret・不変原資料・protected contractの境界検査である。
+
+## 依存条件
+
+- Bash 3.2以上（macOS標準`/bin/bash`互換。Tool全体をBash 3.2で検証する）
+- Git 2.x
+- Python 3（`tools/import-skill.sh`のfrontmatter正規化と`tests/run-evals.py`だけが使う）
+- validatorとbehavioral testはnetworkを使わない。
+- Skill importはnetworkを使わず、`--source`は信頼済みlocal repositoryを指定する
+  （信頼境界は`tools/TOOLS.md#Skill import`）。
+- Independent Projectのmaterializationは、remote URLをclone / fetchする場合だけnetworkと
+  実行環境の標準Git認証を必要とする。
+
+## Version
+
+contract versionは`bash tools/validate-agent-directory.sh --version`が返す（現在`1.0.0`）。
+採用versionはGit tag（`v<version>`）で固定する。schema・validator契約のbreaking changeはversionを上げ、
+その時だけ移行手順を`docs`として添える。自動migrationや更新managerは持たない。
 
 ## 正本
 

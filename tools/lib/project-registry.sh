@@ -63,33 +63,86 @@ agent_registry_records() {
   ' "$1"
 }
 
-# Return success when a repository URL must be rejected. Local paths are accepted only
-# when the explicit second argument is true (isolated validator fixtures).
+# Return success when a repository URL must be rejected. The registry allows only the
+# canonical shapes from projects/REPOSITORIES.md#entry形式 — `git@host:owner/repo.git`,
+# `ssh://git@host/owner/repo.git`, `https://host/owner/repo.git` — with no credential,
+# query, fragment, port, or local path. Local absolute paths are accepted only when the
+# explicit second argument is true (isolated validator fixtures).
 agent_repository_url_is_rejected() {
   local url="$1"
   local allow_local="${2:-false}"
-  local authority userinfo
+  local rest userinfo host path
   [[ -n "$url" ]] || return 0
   case "$url" in
-    -*) return 0 ;;
-    *[[:space:]]*|*'`'*) return 0 ;;
+    -*|*[[:space:]]*|*'`'*|*"'"*|*'"'*) return 0 ;;
     *'?'*|*'#'*) return 0 ;;
-    file://*|FILE://*) return 0 ;;
   esac
-  authority="${url#*://}"
-  authority="${authority%%/*}"
-  case "$authority" in
-    *@*)
-      userinfo="${authority%%@*}"
-      case "$userinfo" in *:*) return 0 ;; esac
-      ;;
-  esac
-  if [[ "$allow_local" != 'true' ]]; then
+  if [[ "$allow_local" == 'true' ]]; then
     case "$url" in
-      /*|./*|../*|~*) return 0 ;;
-      *://*|*:*) ;;
-      *) return 0 ;;
+      /*) return 1 ;;
     esac
   fi
-  return 1
+  case "$url" in
+    https://*)
+      rest="${url#https://}"
+      [[ "$rest" == */* ]] || return 0
+      host="${rest%%/*}"
+      path="${rest#*/}"
+      case "$host" in
+        ''|*@*|*:*) return 0 ;; # https carries no userinfo (tokens included) and no port
+      esac
+      [[ -n "$path" ]] || return 0
+      return 1
+      ;;
+    ssh://*)
+      rest="${url#ssh://}"
+      [[ "$rest" == */* ]] || return 0
+      host="${rest%%/*}"
+      path="${rest#*/}"
+      case "$host" in
+        *@*) userinfo="${host%%@*}"; host="${host#*@}" ;;
+        *) return 0 ;;
+      esac
+      case "$userinfo" in ''|*:*|*@*) return 0 ;; esac
+      case "$host" in ''|*:*|*@*) return 0 ;; esac
+      [[ -n "$path" ]] || return 0
+      return 1
+      ;;
+    *://*) return 0 ;; # file, git, http and every other scheme
+    *@*:*)
+      userinfo="${url%%@*}"
+      rest="${url#*@}"
+      [[ "$rest" == *:* ]] || return 0
+      host="${rest%%:*}"
+      path="${rest#*:}"
+      case "$userinfo" in ''|*:*|*/*|*@*) return 0 ;; esac
+      case "$host" in ''|*/*|*@*) return 0 ;; esac
+      case "$path" in ''|/*) return 0 ;; esac
+      return 1
+      ;;
+    *) return 0 ;;
+  esac
+}
+
+# Print one error line when a parsed registry entry violates the field contracts of
+# projects/REPOSITORIES.md; print nothing when the entry is valid. Never echoes the
+# URL itself so a rejected credential-bearing value cannot leak into reports.
+agent_registry_entry_error() {
+  local name="$1" url="$2" reason="$3" revision="$4" role="$5" allow_local="${6:-false}"
+  case "$reason" in
+    automation|distribution|collaboration|access|identity|upstream|retention) ;;
+    *) printf '`%s` has an invalid repository_reason: %s\n' "$name" "${reason:-<empty>}"; return 0 ;;
+  esac
+  if agent_repository_url_is_rejected "$url" "$allow_local"; then
+    printf '`%s` repository_url must be credential-free git@host:path, ssh://git@host/path or https://host/path without query, fragment or local path\n' "$name"
+    return 0
+  fi
+  if [[ ! "$revision" =~ ^[0-9a-f]{40}$ ]]; then
+    printf '`%s` revision must be a 40-character lowercase commit SHA\n' "$name"
+    return 0
+  fi
+  case "$role" in
+    project|public-foundation) ;;
+    *) printf '`%s` has an invalid repository_role: %s\n' "$name" "${role:-<empty>}" ;;
+  esac
 }
