@@ -3,6 +3,9 @@ set -euo pipefail
 
 # Import one provenance-bound Skill and expose the same canon through the
 # standard Codex and Claude Code project Skill locations.
+# Trust boundary: this tool executes the source repository's tools/import-skill.sh,
+# so --source must point to a trusted local repository whose content the operator
+# has reviewed. There is no sandbox or signature verification (tools/TOOLS.md#Skill import).
 
 tool_root="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
 repo_root="${AGENT_DIRECTORY_ROOT:-$(cd "$tool_root/.." && pwd -P)}"

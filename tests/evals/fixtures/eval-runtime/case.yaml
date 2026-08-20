@@ -16,7 +16,7 @@ expect:
     - tools/TOOLS.md
   must_not_read:
   must_run:
-    - bash tools/validate-agent-directory.sh --changed
+    - bash tools/validate-agent-directory.sh --full
   must_not_run:
     - git push
   must_update:

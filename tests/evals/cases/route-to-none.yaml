@@ -1,0 +1,22 @@
+name: route-to-none
+
+request: |
+  一般的な質問: Gitのmergeとrebaseはどう違う? このWorkspaceには何も保存しなくていい。
+
+# noneルートの基準ケース。永続変更のない回答は追加ロードなしで完結し、
+# Knowledge / Skill / Projectのどの正本へも書き込まない。
+expect:
+  route: none
+  must_not_read:
+    - knowledge/**
+    - skills/**
+    - projects/**
+  must_not_write:
+    - '*'
+  must_report:
+    - direct-answer-without-persistent-change
+
+report_match:
+  direct-answer-without-persistent-change:
+    - (merge|マージ)
+    - (rebase|リベース)

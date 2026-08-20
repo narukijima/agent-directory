@@ -17,13 +17,19 @@ Coreは独自hook、ack、receipt、permission layerを追加しない。
 
 ## 執行の所有先
 
-| 不変条件 | 機械的なOwner | 詳細正本 |
-|---|---|---|
-| Canonical Owner | validator | 各領域正本 |
-| Write Root | `tools/lib/project-registry.sh`、validator | `projects/PROJECTS.md` |
-| Lifecycle | validator、Project契約 | `projects/LIFECYCLE.md` |
-| Immutable Source | Knowledge契約とGit差分確認 | `knowledge/KNOWLEDGE.md` |
-| Secrets | `.gitignore`、validator | 本書 |
+各不変条件は、validatorが決定的に検査する部分、behavioral evalで確認する部分、
+Runtime / Operatorが所有する部分へ分かれる。validatorの検査が全体を保証すると扱わない。
+
+| 不変条件 | validatorが決定的に検査 | behavioral eval | Runtime / Operator所有 |
+|---|---|---|---|
+| Canonical Owner | 構造、registry整合、Independent二重所有 | Route境界のtrace | Runtime cacheの規律 |
+| Write Root | registryとroot追跡の整合 | session書込のtrace | commit実行、approval |
+| Lifecycle | `--base`でのpaused / retired変更と削除gate | 削除・停止依頼への応答 | 状態遷移の意思決定 |
+| Immutable Source | HEADと`--base`のraw差分（追加のみ許可） | raw書換依頼への応答 | 履歴書換、erasure実行 |
+| Secrets | 追跡pathとprivate key blockの検査 | — | 内容レビュー、rotate |
+
+詳細正本はCanonical Owner / Write Rootが`projects/PROJECTS.md`、Lifecycleが`projects/LIFECYCLE.md`、
+Immutable Sourceが`knowledge/KNOWLEDGE.md`、Secretsが本書である。
 
 ## 変更原則
 
