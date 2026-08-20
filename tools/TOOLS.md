@@ -42,9 +42,11 @@ bash tools/validate-agent-directory.sh [--strict] [--full] [--base <ref>] [--boo
 ```
 
 - 通常: 必須構造、frontmatter、Project / Knowledge / Skill schema、registry整合、Independent二重所有、
-  Tool allowlist、script構文、HEADに対するraw不変性を検査
+  Tool allowlist、script構文、HEADに対するraw不変性（`raw/internal/`と`raw/external/`の原記録。
+  `knowledge/raw/`直下のCore文書と構造保持用placeholderは対象外）を検査
 - `--base <ref>`: 指定revisionから現在までの差分で、commit済みを含むraw不変性、paused / retired Projectの
-  変更禁止、Project削除gateを追加検査
+  変更禁止、Project削除gateを追加検査。Gitのrename検出で`projects/LIFECYCLE.md#物理位置`の
+  明示的なProject物理移行を削除と区別する
 - `--strict`: 導入済みWorkspaceとして自己定義placeholderを拒否
 - `--full`: 全Markdown参照、Independent Project整合、Tool behaviorと負条件の自己検査を追加
 - `--bootstrap-status`: `template|deployed`だけを返す
