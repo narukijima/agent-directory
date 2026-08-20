@@ -511,14 +511,26 @@ validate_tool_behaviors() {
   # rename against a base revision must fail; the erasure exception permits
   # deletion only.
   raw_git_root="$fixture_root/raw-immutability"
-  mkdir -p "$raw_git_root/knowledge/raw/internal"
+  mkdir -p "$raw_git_root/knowledge/raw/internal" "$raw_git_root/knowledge/raw/external"
   git -C "$raw_git_root" init -q
   git -C "$raw_git_root" config user.name 'Agent Directory Fixture'
   git -C "$raw_git_root" config user.email 'fixture@example.invalid'
   printf '%s\n' '---' 'recorded_at: 2026-08-01' 'kind: fact' 'subjects: [fixture]' '---' 'Original.' \
     > "$raw_git_root/knowledge/raw/internal/2026-08-01-immutable.md"
+  printf 'Core document, not a record.\n' > "$raw_git_root/knowledge/raw/README.md"
+  : > "$raw_git_root/knowledge/raw/internal/.gitkeep"
+  : > "$raw_git_root/knowledge/raw/external/.gitkeep"
   git -C "$raw_git_root" add -A
   git -C "$raw_git_root" commit -qm 'Add immutable record'
+  # Core documents directly under knowledge/raw/ and structural .gitkeep
+  # placeholders are not records: removing them must not trip the check.
+  rm "$raw_git_root/knowledge/raw/README.md" \
+    "$raw_git_root/knowledge/raw/internal/.gitkeep" \
+    "$raw_git_root/knowledge/raw/external/.gitkeep"
+  raw_diff_output="$( (check_raw_tree_diff "$raw_git_root" HEAD) 2>&1 )"
+  [[ -z "$raw_diff_output" ]] || \
+    fail "raw immutability must not cover Core documents or placeholders: $raw_diff_output"
+  git -C "$raw_git_root" checkout -q -- .
   printf 'Tampered.\n' >> "$raw_git_root/knowledge/raw/internal/2026-08-01-immutable.md"
   raw_diff_output="$( (check_raw_tree_diff "$raw_git_root" HEAD) 2>&1 )"
   printf '%s\n' "$raw_diff_output" | grep -Fq 'modified, deleted or renamed' || \
@@ -546,7 +558,8 @@ validate_tool_behaviors() {
   # Lifecycle enforcement against a base revision: paused Projects reject normal
   # work, and Project deletion requires the committed base-side gate.
   lifecycle_root="$fixture_root/lifecycle"
-  mkdir -p "$lifecycle_root/projects/frozen/outputs" "$lifecycle_root/projects/sunset"
+  mkdir -p "$lifecycle_root/projects/frozen/outputs" "$lifecycle_root/projects/sunset" \
+    "$lifecycle_root/projects/roaming/outputs"
   git -C "$lifecycle_root" init -q
   git -C "$lifecycle_root" config user.name 'Agent Directory Fixture'
   git -C "$lifecycle_root" config user.email 'fixture@example.invalid'
@@ -558,6 +571,10 @@ validate_tool_behaviors() {
     'mode: finite' 'deletion_approved: true' 'artifacts_retained_at: none' '---' '# sunset' \
     > "$lifecycle_root/projects/sunset/PROJECT.md"
   printf '%s\n' '---' 'updated_at: 2026-08-01' '---' '# State' > "$lifecycle_root/projects/sunset/STATE.md"
+  printf '%s\n' '---' 'name: roaming' 'description: Active fixture Project' 'status: active' \
+    'mode: finite' '---' '# Fixture' > "$lifecycle_root/projects/roaming/PROJECT.md"
+  printf '%s\n' '---' 'updated_at: 2026-08-01' '---' '# State' > "$lifecycle_root/projects/roaming/STATE.md"
+  printf 'artifact\n' > "$lifecycle_root/projects/roaming/outputs/report.md"
   git -C "$lifecycle_root" add -A
   git -C "$lifecycle_root" commit -qm 'Add lifecycle fixture projects'
   printf 'more\n' >> "$lifecycle_root/projects/frozen/outputs/report.md"
@@ -580,6 +597,73 @@ validate_tool_behaviors() {
   [[ -z "$lifecycle_output" ]] || \
     fail "check_lifecycle_diff rejected a gated Project deletion: $lifecycle_output"
   git -C "$lifecycle_root" checkout -q -- .
+
+  # Deleting an active Project stays gated even with migration detection present.
+  rm -rf "$lifecycle_root/projects/roaming"
+  lifecycle_output="$( (check_lifecycle_diff "$lifecycle_root" HEAD) 2>&1 )"
+  printf '%s\n' "$lifecycle_output" | grep -Fq 'requires base status retired' || \
+    fail 'check_lifecycle_diff accepted deleting an active Project'
+  git -C "$lifecycle_root" checkout -q -- .
+
+  # Explicit physical migration: a full Git rename of the Project directory with a
+  # matching PROJECT.md name is not a deletion.
+  git -C "$lifecycle_root" mv projects/roaming projects/moved
+  printf '%s\n' '---' 'name: moved' 'description: Active fixture Project' 'status: active' \
+    'mode: finite' '---' '# Fixture' > "$lifecycle_root/projects/moved/PROJECT.md"
+  lifecycle_output="$( (check_lifecycle_diff "$lifecycle_root" HEAD) 2>&1 )"
+  [[ -z "$lifecycle_output" ]] || \
+    fail "check_lifecycle_diff rejected an explicit physical migration: $lifecycle_output"
+
+  # A migrated PROJECT.md whose name still points at the old directory fails.
+  printf '%s\n' '---' 'name: roaming' 'description: Active fixture Project' 'status: active' \
+    'mode: finite' '---' '# Fixture' > "$lifecycle_root/projects/moved/PROJECT.md"
+  lifecycle_output="$( (check_lifecycle_diff "$lifecycle_root" HEAD) 2>&1 )"
+  printf '%s\n' "$lifecycle_output" | grep -Fq 'requires PROJECT.md name to match projects/moved' || \
+    fail 'check_project_migration accepted a name/directory mismatch after migration'
+
+  # A stale reference to the old path blocks the migration.
+  printf '%s\n' '---' 'name: moved' 'description: Active fixture Project' 'status: active' \
+    'mode: finite' '---' '# Fixture' > "$lifecycle_root/projects/moved/PROJECT.md"
+  printf 'See projects/roaming for history.\n' > "$lifecycle_root/stale.md"
+  git -C "$lifecycle_root" add stale.md
+  lifecycle_output="$( (check_lifecycle_diff "$lifecycle_root" HEAD) 2>&1 )"
+  printf '%s\n' "$lifecycle_output" | grep -Fq 'requires zero remaining references to projects/roaming' || \
+    fail 'check_project_migration accepted a stale reference to the migrated path'
+  git -C "$lifecycle_root" rm -q -f stale.md
+  git -C "$lifecycle_root" reset -q --hard
+  rm -rf "$lifecycle_root/projects/moved"
+
+  # Moving only PROJECT.md while dropping the rest of the Project is a masked
+  # deletion, not a migration.
+  mkdir -p "$lifecycle_root/projects/moved"
+  git -C "$lifecycle_root" mv projects/roaming/PROJECT.md projects/moved/PROJECT.md
+  git -C "$lifecycle_root" rm -q -r projects/roaming
+  printf '%s\n' '---' 'name: moved' 'description: Active fixture Project' 'status: active' \
+    'mode: finite' '---' '# Fixture' > "$lifecycle_root/projects/moved/PROJECT.md"
+  lifecycle_output="$( (check_lifecycle_diff "$lifecycle_root" HEAD) 2>&1 )"
+  printf '%s\n' "$lifecycle_output" | grep -Fq 'requires every base file to move under projects/moved' || \
+    fail 'check_project_migration accepted a partial move that drops base files'
+  git -C "$lifecycle_root" reset -q --hard
+  rm -rf "$lifecycle_root/projects/moved"
+
+  # A destination that already existed at base is a dual canon, not a migration.
+  migration_output="$( (check_project_migration "$lifecycle_root" HEAD roaming frozen) 2>&1 )"
+  printf '%s\n' "$migration_output" | grep -Fq 'requires a destination that did not exist at HEAD' || \
+    fail 'check_project_migration accepted a destination that existed at base'
+
+  # A paused Project may migrate, but the move must not smuggle in normal work.
+  git -C "$lifecycle_root" mv projects/frozen projects/glacier
+  printf '%s\n' '---' 'name: glacier' 'description: Paused fixture Project' 'status: paused' \
+    'mode: finite' '---' '# frozen' > "$lifecycle_root/projects/glacier/PROJECT.md"
+  lifecycle_output="$( (check_lifecycle_diff "$lifecycle_root" HEAD) 2>&1 )"
+  [[ -z "$lifecycle_output" ]] || \
+    fail "check_lifecycle_diff rejected a pure paused Project migration: $lifecycle_output"
+  printf 'more\n' >> "$lifecycle_root/projects/glacier/outputs/report.md"
+  lifecycle_output="$( (check_lifecycle_diff "$lifecycle_root" HEAD) 2>&1 )"
+  printf '%s\n' "$lifecycle_output" | grep -Fq 'may only carry PROJECT.md / STATE.md changes' || \
+    fail 'check_project_migration accepted normal work smuggled into a paused migration'
+  git -C "$lifecycle_root" reset -q --hard
+  rm -rf "$lifecycle_root/projects/glacier"
 
   # Canonical Ownership: dual ownership by root Git and an unregistered nested
   # Project Git are both violations.
@@ -966,14 +1050,19 @@ for executable in "${executables[@]}"; do
 done
 
 # Immutable raw sources: only additions may appear between the given revision and the
-# working tree. Deletion is tolerated only under the canonical privacy/security erasure
-# exception (knowledge/KNOWLEDGE.md#Secret・privacy削除の限定例外), which the operator
-# asserts explicitly with AGENT_ALLOW_RAW_ERASURE=true; modification and rename stay
-# rejected even then because raw paths are permanent IDs.
+# working tree. The immutable set is the records under raw/internal/ and raw/external/
+# (knowledge/KNOWLEDGE.md#不変規則) — Core documents directly under knowledge/raw/ and
+# structural .gitkeep placeholders are not records. Deletion is tolerated only under the
+# canonical privacy/security erasure exception
+# (knowledge/KNOWLEDGE.md#Secret・privacy削除の限定例外), which the operator asserts
+# explicitly with AGENT_ALLOW_RAW_ERASURE=true; modification and rename stay rejected
+# even then because raw paths are permanent IDs.
 check_raw_tree_diff() {
   local root="$1" base="$2" allow_erasure="${AGENT_ALLOW_RAW_ERASURE:-false}" raw_mutations
-  raw_mutations="$(git -C "$root" diff --name-status -M "$base" -- knowledge/raw | \
-    LC_ALL=C awk -v allow_erasure="$allow_erasure" '
+  raw_mutations="$(git -C "$root" diff --name-status -M "$base" -- \
+    knowledge/raw/internal knowledge/raw/external | \
+    LC_ALL=C awk -F'\t' -v allow_erasure="$allow_erasure" '
+      $2 ~ /(^|\/)\.gitkeep$/ { next }
       $1 == "A" { next }
       $1 == "D" && allow_erasure == "true" { next }
       { print }
@@ -1017,17 +1106,92 @@ check_project_deletion_gate() {
   fi
 }
 
+# Explicit physical Project migration (projects/LIFECYCLE.md#物理位置): a base Project
+# whose PROJECT.md Git-renames to another projects/<new>/PROJECT.md is a migration, not
+# a deletion. Only the deterministic shape is verified here — every base file moves
+# under the new path, the destination did not exist at base, the new PROJECT.md name
+# matches its directory, and no reference to the old path remains in the current canon
+# (immutable raw records excluded, so the migration record itself lives there). The
+# explicit operator instruction that authorizes the move stays owned by the canon and
+# is never inferred by the validator.
+check_project_migration() {
+  local root="$1" base="$2" old="$3" new="$4"
+  local label="projects/$old -> projects/$new migration against $base"
+  local new_name leftovers references base_status stray
+  if [[ "$new" == '_template' ]] || \
+    git -C "$root" cat-file -e "$base:projects/$new/PROJECT.md" 2>/dev/null; then
+    fail "$label requires a destination that did not exist at $base"
+  fi
+  if [[ ! -f "$root/projects/$new/PROJECT.md" ]]; then
+    fail "$label requires projects/$new/PROJECT.md in the working tree"
+    return
+  fi
+  new_name="$(frontmatter_value "$root/projects/$new/PROJECT.md" name)"
+  [[ "$new_name" == "$new" ]] || \
+    fail "$label requires PROJECT.md name to match projects/$new, found: ${new_name:-<missing>}"
+  leftovers="$(git -C "$root" diff --name-status -M "$base" -- projects | \
+    LC_ALL=C awk -F'\t' -v src_prefix="projects/$old/" -v dest_prefix="projects/$new/" '
+      index($2, src_prefix) != 1 { next }
+      $1 ~ /^R/ && index($3, dest_prefix) == 1 { next }
+      { print }
+    ')"
+  if [[ -n "$leftovers" ]]; then
+    fail "$label requires every base file to move under projects/$new (or pass the deletion gate)"
+    printf '%s\n' "$leftovers" >&2
+  fi
+  references="$(git -C "$root" grep -l -F "projects/$old" -- '*.md' 2>/dev/null | \
+    grep -v '^knowledge/raw/' || true)"
+  if [[ -n "$references" ]]; then
+    fail "$label requires zero remaining references to projects/$old"
+    printf '%s\n' "$references" >&2
+  fi
+  base_status="$(git -C "$root" show "$base:projects/$old/PROJECT.md" 2>/dev/null | \
+    frontmatter_value /dev/stdin status)"
+  case "$base_status" in
+    paused|retired)
+      stray="$(git -C "$root" diff --name-status -M "$base" -- projects | \
+        LC_ALL=C awk -F'\t' -v dest_prefix="projects/$new/" '
+          {
+            path = $2
+            if ($1 ~ /^R/) path = $3
+            if (index(path, dest_prefix) != 1) next
+            rest = substr(path, length(dest_prefix) + 1)
+            if (rest == "PROJECT.md" || rest == "STATE.md") next
+            if ($1 == "R100") next
+            print
+          }
+        ')"
+      if [[ -n "$stray" ]]; then
+        fail "projects/$old was $base_status at $base; migration to projects/$new may only carry PROJECT.md / STATE.md changes"
+        printf '%s\n' "$stray" >&2
+      fi
+      ;;
+  esac
+}
+
 # Base-aware lifecycle enforcement: a Project that was paused or retired at the base
 # revision only accepts PROJECT.md / STATE.md state-transition edits, and a Project
-# removed since the base revision must pass the deletion gate. Independent Projects
-# are invisible to the root tree here; their lifecycle lives in their own Git.
+# removed since the base revision must pass the deletion gate unless Git rename
+# detection identifies an explicit physical migration. Independent Projects are
+# invisible to the root tree here; their lifecycle lives in their own Git.
 check_lifecycle_diff() {
-  local root="$1" base="$2" name base_status disallowed
+  local root="$1" base="$2" name base_status disallowed migration_dest dest_name
   while IFS= read -r name; do
     [[ -n "$name" && "$name" != '_template' ]] || continue
     git -C "$root" cat-file -e "$base:projects/$name/PROJECT.md" 2>/dev/null || continue
     if [[ ! -e "$root/projects/$name" ]]; then
-      check_project_deletion_gate "$root" "$base" "$name"
+      migration_dest="$(git -C "$root" diff --name-status -M "$base" -- projects | \
+        LC_ALL=C awk -F'\t' -v src="projects/$name/PROJECT.md" '
+          $1 ~ /^R/ && $2 == src { print $3; exit }
+        ')"
+      dest_name="${migration_dest#projects/}"
+      dest_name="${dest_name%/PROJECT.md}"
+      if [[ -n "$migration_dest" && -n "$dest_name" && "$dest_name" != */* && \
+        "$migration_dest" == "projects/$dest_name/PROJECT.md" ]]; then
+        check_project_migration "$root" "$base" "$name" "$dest_name"
+      else
+        check_project_deletion_gate "$root" "$base" "$name"
+      fi
       continue
     fi
     base_status="$(git -C "$root" show "$base:projects/$name/PROJECT.md" | \

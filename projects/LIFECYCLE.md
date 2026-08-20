@@ -42,6 +42,12 @@ Agent Directoryは確定した決定と状態遷移だけを正本へ記録す�
 
 検索除外のためにProjectを`_archive/`へ移動しない。completed、paused、retiredも元のパスに残し、状態で絞る。
 別パスへの移行が必要な場合は、すべての参照先、移行表、復旧方法を用意し、利用者の明示指示に基づいて行う。
+移行表は新しい`knowledge/raw/internal/` recordとして残す。
+
+`--base <ref>`検査は、Gitのrename検出でProject物理移行と削除を区別し、移行の決定的な形だけを検査する
+（base側全ファイルの新パスへの対応、baseに存在しない移行先、`PROJECT.md`の`name`と新ディレクトリ名の一致、
+現行正本からの旧path残存参照ゼロ、paused / retiredでは状態遷移以外を持ち込まないこと）。
+利用者の明示指示という要件そのものはvalidatorが推論せず、本正本が所有する。
 
 ## statusとIndependent repository
 
