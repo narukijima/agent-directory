@@ -154,6 +154,60 @@ validate_status_file() {
   fi
 }
 
+# Contract for knowledge/raw/internal records: knowledge/KNOWLEDGE.md#内部原記録のRecord形式.
+validate_raw_internal_record() {
+  local file="$1" name="${1##*/}" record_root="${1%%/knowledge/raw/internal/*}"
+  local recorded_at kind subjects subjects_compact corrects key
+  [[ "${file#*/knowledge/raw/internal/}" == "$name" && \
+     "$name" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}-[a-z0-9]+(-[a-z0-9]+)*\.md$ ]] || {
+    fail "${file#"$repo_root"/} must be knowledge/raw/internal/YYYY-MM-DD-<lowercase-kebab>.md"
+    return 0
+  }
+  [[ "$(sed -n '1p' "$file")" == '---' ]] || {
+    fail "${file#"$repo_root"/} must start with YAML frontmatter"
+    return 0
+  }
+  recorded_at="$(frontmatter_value "$file" recorded_at)"
+  if [[ ! "$recorded_at" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}(T[0-9]{2}:[0-9]{2}:[0-9]{2}(Z|[+-][0-9]{2}:[0-9]{2}))?$ ]]; then
+    fail "${file#"$repo_root"/} recorded_at must be YYYY-MM-DD or ISO 8601 with timezone offset"
+  elif [[ "${name:0:10}" != "${recorded_at:0:10}" ]]; then
+    fail "${file#"$repo_root"/} filename date must match recorded_at: ${recorded_at:0:10}"
+  fi
+  kind="$(frontmatter_value "$file" kind)"
+  case "$kind" in
+    instruction|decision|preference|fact|observation|hypothesis|correction) ;;
+    '') fail "${file#"$repo_root"/} is missing frontmatter kind" ;;
+    *) fail "${file#"$repo_root"/} has invalid kind: $kind" ;;
+  esac
+  subjects="$(frontmatter_value "$file" subjects)"
+  subjects_compact=''
+  [[ "$subjects" =~ ^\[(.*)\]$ ]] && subjects_compact="${BASH_REMATCH[1]// /}"
+  if [[ -z "$subjects_compact" || "$subjects" == *$'\t'* || \
+        "$subjects_compact" == ,* || "$subjects_compact" == *, || "$subjects_compact" == *,,* ]]; then
+    fail "${file#"$repo_root"/} subjects must be a one-line array with at least one subject"
+  fi
+  corrects="$(frontmatter_value "$file" corrects)"
+  if [[ "$kind" == 'correction' ]]; then
+    if [[ "$corrects" != knowledge/raw/internal/* ]]; then
+      fail "${file#"$repo_root"/} correction must set corrects to a knowledge/raw/internal/ path"
+    elif [[ "$record_root/$corrects" == "$file" || ! -f "$record_root/$corrects" ]]; then
+      fail "${file#"$repo_root"/} corrects must point to an existing earlier record: $corrects"
+    fi
+  fi
+  while IFS= read -r key; do
+    case "$key" in
+      recorded_at|kind|subjects) ;;
+      corrects) [[ "$kind" == 'correction' ]] || \
+        fail "${file#"$repo_root"/} corrects is only allowed on correction records" ;;
+      *) fail "${file#"$repo_root"/} has non-standard record field: $key" ;;
+    esac
+  done < <(awk '
+    NR == 1 && $0 == "---" { in_frontmatter = 1; next }
+    in_frontmatter && $0 == "---" { exit }
+    in_frontmatter && match($0, /^[a-z][a-z0-9_-]*:/) { print substr($0, 1, RLENGTH - 1) }
+  ' "$file")
+}
+
 require_headings() {
   local file="$1" label="$2" heading
   shift 2
@@ -252,6 +306,7 @@ validate_tool_behaviors() {
   local materialize_root upstream_work upstream_bare adopted_sha materialize_output
   local skill_source_root skill_target_root skill_import_output second_import_output
   local locale_skill_dir locale_output reference_fixture reference_scope_output
+  local raw_record_dir raw_record_output
 
   fixture_root="$(mktemp -d "${TMPDIR:-/tmp}/agent-directory-tool-test.XXXXXX")"
   tool_fixture_root="$fixture_root"
@@ -290,6 +345,26 @@ validate_tool_behaviors() {
     fail 'check-markdown-references.sh lost the broken wiki reference failure'
   ! printf '%s\n' "$reference_scope_output" | grep -Fq 'knowledge/raw/' || \
     fail 'check-markdown-references.sh must not require resolution inside immutable knowledge/raw records'
+
+  # raw/internal record schema: canonical decision and correction records pass,
+  # and the kind allowlist still rejects a non-canonical classification.
+  raw_record_dir="$fixture_root/raw-schema/knowledge/raw/internal"
+  mkdir -p "$raw_record_dir"
+  printf '%s\n' '---' 'recorded_at: 2026-08-20T13:01:00+09:00' 'kind: decision' \
+    'subjects: [fixture, deploy]' '---' '' '# Fixture decision' \
+    > "$raw_record_dir/2026-08-20-fixture-decision.md"
+  printf '%s\n' '---' 'recorded_at: 2026-08-21' 'kind: correction' 'subjects: [fixture]' \
+    'corrects: knowledge/raw/internal/2026-08-20-fixture-decision.md' '---' '' '# Fixture correction' \
+    > "$raw_record_dir/2026-08-21-fixture-correction.md"
+  raw_record_output="$( { validate_raw_internal_record "$raw_record_dir/2026-08-20-fixture-decision.md"
+    validate_raw_internal_record "$raw_record_dir/2026-08-21-fixture-correction.md"; } 2>&1 )"
+  [[ -z "$raw_record_output" ]] || \
+    fail "canonical raw/internal records must validate cleanly: $raw_record_output"
+  printf '%s\n' '---' 'recorded_at: 2026-08-22T09:00:00+09:00' 'kind: summary' 'subjects: [fixture]' '---' \
+    > "$raw_record_dir/2026-08-22-invalid-kind.md"
+  raw_record_output="$(validate_raw_internal_record "$raw_record_dir/2026-08-22-invalid-kind.md" 2>&1)"
+  printf '%s\n' "$raw_record_output" | grep -Fq 'invalid kind' || \
+    fail 'validate_raw_internal_record lost the kind allowlist check'
 
   # Skill import: preserve provenance, normalize portable frontmatter, and create
   # exactly one native symlink adapter for each supported Runtime.
@@ -491,6 +566,11 @@ while IFS= read -r -d '' page; do
   (( bytes <= 65536 )) || fail "${page#"$repo_root"/} exceeds 64KiB"
 done < <(find "$repo_root/knowledge/wiki/sources" "$repo_root/knowledge/wiki/topics" -type f -name '*.md' -print0)
 
+while IFS= read -r -d '' record; do
+  validate_raw_internal_record "$record"
+done < <(find "$repo_root/knowledge/raw/internal" -mindepth 1 \
+  -not -name '.gitkeep' -not -name '.DS_Store' -print0)
+
 for skill_dir in "$repo_root"/skills/*; do
   [[ -d "$skill_dir" ]] || continue
   [[ "${skill_dir##*/}" != '_template' ]] || continue
@@ -578,6 +658,16 @@ if git -C "$repo_root" rev-parse --show-toplevel >/dev/null 2>&1; then
     tracked_forbidden="${tracked_forbidden}${tracked_path}\n"
   done < <(git -C "$repo_root" ls-files | grep -E '(^|/)(\.env($|\.)|\.DS_Store$|\.tmp/|__pycache__/)' || true)
   [[ -z "$tracked_forbidden" ]] || fail "forbidden generated or secret-bearing paths are tracked"
+
+  # Immutable raw records: additions and byte-identical migration renames only.
+  if git -C "$repo_root" rev-parse --verify HEAD >/dev/null 2>&1; then
+    raw_mutations="$(git -C "$repo_root" diff --name-status -M100% HEAD -- knowledge/raw \
+      | grep -Ev '^(A|R100)[[:space:]]' || true)"
+    if [[ -n "$raw_mutations" ]]; then
+      fail 'immutable knowledge/raw records are modified or deleted in the working tree'
+      printf '%s\n' "$raw_mutations" >&2
+    fi
+  fi
 fi
 
 if [[ "$full" == true ]]; then
