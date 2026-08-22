@@ -47,6 +47,7 @@ projects/<project-name>/
 ├── AGENTS.md         # 任意。作業差分がある場合だけ
 ├── ARCHITECTURE.md   # 任意。Project全体の構造地図
 ├── docs/             # 任意。必要になったProject固有文書
+├── skills/           # 任意。Project固有Skillの正本
 ├── inputs/           # Project固有の入力
 ├── outputs/          # 完成成果物
 ├── runs/             # 保存価値のある詳細履歴。既定では読まない
@@ -69,6 +70,20 @@ build/testコマンド、編集禁止事項がある場合だけ置き、目的�
 具体的な調査、仮説、実験、結果はProjectが所有する。Project外でも再利用でき、根拠、適用範囲、不確実性を
 示せる確定知識だけをKnowledgeへ昇格し、元の証拠へリンクする。同じ結論をProjectとKnowledgeの二つの
 active正本として保守しない。
+
+## Project固有Skill
+
+単一Projectだけが使うSkillは、そのProjectが`projects/<name>/skills/<skill-name>/`を正本として所有する。
+構造、frontmatter、lifecycleは`skills/SKILLS.md`の契約に従い、root `skills/`と正本を二重化しない。
+
+- Runtime adapterはProject自身の`.agents/skills/<skill-name>`と`.claude/skills/<skill-name>`に、
+  root Skillと同じ`../../skills/<skill-name>`へのper-Skill symlinkとして置く。
+- Workspace rootの`.agents/skills/` / `.claude/skills/`へProject Skillをブリッジしない。root adapterの
+  正本は常にroot `skills/`である。
+- Runtimeの自動discoveryはProjectをsession rootとして開いた場合だけ働く。Workspace rootのsessionは
+  `PROJECT.md`の「使用するSkill」のリポジトリ相対パスで明示参照して読む。
+- 2つ以上のProjectが同じSkillを必要とした時点で、`AGENTS.md#差分判定`に従いroot `skills/`へ昇格し、
+  Project側に旧正本を残さない。
 
 ## 食い違いの訂正
 

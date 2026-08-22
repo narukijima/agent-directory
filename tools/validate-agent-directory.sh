@@ -393,6 +393,8 @@ validate_skill_frontmatter() {
 
 validate_skill_adapter() {
   local skill_name="$1" adapter="$2" expected
+  # Root and Project adapters share the same layout, so the link target is
+  # always ../../skills/<name> relative to the adapter directory.
   expected="../../skills/$skill_name"
   if [[ -L "$repo_root/$adapter/$skill_name" ]]; then
     [[ "$(readlink "$repo_root/$adapter/$skill_name")" == "$expected" ]] || \
@@ -936,37 +938,67 @@ while IFS= read -r -d '' record; do
 done < <(find "$repo_root/knowledge/raw/internal" -mindepth 1 \
   -not -name '.gitkeep' -not -name '.DS_Store' -print0)
 
-for skill_dir in "$repo_root"/skills/*; do
-  [[ -d "$skill_dir" ]] || continue
-  [[ "${skill_dir##*/}" != '_template' ]] || continue
-  skill_file="$skill_dir/SKILL.md"
-  [[ -f "$skill_file" ]] || { fail "Skill directory is missing SKILL.md: ${skill_dir##*/}"; continue; }
-  validate_skill_frontmatter "$skill_file"
-  skill_name="$(frontmatter_value "$skill_file" name)"
-  [[ "$skill_name" == "${skill_dir##*/}" ]] || fail "${skill_file#"$repo_root"/} name must match its directory"
-  [[ -n "$(frontmatter_value "$skill_file" description)" ]] || fail "${skill_file#"$repo_root"/} is missing description"
-  validate_skill_adapter "$skill_name" '.agents/skills'
-  validate_skill_adapter "$skill_name" '.claude/skills'
-  skill_status="$(frontmatter_metadata_value "$skill_file" agent-directory.status)"
-  [[ -n "$skill_status" ]] || skill_status="$(frontmatter_value "$skill_file" status)"
-  if [[ "$skill_status" == 'deprecated' ]]; then
-    replacement="$(frontmatter_metadata_value "$skill_file" agent-directory.replaced-by)"
-    [[ -n "$replacement" ]] || replacement="$(frontmatter_value "$skill_file" replaced_by)"
-    if [[ ! "$replacement" =~ ^[a-z0-9]+(-[a-z0-9]+)*$ ]]; then
-      fail "${skill_file#"$repo_root"/} deprecated Skill is missing a valid metadata agent-directory.replaced-by"
-    elif [[ ! -f "$repo_root/skills/$replacement/SKILL.md" ]]; then
-      fail "${skill_file#"$repo_root"/} replacement Skill does not exist: $replacement"
-    else
-      replacement_status="$(frontmatter_metadata_value "$repo_root/skills/$replacement/SKILL.md" agent-directory.status)"
-      [[ -n "$replacement_status" ]] || \
-        replacement_status="$(frontmatter_value "$repo_root/skills/$replacement/SKILL.md" status)"
-      # Replacements must be active, so deprecated chains can neither dangle nor cycle.
-      [[ "$replacement_status" == 'active' ]] || \
-        fail "${skill_file#"$repo_root"/} replacement Skill is not active: $replacement"
+validate_skill_library() {
+  local skills_parent="$1" agents_adapter="$2" claude_adapter="$3"
+  local skill_dir skill_file skill_name skill_status replacement replacement_status bytes
+  for skill_dir in "$repo_root/$skills_parent"/*; do
+    [[ -d "$skill_dir" ]] || continue
+    [[ "${skill_dir##*/}" != '_template' ]] || continue
+    skill_file="$skill_dir/SKILL.md"
+    [[ -f "$skill_file" ]] || { fail "Skill directory is missing SKILL.md: ${skill_dir#"$repo_root"/}"; continue; }
+    validate_skill_frontmatter "$skill_file"
+    skill_name="$(frontmatter_value "$skill_file" name)"
+    [[ "$skill_name" == "${skill_dir##*/}" ]] || fail "${skill_file#"$repo_root"/} name must match its directory"
+    [[ -n "$(frontmatter_value "$skill_file" description)" ]] || fail "${skill_file#"$repo_root"/} is missing description"
+    validate_skill_adapter "$skill_name" "$agents_adapter"
+    validate_skill_adapter "$skill_name" "$claude_adapter"
+    skill_status="$(frontmatter_metadata_value "$skill_file" agent-directory.status)"
+    [[ -n "$skill_status" ]] || skill_status="$(frontmatter_value "$skill_file" status)"
+    if [[ "$skill_status" == 'deprecated' ]]; then
+      replacement="$(frontmatter_metadata_value "$skill_file" agent-directory.replaced-by)"
+      [[ -n "$replacement" ]] || replacement="$(frontmatter_value "$skill_file" replaced_by)"
+      if [[ ! "$replacement" =~ ^[a-z0-9]+(-[a-z0-9]+)*$ ]]; then
+        fail "${skill_file#"$repo_root"/} deprecated Skill is missing a valid metadata agent-directory.replaced-by"
+      elif [[ ! -f "$repo_root/$skills_parent/$replacement/SKILL.md" ]]; then
+        fail "${skill_file#"$repo_root"/} replacement Skill does not exist: $replacement"
+      else
+        replacement_status="$(frontmatter_metadata_value "$repo_root/$skills_parent/$replacement/SKILL.md" agent-directory.status)"
+        [[ -n "$replacement_status" ]] || \
+          replacement_status="$(frontmatter_value "$repo_root/$skills_parent/$replacement/SKILL.md" status)"
+        # Replacements must be active, so deprecated chains can neither dangle nor cycle.
+        [[ "$replacement_status" == 'active' ]] || \
+          fail "${skill_file#"$repo_root"/} replacement Skill is not active: $replacement"
+      fi
     fi
-  fi
-  bytes="$(wc -c < "$skill_file" | tr -d ' ')"
-  (( bytes <= 20480 )) || fail "${skill_file#"$repo_root"/} exceeds 20KiB"
+    bytes="$(wc -c < "$skill_file" | tr -d ' ')"
+    (( bytes <= 20480 )) || fail "${skill_file#"$repo_root"/} exceeds 20KiB"
+  done
+}
+
+validate_skill_library 'skills' '.agents/skills' '.claude/skills'
+
+# Project-local Skills (projects/PROJECTS.md#Project固有Skill): the Project owns
+# canon and adapters under its own tree. Independent Projects (own .git) validate
+# themselves; the Workspace validator covers Embedded Projects only.
+for project_skill_root in "$repo_root"/projects/*/skills; do
+  [[ -d "$project_skill_root" ]] || continue
+  project_dir="${project_skill_root%/skills}"
+  project_name="${project_dir##*/}"
+  [[ "$project_name" != '_template' ]] || continue
+  [[ ! -d "$project_dir/.git" ]] || continue
+  validate_skill_library "projects/$project_name/skills" \
+    "projects/$project_name/.agents/skills" "projects/$project_name/.claude/skills"
+done
+
+# Workspace root adapters must only expose root Skills; Project Skills are never
+# bridged to the root (projects/PROJECTS.md#Project固有Skill).
+for adapter_root in '.agents/skills' '.claude/skills'; do
+  for adapter_entry in "$repo_root/$adapter_root"/*; do
+    [[ -e "$adapter_entry" || -L "$adapter_entry" ]] || continue
+    adapter_entry_name="${adapter_entry##*/}"
+    [[ -f "$repo_root/skills/$adapter_entry_name/SKILL.md" ]] || \
+      fail "$adapter_root/$adapter_entry_name has no root skills/ canon; do not bridge Project Skills to the Workspace root"
+  done
 done
 
 for project_dir in "$repo_root"/projects/*; do
