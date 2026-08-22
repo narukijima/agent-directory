@@ -14,7 +14,7 @@ root `skills/`はProject横断で再利用するSkillだけの正本とする。
 
 ## 共有Skillライブラリ
 
-Agent間で再利用する汎用Skillは、別リポジトリの [`agent-skills`](https://github.com/claudagt/agent-skills) が配布元である。
+Agent間で再利用する汎用Skillは、別リポジトリの [`agent-skills`](https://github.com/narukijima/agent-skills) が配布元である。
 このWorkspaceへSkillを標準で自動導入・自動同期はしない。必要なタスクで利用者が明示したときだけ、target側のimport
 transactionで`skills/<skill-name>/`をコピーし、取り込んだSkillをこのWorkspaceの正本にする。
 

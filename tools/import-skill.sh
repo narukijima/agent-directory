@@ -137,7 +137,6 @@ def unquote(value: str) -> str:
 status = unquote(
     metadata.get("agent-directory.status")
     or top.get("status")
-    or metadata.get("claudagt.status")
     or ""
 )
 if status not in {"active", "deprecated", "retired"}:
@@ -146,7 +145,6 @@ if status not in {"active", "deprecated", "retired"}:
 raw_aliases = (
     metadata.get("agent-directory.aliases")
     or top.get("aliases")
-    or metadata.get("claudagt.aliases")
     or '""'
 )
 if raw_aliases.lstrip().startswith("["):
@@ -160,7 +158,6 @@ else:
 replacement = unquote(
     metadata.get("agent-directory.replaced-by")
     or top.get("replaced_by")
-    or metadata.get("claudagt.replaced-by")
     or ""
 )
 
