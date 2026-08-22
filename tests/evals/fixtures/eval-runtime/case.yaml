@@ -19,6 +19,8 @@ expect:
     - bash tools/validate-agent-directory.sh --full
   must_not_run:
     - git push
+  must_delegate:
+    - sample-skill
   must_update:
     - tools/example.sh
   may_write:

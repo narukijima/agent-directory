@@ -35,7 +35,29 @@ bash tools/import-skill.sh <skill-name> --source /path/to/agent-skills
 - 共有Skillのadapterは`tools/import-skill.sh`がimportと同じtransactionで作る。固有Skillはsource作成後に同じlinkを作る。
 - adapterを利用できないRuntimeでは、そのRuntime自身の標準導入経路をconsumerが所有する。Core独自の
   discovery、同期、copy daemon、fallbackを追加しない。
-- Skillを実行するときはRuntimeが選んだ`SKILL.md`を最後まで読み、descriptionだけで代用しない。
+- Skillを実行する主体（Root Agentまたは委譲先Worker）は対象`SKILL.md`を最後まで読み、descriptionだけで代用しない。
+
+## Skill実行の委譲
+
+Root Agentは、独立して完結するbounded Skill workをRuntime標準のSubagentへ委譲してよい。委譲しても
+`SKILL.md`が唯一の正本であり、Workerはそれを実行する一時的な実行主体である。SkillごとのAgent定義の複製、
+Skill本文のWorker向けコピー、Core独自のorchestrator、queue、scheduler、worker manager、常駐processを
+追加しない。実行機構は各Runtimeの標準Subagent機能だけを使い、Subagent実行を持たないRuntimeでは
+Rootが直列実行する。
+
+- **委譲に適する** — 調査、分析、review、verification、独立した生成、ログ・大量ファイルの読込など、
+  Root contextと独立に完結する処理。
+- **Rootで直接実行する** — 非常に小さいSkill、Root contextへ強く依存する処理、委譲overheadが実行コストを
+  上回る処理、同じファイル群を継続編集する密結合な処理。
+- **Workerへ渡すcontext** — 対象`SKILL.md`パス、対象Project、Required Knowledge、具体的Task、成果契約
+  だけを渡す。Skill本文やProject文書をprompt内へ複製しない。
+- **WorkerからRootへ返す報告** — 完成成果、重要な判断、検証結果、blockerだけを返し、探索ログや中間出力を
+  Root contextへ戻さない。
+- **並列化** — 相互依存のない複数Skillは、Runtimeが対応する範囲で並列に委譲してよい。read-heavyな処理を
+  優先し、書込を伴う並列は書込対象が互いに素で、`tools/SAFETY.md`のWrite Rootと対象Project契約に
+  反しない場合だけ許す。依存があるSkill列は直列にし、Core独自のDAG管理を持たない。
+- **Runtime固有設定** — custom agent定義やfork用frontmatter等のProvider固有委譲設定はPortable sourceの
+  必須契約にしない。必要なAgentだけがRuntime層の薄いadapterとして追加・追跡する。
 
 ## frontmatterと状態
 

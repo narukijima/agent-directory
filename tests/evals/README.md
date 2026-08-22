@@ -18,6 +18,7 @@ traceはJSON Linesの1行1eventで、実際に観測した値だけを記録す�
 - `search` — command、status、returned
 - `read` — path、bytes
 - `run` — command、exit_code
+- `delegate` — skill（Runtime標準のSubagentへ委譲したSkill名）
 - `write` — path、operation
 - `state` — path、field、value
 - `final_response` — 利用者向け報告

@@ -36,7 +36,9 @@ Projectは明示pathと`projects/`の直下構造を使い、Core独自の検索
 
 ## 自律実行
 
-通常経路は`Route → Target → Work → Verify`、書込Git rootはsessionごとに1つ。
+通常経路は`Route → Target → Work → Verify`、書込Git rootはsessionごとに1つ。独立して完結するSkill実行は
+Runtime標準のSubagentへ委譲・並列化してよく、委譲基準、境界、Worker往復の最小contextは
+`skills/SKILLS.md#Skill実行の委譲`が所有する。
 Runtime、Provider、認証、permission mode、schedulerは各AgentとOperatorが所有し、本Coreは選択・設定・診断しない。
 失敗層を分け、同じfingerprintを状態・入力・経路の差分なしに再試行しない。
 

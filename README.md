@@ -112,6 +112,11 @@ ln -s ../../skills/<skill-name> .agents/skills/<skill-name>
 ln -s ../../skills/<skill-name> .claude/skills/<skill-name>
 ```
 
+Skill実行はRootの直列実行に限らない。独立して完結するSkill workは、CodexやClaude Codeが標準で提供する
+Subagent実行へ委譲・並列化してよい。委譲基準、Worker往復の最小context、並列とSingle Writerの境界は
+[skills/SKILLS.md](skills/SKILLS.md)の「Skill実行の委譲」が所有し、Coreは独自のorchestrator、queue、
+worker manager、DAG管理を持たない。
+
 両Runtimeの受け皿は空の構造だけをtemplateに含める。Skill実体、偽の`SKILL.md`、`_template` linkは置かず、
 `tools/import-skill.sh`が共有Skillのimport時にだけ同名linkを作る。固有Skillを`_template/`から作る場合も、同じ2本の
 per-Skill linkだけを追加する。
@@ -200,7 +205,7 @@ contract versionは`bash tools/validate-agent-directory.sh --version`が返す�
 |---|---|
 | [AGENTS.md](AGENTS.md) | 自己定義、Route、Context Loading、共通判断 |
 | [knowledge/KNOWLEDGE.md](knowledge/KNOWLEDGE.md) | Knowledge構造、不変規則、限定取得 |
-| [skills/SKILLS.md](skills/SKILLS.md) | Skill schema、選択、Owner確認 |
+| [skills/SKILLS.md](skills/SKILLS.md) | Skill schema、選択、実行委譲、Owner確認 |
 | [projects/AGENTS.md](projects/AGENTS.md) | Project作業入口 |
 | [projects/PROJECTS.md](projects/PROJECTS.md) | 成果契約、Git ownership、attachment |
 | [projects/REPOSITORIES.md](projects/REPOSITORIES.md) | Independent registry |
