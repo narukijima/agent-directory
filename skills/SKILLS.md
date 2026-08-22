@@ -8,6 +8,10 @@ Projectは「何を作り残すか」を所有する。再利用可能な研究�
 `skills/<name>/`はAgent Skills公開標準に従うProvider間共有sourceであり、consumerはRuntime標準のSkill配置へ
 薄いadapterまたは明示importで接続する。Provider固有frontmatterは共有sourceの必須契約にしない。
 
+root `skills/`はProject横断で再利用するSkillだけの正本とする。単一Projectだけが使うSkillは
+`projects/PROJECTS.md#Project固有Skill`に従いProject配下が正本・adapterとも所有し、2つ目のProjectが
+使う時点でrootへ昇格する。Project Skillをroot adapterへブリッジしない。
+
 ## 共有Skillライブラリ
 
 Agent間で再利用する汎用Skillは、別リポジトリの [`agent-skills`](https://github.com/claudagt/agent-skills) が配布元である。
