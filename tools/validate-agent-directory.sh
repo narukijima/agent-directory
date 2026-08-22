@@ -721,7 +721,7 @@ validate_tool_behaviors() {
     '[[ "$1" == "--target" && $# -eq 2 ]]' \
     'target_root="$2"' \
     'mkdir -p "$target_root/skills/$skill_name/agents"' \
-    'printf '\''%s\n'\'' '\''---'\'' '\''name: sample-skill'\'' '\''description: Portable fixture Skill'\'' '\''status: active'\'' '\''aliases: ["sample", "fixture"]'\'' '\''metadata:'\'' '\''  claudagt.version: "1.0.0"'\'' '\''  claudagt.status: "active"'\'' '\''  claudagt.aliases: "sample,fixture"'\'' '\''---'\'' '\'''\'' '\''# Sample'\'' > "$target_root/skills/$skill_name/SKILL.md"' \
+    'printf '\''%s\n'\'' '\''---'\'' '\''name: sample-skill'\'' '\''description: Portable fixture Skill'\'' '\''status: active'\'' '\''aliases: ["sample", "fixture"]'\'' '\''metadata:'\'' '\''  upstream.version: "1.0.0"'\'' '\''---'\'' '\'''\'' '\''# Sample'\'' > "$target_root/skills/$skill_name/SKILL.md"' \
     'printf '\''%s\n'\'' '\''source_commit: "0123456789abcdef"'\'' > "$target_root/skills/$skill_name/agents/upstream.yaml"' \
     > "$skill_source_root/tools/import-skill.sh"
   chmod 755 "$skill_source_root/tools/import-skill.sh"
