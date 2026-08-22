@@ -5,7 +5,8 @@
 {"event":"read","path":"AGENTS.md","bytes":200}
 {"event":"read","path":"tools/TOOLS.md","bytes":300}
 {"event":"run","command":"bash tools/validate-agent-directory.sh --full","exit_code":0,"duration_ms":400}
-{"event":"delegate","skill":"sample-skill"}
+{"event":"delegate","skill":"sample-skill","parallel_group":"analysis-1"}
+{"event":"delegate","skill":"peer-skill","parallel_group":"analysis-1"}
 {"event":"write","path":"tools/example.sh","operation":"update"}
 {"event":"final_response","text":"検証は完了し、PASSしました。"}
 {"event":"summary","tool_calls":1,"wall_time_ms":1000}

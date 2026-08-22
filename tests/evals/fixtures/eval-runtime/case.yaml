@@ -21,6 +21,10 @@ expect:
     - git push
   must_delegate:
     - sample-skill
+    - peer-skill
+  must_delegate_parallel:
+    - sample-skill
+    - peer-skill
   must_update:
     - tools/example.sh
   may_write:

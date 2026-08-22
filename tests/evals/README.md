@@ -18,7 +18,7 @@ traceはJSON Linesの1行1eventで、実際に観測した値だけを記録す�
 - `search` — command、status、returned
 - `read` — path、bytes
 - `run` — command、exit_code
-- `delegate` — skill（Runtime標準のSubagentへ委譲したSkill名）
+- `delegate` — `skill`（Runtime標準のSubagentへ委譲したSkill名）、同時実行を観測した場合だけ`parallel_group`
 - `write` — path、operation
 - `state` — path、field、value
 - `final_response` — 利用者向け報告
@@ -26,6 +26,7 @@ traceはJSON Linesの1行1eventで、実際に観測した値だけを記録す�
 
 traceの先頭eventは`trace`でなければならない。`route` eventが複数ある場合は、すべてが期待Routeと
 一致しない限り不合格とする。harnessまたは決定的Toolの観測を優先し、traceにない期待は`UNVERIFIED`とする。
+`parallel_group`は同じ値のdelegate同士が実際に同時実行されたことをharnessが観測した場合だけ記録する。
 Agentの説明から未観測eventを補完せず、secret、credential、個人情報を入れない。trace生成、adapter、model実行、隔離はRuntimeまたは外部harnessが
 所有する。
 

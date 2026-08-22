@@ -11,8 +11,14 @@ expect:
   must_delegate:
     - competitor-scan
     - literature-review
+  must_delegate_parallel:
+    - competitor-scan
+    - literature-review
   must_read:
     - AGENTS.md
+    - skills/SKILLS.md
+    - skills/competitor-scan/SKILL.md
+    - skills/literature-review/SKILL.md
   may_write:
     - .tmp/**
   must_not_write:

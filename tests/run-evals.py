@@ -13,7 +13,7 @@ MAP_EXPECTATIONS = {"must_search"}
 SUPPORTED_EXPECTATIONS = {
     "route", "must_search", "max_candidates", "must_read", "must_not_read",
     "max_read_files", "max_context_bytes", "must_run", "must_not_run",
-    "must_delegate", "must_update", "must_not_write", "may_write",
+    "must_delegate", "must_delegate_parallel", "must_update", "must_not_write", "may_write",
     "must_preserve", "must_set", "must_report", "must_not_report",
 }
 
@@ -262,6 +262,17 @@ def score_case(case, events):
             actual = [event["skill"] for event in delegates]
             missing = [skill for skill in expected if str(skill) not in actual]
             status, detail = observed_or_unverified("delegate", not missing, "missing=%s" % missing)
+            add(key, status, detail)
+        elif key == "must_delegate_parallel":
+            groups = {}
+            for event in delegates:
+                group = event.get("parallel_group")
+                if isinstance(group, str) and group:
+                    groups.setdefault(group, []).append(event["skill"])
+            matching = [group for group, skills in groups.items()
+                        if all(str(skill) in skills for skill in expected)]
+            status, detail = observed_or_unverified(
+                "delegate", bool(matching), "matching_parallel_groups=%s" % matching)
             add(key, status, detail)
         elif key in {"must_update", "must_not_write", "may_write", "must_preserve"}:
             actual = [event["path"] for event in writes]
