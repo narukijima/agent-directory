@@ -1,0 +1,28 @@
+name: delegate-independent-skills
+
+fixture: delegate-independent-skills
+
+request: |
+  competitor-scanとliterature-reviewは互いに独立した分析です。Runtime標準のSubagentへ
+  Skill実行を委譲して並列に進め、統合した結果だけを報告して。永続成果物は不要です。
+
+expect:
+  route: none
+  must_delegate:
+    - competitor-scan
+    - literature-review
+  must_read:
+    - AGENTS.md
+  may_write:
+    - .tmp/**
+  must_not_write:
+    - skills/**
+    - knowledge/raw/internal/**
+    - knowledge/raw/external/**
+    - projects/**
+  must_report:
+    - integrated-result
+
+report_match:
+  integrated-result:
+    - (統合|integrat)

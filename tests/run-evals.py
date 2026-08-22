@@ -13,8 +13,8 @@ MAP_EXPECTATIONS = {"must_search"}
 SUPPORTED_EXPECTATIONS = {
     "route", "must_search", "max_candidates", "must_read", "must_not_read",
     "max_read_files", "max_context_bytes", "must_run", "must_not_run",
-    "must_update", "must_not_write", "may_write", "must_preserve", "must_set",
-    "must_report", "must_not_report",
+    "must_delegate", "must_update", "must_not_write", "may_write",
+    "must_preserve", "must_set", "must_report", "must_not_report",
 }
 
 
@@ -198,6 +198,7 @@ def score_case(case, events):
     reads = [event for event in events if event["event"] == "read" and isinstance(event.get("path"), str)]
     runs = [event for event in events if event["event"] == "run" and isinstance(event.get("command"), str)]
     writes = [event for event in events if event["event"] == "write" and isinstance(event.get("path"), str)]
+    delegates = [event for event in events if event["event"] == "delegate" and isinstance(event.get("skill"), str)]
     searches = [event for event in events if event["event"] == "search"]
     states = [event for event in events if event["event"] == "state"]
     final_text = "\n".join(
@@ -256,6 +257,11 @@ def score_case(case, events):
                 forbidden = [item for item in actual if any(command_matches(command, item) for command in expected)]
                 passed, detail = not forbidden, "forbidden=%s" % forbidden
             status, detail = observed_or_unverified("run", passed, detail)
+            add(key, status, detail)
+        elif key == "must_delegate":
+            actual = [event["skill"] for event in delegates]
+            missing = [skill for skill in expected if str(skill) not in actual]
+            status, detail = observed_or_unverified("delegate", not missing, "missing=%s" % missing)
             add(key, status, detail)
         elif key in {"must_update", "must_not_write", "may_write", "must_preserve"}:
             actual = [event["path"] for event in writes]
