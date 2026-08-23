@@ -67,11 +67,7 @@ agent-directory/
 ├── CLAUDE.md                    # @AGENTS.mdだけのClaude Code bridge
 ├── README.md
 ├── .agents/skills/              # Codex用Skill bridgeの空の受け皿
-├── .claude/
-│   ├── skills/                  # Claude Code用Skill bridgeの空の受け皿
-│   └── settings.json            # Claude Code native Runtime設定
-├── .codex/
-│   └── config.toml              # Codex native Runtime設定
+├── .claude/skills/              # Claude Code用Skill bridgeの空の受け皿
 ├── knowledge/
 │   ├── KNOWLEDGE.md
 │   ├── raw/{internal,external}/
@@ -100,20 +96,10 @@ agent-directory/
 
 Runtime、Provider、認証、permission、machine-local setupは各Agent / Operatorが所有する。
 Agent Directory Coreはそれらを選択・変換・実行せず、共通Permission schema、approval engine、network gatewayを
-持たない。各Agentは`.codex/`、`.claude/`等の薄いRuntime設定で、自身の名前と標準のAuto modeだけを宣言する。
-配布済み`CLAUDE.md`は`@AGENTS.md`だけをimportする。Repository Knowledgeが正本で、製品側memoryは任意の
-Runtime cacheである。
-
-### Runtime設定
-
-Runtime設定はCoreの抽象化ではなく、各Runtimeが直接読む最小の設定ファイルである。
-
-- Codexは`.codex/config.toml`で`approval_policy = "on-request"`と
-  `approvals_reviewer = "auto_review"`を使う。Permission Profile名は各Agent名と一致させ、標準`:workspace`を
-  そのまま継承する。本Agentは`agent-directory`である。
-- Claude Codeは`.claude/settings.json`で`permissions.defaultMode = "auto"`だけを共有する。
-- Coreはcommand rule、domain allowlist / blocklist、network proxy、sandbox overrideを追加しない。
-  Browser / Computer Useを含む通常経路は各Runtimeの標準Auto modeへ委ねる。
+持たない。`.codex/config.toml`や`.claude/settings.json`によるRuntime権限設定も配布しない。Auto / Manual、
+sandbox、Permission Profile、network、Browser / Computer Use、Git metadataの権限は各RuntimeとOperatorの設定を
+そのまま使う。配布済み`CLAUDE.md`は`@AGENTS.md`だけをimportする。Repository Knowledgeが正本で、製品側memoryは
+任意のRuntime cacheである。
 
 Agent固有の環境変数はroot `.env`を既定の未追跡注入面とする。値や変数一覧を公開templateへ持たず、OS共有、
 Keychain、外部secret storeを必須にしない。別の注入面が必要なRuntimeでは、そのAgent / Operatorが明示選択する。

@@ -1,8 +1,0 @@
-#:schema https://developers.openai.com/codex/config-schema.json
-approval_policy = "on-request"
-approvals_reviewer = "auto_review"
-default_permissions = "agent-directory"
-
-[permissions.agent-directory]
-description = "Agent Directory"
-extends = ":workspace"
