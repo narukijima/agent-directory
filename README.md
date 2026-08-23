@@ -71,8 +71,7 @@ agent-directory/
 │   ├── skills/                  # Claude Code用Skill bridgeの空の受け皿
 │   └── settings.json            # Claude Code native Runtime設定
 ├── .codex/
-│   ├── config.toml              # Codex native Runtime設定
-│   └── rules/default.rules      # Codex command rules
+│   └── config.toml              # Codex native Runtime設定
 ├── knowledge/
 │   ├── KNOWLEDGE.md
 │   ├── raw/{internal,external}/
@@ -101,40 +100,20 @@ agent-directory/
 
 Runtime、Provider、認証、permission、machine-local setupは各Agent / Operatorが所有する。
 Agent Directory Coreはそれらを選択・変換・実行せず、共通Permission schema、approval engine、network gatewayを
-持たない。各Agentは必要に応じて`.codex/`、`.claude/`等の薄いRuntime Permission Adapterを追跡してよい。
-公開templateのadapterは外部通信や外部書込を事前承認せず、導入後のAgent / Operatorが各Runtimeのnative設定を
-直接狭めて使う。配布済み`CLAUDE.md`は`@AGENTS.md`だけをimportする。Repository Knowledgeが正本で、製品側memoryは
-任意のRuntime cacheである。
+持たない。各Agentは`.codex/`、`.claude/`等の薄いRuntime設定で、自身の名前と標準のAuto modeだけを宣言する。
+配布済み`CLAUDE.md`は`@AGENTS.md`だけをimportする。Repository Knowledgeが正本で、製品側memoryは任意の
+Runtime cacheである。
 
-### Runtime Permission Adapter
+### Runtime設定
 
-Permission AdapterはCoreの抽象化ではなく、各Runtimeが直接読む設定ファイルである。operation permissionと
-network destinationは別に設定する。通信先を許可してもpublishやpushを許可したことにはならず、commandを
-許可しても任意の通信先へ接続できるとは限らない。
+Runtime設定はCoreの抽象化ではなく、各Runtimeが直接読む最小の設定ファイルである。
 
-- Claude Codeは共有設定`.claude/settings.json`の`permissions.allow` / `ask` / `deny`と`sandbox`を使う。
-  公開templateはManual相当、sandbox有効、sandbox外retry無効、許可domainなしで、push、GitHub API、publishを
-  毎回確認し、repository削除を禁止する。個別Agentの未追跡overrideは`.claude/settings.local.json`へ置ける。
-- Codexはproject設定`.codex/config.toml`の`approval_policy`とPermission Profile、
-  `.codex/rules/*.rules`のnative command rulesを使う。公開templateはworkspace profile、command network無効、
-  network proxy無効で、push、GitHub API、publishを`prompt`、repository削除を`forbidden`にする。
-- unattended / scheduled executionでは、既知の正常経路に必要なcommandとdomainだけを導入後に追加する。
-  Claude Codeの非対話実行はreview済み`allow`だけを実行する`dontAsk`、Codexはreview済み`allow`とsandbox境界の下で
-  `approval_policy = "never"`を選べる。対話runは既定の`default` / `on-request`を維持する。
-- Claude Codeのsandbox domainは`sandbox.network.allowedDomains` / `deniedDomains`、Codexのdomainは
-  `permissions.<name>.network.domains`へ置く。Codexはdomain ruleを実効化する時だけ
-  `features.network_proxy = true`とし、profile側の`network.enabled = true`も明示する。
-
-導入後は、たとえばGitHub通信なら必要なhostだけをdomain allowlistへ追加し、`git fetch`、`git pull`、backup、
-対象Project既存のpublish command、特定API投稿commandを個別のnative ruleへ追加する。secret値は設定へ書かない。
-Claude Codeは`deny → ask → allow`、Codexは`forbidden → prompt → allow`の厳しい決定を優先するため、事前承認へ
-切り替える操作は競合するshared `ask` / `prompt`を残したままlocal `allow`を足さず、Agent自身の設定で対象ruleを
-置き換える。command patternは完全なsemantic policyではない。特にCodexの`prefix_rule`で広い`git push`を
-`allow`すると後続引数も含み得るため、forceを構造的に除外できないraw commandは自動承認せず、対象Projectの
-既存の安全なentrypointまたはremote側保護まで確認する。
-
-公開templateはGitHub host、任意API、package registry、publish、通常push、backup pushをallowしない。
-force push、repository削除、未知の外部通信、secret送信、全権modeも自動承認しない。
+- Codexは`.codex/config.toml`で`approval_policy = "on-request"`と
+  `approvals_reviewer = "auto_review"`を使う。Permission Profile名は各Agent名と一致させ、標準`:workspace`を
+  そのまま継承する。本Agentは`agent-directory`である。
+- Claude Codeは`.claude/settings.json`で`permissions.defaultMode = "auto"`だけを共有する。
+- Coreはcommand rule、domain allowlist / blocklist、network proxy、sandbox overrideを追加しない。
+  Browser / Computer Useを含む通常経路は各Runtimeの標準Auto modeへ委ねる。
 
 Agent固有の環境変数はroot `.env`を既定の未追跡注入面とする。値や変数一覧を公開templateへ持たず、OS共有、
 Keychain、外部secret storeを必須にしない。別の注入面が必要なRuntimeでは、そのAgent / Operatorが明示選択する。

@@ -1,15 +1,8 @@
 #:schema https://developers.openai.com/codex/config-schema.json
-# Safe public-template baseline. Operators add only the permissions and
-# destinations required by the deployed Agent's known normal paths.
 approval_policy = "on-request"
-default_permissions = "agent-directory-template"
+approvals_reviewer = "auto_review"
+default_permissions = "agent-directory"
 
-[features]
-network_proxy = false
-
-[permissions.agent-directory-template]
-description = "Workspace editing with command network access disabled by default."
+[permissions.agent-directory]
+description = "Agent Directory"
 extends = ":workspace"
-
-[permissions.agent-directory-template.network]
-enabled = false

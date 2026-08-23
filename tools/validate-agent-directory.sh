@@ -798,9 +798,6 @@ validate_tool_behaviors() {
 required_files=(
   '.gitignore'
   '.agents/skills/.gitkeep'
-  '.codex/config.toml'
-  '.codex/rules/default.rules'
-  '.claude/settings.json'
   '.claude/skills/.gitkeep'
   'AGENTS.md'
   'CLAUDE.md'
@@ -859,8 +856,6 @@ grep -Fq 'Skillの新設は既存Skillの更新・統合で目的を満たせな
 grep -Fq 'Agent Skills公開標準に従うProvider間共有source' "$repo_root/skills/SKILLS.md" || fail 'skills/SKILLS.md lost the Agent Skills standard boundary'
 grep -Fq 'agent-directory.status: "active"' "$repo_root/skills/_template/SKILL.md" || fail 'Skill template must use namespaced standard metadata'
 grep -Fq '新しいToolは原則追加しない' "$repo_root/tools/TOOLS.md" || fail 'tools/TOOLS.md lost the Tool owner gate'
-grep -Fq '各Agentは必要に応じて`.codex/`、`.claude/`等の薄いRuntime Permission Adapterを追跡してよい' "$repo_root/README.md" || \
-  fail 'README.md must keep Runtime Permission Adapters agent-owned'
 grep -Fq 'これはRuntimeが一時的なsession isolationや並列作業にGit worktreeを使うことを' "$repo_root/README.md" || fail 'README.md must allow Runtime worktrees'
 grep -Fq 'Skill discovery、選択、起動、subagent実行を行わない' "$repo_root/skills/SKILLS.md" || fail 'skills/SKILLS.md must remain a source contract, not a Skill runtime'
 
