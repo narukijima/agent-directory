@@ -67,7 +67,11 @@ agent-directory/
 ├── CLAUDE.md                    # @AGENTS.mdだけのClaude Code bridge
 ├── README.md
 ├── .agents/skills/              # Codex用Skill bridgeの空の受け皿
-├── .claude/skills/              # Claude Code用Skill bridgeの空の受け皿
+├── .claude/
+│   ├── skills/                  # Claude Code用Skill bridgeの空の受け皿
+│   └── settings.json            # 権限overrideを持たないnative設定
+├── .codex/
+│   └── config.toml              # 権限overrideを持たないnative設定
 ├── knowledge/
 │   ├── KNOWLEDGE.md
 │   ├── raw/{internal,external}/
@@ -96,10 +100,10 @@ agent-directory/
 
 Runtime、Provider、認証、permission、machine-local setupは各Agent / Operatorが所有する。
 Agent Directory Coreはそれらを選択・変換・実行せず、共通Permission schema、approval engine、network gatewayを
-持たない。`.codex/config.toml`や`.claude/settings.json`によるRuntime権限設定も配布しない。Auto / Manual、
-sandbox、Permission Profile、network、Browser / Computer Use、Git metadataの権限は各RuntimeとOperatorの設定を
-そのまま使う。配布済み`CLAUDE.md`は`@AGENTS.md`だけをimportする。Repository Knowledgeが正本で、製品側memoryは
-任意のRuntime cacheである。
+持たない。`.codex/config.toml`と`.claude/settings.json`はnative設定の受け皿だけを残し、Runtime権限をoverrideしない。
+Auto / Manual、sandbox、Permission Profile、network、Browser / Computer Use、Git metadataの権限は各Runtimeと
+Operatorの設定をそのまま使う。配布済み`CLAUDE.md`は`@AGENTS.md`だけをimportする。Repository Knowledgeが正本で、
+製品側memoryは任意のRuntime cacheである。
 
 Agent固有の環境変数はroot `.env`を既定の未追跡注入面とする。値や変数一覧を公開templateへ持たず、OS共有、
 Keychain、外部secret storeを必須にしない。別の注入面が必要なRuntimeでは、そのAgent / Operatorが明示選択する。
