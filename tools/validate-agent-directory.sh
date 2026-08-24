@@ -6,14 +6,18 @@ set -euo pipefail
 tool_root="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
 repo_root="$(cd "$tool_root/.." && pwd -P)"
 . "$tool_root/lib/project-registry.sh"
-contract_version='1.0.0'
+contract_version='1.1.0'
 strict=false
 full=false
+changed=false
+self_test=false
 base_ref=''
 bootstrap_status=false
 failures=0
 warnings=0
 tool_fixture_root=''
+scope_active=false
+scope_targets=$'\n'
 
 cleanup() {
   [[ -z "$tool_fixture_root" ]] || rm -rf -- "$tool_fixture_root"
@@ -21,7 +25,8 @@ cleanup() {
 trap cleanup EXIT
 
 usage() {
-  printf 'Usage: %s [--strict] [--full] [--base <ref>] [--bootstrap-status] [--version]\n' "${0##*/}" >&2
+  printf 'Usage: %s [--strict] [--full] [--changed] [--self-test] [--base <ref>] [--bootstrap-status] [--version]\n' \
+    "${0##*/}" >&2
 }
 
 fail() {
@@ -38,6 +43,8 @@ while (( $# > 0 )); do
   case "$1" in
     --strict) strict=true; shift ;;
     --full) full=true; shift ;;
+    --changed) changed=true; shift ;;
+    --self-test) self_test=true; shift ;;
     --base)
       [[ $# -ge 2 ]] || { usage; exit 2; }
       base_ref="$2"
@@ -51,7 +58,7 @@ while (( $# > 0 )); do
 done
 
 if [[ "$bootstrap_status" == true ]]; then
-  [[ "$strict" == false && "$full" == false && -z "$base_ref" ]] || {
+  [[ "$strict" == false && "$full" == false && "$changed" == false && "$self_test" == false && -z "$base_ref" ]] || {
     usage
     exit 2
   }
@@ -66,6 +73,69 @@ fi
 require_file() {
   [[ -f "$repo_root/$1" ]] || fail "missing required file: $1"
 }
+
+# --- Scoped run (--changed) ------------------------------------------------------
+# Structural checks that do not scale with the workspace always run. Only the
+# per-target loops (Project, Wiki page, raw record, Skill) honour the scope, so a
+# one-Project edit stops paying for every other Project. Any change that reaches
+# meta canon, or any deletion or rename, drops back to the full workspace run:
+# those change the rules or the registry, not one target.
+scope_target_of() {
+  local path="$1"
+  case "$path" in
+    projects/_template/*|skills/_template/*) printf '%s' 'META'; return 0 ;;
+    projects/*/*)
+      path="${path#projects/}"
+      printf 'projects/%s' "${path%%/*}" ;;
+    skills/*/*)
+      path="${path#skills/}"
+      printf 'skills/%s' "${path%%/*}" ;;
+    knowledge/wiki/sources/*.md|knowledge/wiki/topics/*.md|knowledge/raw/internal/*)
+      printf '%s' "$path" ;;
+    *) printf '%s' 'META' ;;
+  esac
+}
+
+build_scope() {
+  local line status path target referrer
+  git -C "$repo_root" rev-parse --show-toplevel >/dev/null 2>&1 || {
+    warn '--changed needs a Git working tree; validating the whole workspace'
+    return 0
+  }
+  while IFS= read -r line; do
+    [[ -n "$line" ]] || continue
+    status="${line:0:2}"
+    path="${line:3}"
+    # Deletions, renames and quoted (non-ASCII-safe) paths are not single-target changes.
+    case "$status" in *D*|*R*) return 0 ;; esac
+    case "$path" in '"'*) return 0 ;; esac
+    target="$(scope_target_of "$path")"
+    [[ "$target" != 'META' ]] || return 0
+    case "$scope_targets" in *$'\n'"$target"$'\n'*) continue ;; esac
+    scope_targets="$scope_targets$target"$'\n'
+  done < <(git -C "$repo_root" status --porcelain)
+  # Close the scope over incoming references (source, superseded_by, replaced-by,
+  # corrects): a target that points at a changed target is validated too.
+  while IFS= read -r target; do
+    [[ -n "$target" ]] || continue
+    while IFS= read -r referrer; do
+      [[ -n "$referrer" ]] || continue
+      referrer="$(scope_target_of "$referrer")"
+      [[ "$referrer" != 'META' ]] || continue
+      case "$scope_targets" in *$'\n'"$referrer"$'\n'*) continue ;; esac
+      scope_targets="$scope_targets$referrer"$'\n'
+    done < <(git -C "$repo_root" grep -lF -- "$target" 2>/dev/null || true)
+  done <<<"${scope_targets}"
+  scope_active=true
+}
+
+in_scope() {
+  [[ "$scope_active" == true ]] || return 0
+  case "$scope_targets" in *$'\n'"$1"$'\n'*) return 0 ;; esac
+  return 1
+}
+
+[[ "$changed" == false ]] || build_scope
 
 check_size() {
   local path="$1" limit="$2" label="$3" bytes
@@ -417,7 +487,7 @@ validate_tool_behaviors() {
   local locale_skill_dir locale_output reference_fixture reference_scope_output
   local raw_record_dir raw_record_output
   local raw_git_root raw_diff_output lifecycle_root lifecycle_output
-  local ownership_root ownership_output url_probe
+  local ownership_root ownership_output url_probe scope_probe
 
   fixture_root="$(mktemp -d "${TMPDIR:-/tmp}/agent-directory-tool-test.XXXXXX")"
   tool_fixture_root="$fixture_root"
@@ -456,6 +526,28 @@ validate_tool_behaviors() {
     fail 'check-markdown-references.sh lost the broken wiki reference failure'
   ! printf '%s\n' "$reference_scope_output" | grep -Fq 'knowledge/raw/' || \
     fail 'check-markdown-references.sh must not require resolution inside immutable knowledge/raw records'
+
+  # Retained history must not make verification grow: runs/ is skipped, its sibling is not.
+  mkdir -p "$reference_fixture/projects/sample/runs" "$reference_fixture/projects/sample/docs"
+  printf '%s\n' 'See `tools/removed.md#gone`.' > "$reference_fixture/projects/sample/runs/2026-01-01.md"
+  printf '%s\n' 'See `tools/removed.md#gone`.' > "$reference_fixture/projects/sample/docs/note.md"
+  reference_scope_output="$(bash "$repo_root/tools/validator/check-markdown-references.sh" "$reference_fixture" 2>&1 || true)"
+  printf '%s\n' "$reference_scope_output" | grep -Fq 'projects/sample/docs/note.md' || \
+    fail 'check-markdown-references.sh lost broken reference detection outside runs/'
+  ! printf '%s\n' "$reference_scope_output" | grep -Fq 'projects/sample/runs/' || \
+    fail 'check-markdown-references.sh must skip projects/<name>/runs/ retained history'
+
+  # Scope mapping for --changed: one target per Project / page / Skill, everything else meta.
+  [[ "$(scope_target_of 'projects/sample/docs/note.md')" == 'projects/sample' ]] || \
+    fail '--changed must scope a Project file to its Project'
+  [[ "$(scope_target_of 'skills/sample/SKILL.md')" == 'skills/sample' ]] || \
+    fail '--changed must scope a Skill file to its Skill'
+  [[ "$(scope_target_of 'knowledge/wiki/topics/a.md')" == 'knowledge/wiki/topics/a.md' ]] || \
+    fail '--changed must scope a Wiki page to itself'
+  for scope_probe in 'tools/TOOLS.md' 'AGENTS.md' 'projects/PROJECTS.md' 'projects/_template/PROJECT.md'; do
+    [[ "$(scope_target_of "$scope_probe")" == 'META' ]] || \
+      fail "--changed must fall back to the full run for meta canon: $scope_probe"
+  done
 
   # raw/internal record schema: canonical decision and correction records pass,
   # and the kind allowlist still rejects a non-canonical classification.
@@ -873,6 +965,7 @@ check_size 'tools/SAFETY.md' 20480 'tools/SAFETY.md'
 check_size 'knowledge/wiki/INDEX.md' 8192 'knowledge/wiki/INDEX.md'
 
 while IFS= read -r -d '' page; do
+  in_scope "${page#"$repo_root"/}" || continue
   page_basename="${page##*/}"
   [[ "$page_basename" =~ ^[a-z0-9]+(-[a-z0-9]+)*\.md$ ]] || \
     fail "${page#"$repo_root"/} must use a lowercase-kebab page name"
@@ -933,6 +1026,7 @@ index_entries="$(grep -c '^- ' "$repo_root/knowledge/wiki/INDEX.md" 2>/dev/null 
   fail "knowledge/wiki/INDEX.md exceeds the 50-entry limit: $index_entries entries"
 
 while IFS= read -r -d '' record; do
+  in_scope "${record#"$repo_root"/}" || continue
   validate_raw_internal_record "$record"
 done < <(find "$repo_root/knowledge/raw/internal" -mindepth 1 \
   -not -name '.gitkeep' -not -name '.DS_Store' -print0)
@@ -943,6 +1037,12 @@ validate_skill_library() {
   for skill_dir in "$repo_root/$skills_parent"/*; do
     [[ -d "$skill_dir" ]] || continue
     [[ "${skill_dir##*/}" != '_template' ]] || continue
+    # Root Skills scope by Skill; Project-local Skills scope with their owning Project.
+    if [[ "$skills_parent" == 'skills' ]]; then
+      in_scope "skills/${skill_dir##*/}" || continue
+    else
+      in_scope "${skills_parent%/skills}" || continue
+    fi
     skill_file="$skill_dir/SKILL.md"
     [[ -f "$skill_file" ]] || { fail "Skill directory is missing SKILL.md: ${skill_dir#"$repo_root"/}"; continue; }
     validate_skill_frontmatter "$skill_file"
@@ -1005,6 +1105,7 @@ for project_dir in "$repo_root"/projects/*; do
   project_name="${project_dir##*/}"
   [[ "$project_name" != '_template' ]] || continue
   [[ ! -d "$project_dir/.git" ]] || continue
+  in_scope "projects/$project_name" || continue
   if [[ -f "$project_dir/PROJECT.md" || -f "$project_dir/STATE.md" ]]; then
     [[ -f "$project_dir/PROJECT.md" ]] || fail "projects/$project_name is missing PROJECT.md"
     [[ -f "$project_dir/STATE.md" ]] || fail "projects/$project_name is missing STATE.md"
@@ -1330,9 +1431,13 @@ if [[ "$full" == true ]]; then
   if (( failures == 0 )); then
     materialize_output="$(bash "$repo_root/tools/materialize-project-repositories.sh" --all --check 2>&1)" || fail "Independent Project check failed: $materialize_output"
   fi
-  if (( failures == 0 )); then
-    validate_tool_behaviors
-  fi
+fi
+
+# Tool self-check: fixtures for this validator's own behaviour and negative conditions.
+# It inspects no Workspace content, so consumers do not pay for it on every run
+# (tools/TOOLS.md#Validator). The product repository runs it in its own QA.
+if [[ "$self_test" == true ]] && (( failures == 0 )); then
+  validate_tool_behaviors
 fi
 
 if (( failures > 0 )); then
