@@ -152,20 +152,24 @@ bash tools/materialize-project-repositories.sh --project <name>
 明示パスを検索より優先する。target未指定のKnowledge照会だけ、Runtime標準のファイル検索で
 `knowledge/wiki/sources/`と`knowledge/wiki/topics/`のactive候補を最大5件へ絞る。Projectは`projects/<name>/`、
 Skill sourceは`skills/<name>/SKILL.md`を直接使う。検索結果や製品側memoryを正本の代わりにしない。
+予算はbyte数だけでなく往復回数にも適用し、pathが決まっている読込は1回のbatchへまとめる。
 
 ## 検証
 
 ```bash
-bash tools/validate-agent-directory.sh
+bash tools/validate-agent-directory.sh --changed
 bash tools/validate-agent-directory.sh --strict --full
 bash tools/validate-agent-directory.sh --base origin/main --full
+bash tools/validate-agent-directory.sh --full --self-test
 python3 tests/run-evals.py validate
 python3 tests/run-evals.py score --case tests/evals/fixtures/eval-runtime/case.yaml --trace tests/evals/fixtures/eval-runtime/pass.jsonl
 ```
 
 validatorは必須構造、frontmatter、サイズ、Project / Knowledge / Skill境界、Tool allowlist、script構文、
-Markdown参照、Independent Project整合を検査する。`--base <ref>`はcommit済みを含むraw不変性、
+Markdown参照、Independent Project整合を検査する。通常の作業終了時は`--changed`で変更targetだけを検査し、
+Project数に比例した固定費を払わない。`--base <ref>`はcommit済みを含むraw不変性、
 paused / retired Projectの変更禁止、Project削除gateをbase revisionとの差分で検査する。
+`--self-test`はTool自身の回帰検査であり、Workspaceの内容を検査しないため通常運用では使わない。
 networkと外部AIを必要とせず、検証は作業Agent自身がsession内で完結させる。CIやHosted checkへ依存しない。
 [behavioral tests](tests/evals/README.md)は本repositoryの開発QAであり、導入済みWorkspaceのCore依存ではない。
 静的validatorでは判定できないRoute解釈を、保存済みtraceで検査する。
@@ -200,7 +204,7 @@ repository / revisionによる再現性、送信対象に対するsecret・不�
 
 ## Version
 
-contract versionは`bash tools/validate-agent-directory.sh --version`が返す（現在`1.0.0`）。
+contract versionは`bash tools/validate-agent-directory.sh --version`が返す（現在`1.1.0`）。
 採用versionはGit tag（`v<version>`）で固定する。schema・validator契約のbreaking changeはversionを上げ、
 その時だけ移行手順を`docs`として添える。自動migrationや更新managerは持たない。
 

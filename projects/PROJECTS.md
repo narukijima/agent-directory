@@ -245,7 +245,8 @@ finiteの完了条件とcontinuousの成功指標だけに、`- **PC-01** <安�
 - 合格条件は第三者が判定できる形にする。
 - 検証結果は対象、確認日、方法、客観的結果を持ち、最新の有効な証拠だけを残す。
 - 有効な決定、失敗・却下済み、ブロッカー、次の一手を現在形で短く保つ。
-- 詳細な試行履歴は`runs/`またはGitへ移し、8KiBを超えない。
+- 詳細な試行履歴は`runs/`またはGitへ移し、8KiBを超えない。上書きで失う指示、決定、訂正、
+  再利用できる結論は`knowledge/KNOWLEDGE.md#失う前に確定する`に従って確定させてから消す。
 - 現在判断ではactiveなKnowledgeとSkillを優先する。
 
 状態遷移と削除条件は必要な場合だけ[projects/LIFECYCLE.md](LIFECYCLE.md)を読む。Independent repositoryの

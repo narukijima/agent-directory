@@ -31,8 +31,11 @@
 
 明示targetを優先する。target未指定のKnowledge照会だけ、Runtime標準のファイル検索で
 `knowledge/wiki/{sources,topics}/`からactive候補を最大5件へ絞る。SkillはRuntimeの標準Skill discovery、
-Projectは明示pathと`projects/`の直下構造を使い、Core独自の検索Runtimeを通さない。台帳、履歴、`runs/`、
-`docs/**`を一括読込せず、24KiB超は節で絞る。32KiB・12ファイル到達時は未読範囲を報告して停止する。
+Projectは明示pathか`projects/*/PROJECT.md`のfrontmatterからactive候補を最大5件へ絞り、Core独自の検索
+Runtimeを通さない。台帳、履歴、`runs/`、`docs/**`を一括読込せず、24KiB超は節で絞る。
+
+予算はbyte数だけでなく往復回数にも適用する。pathが決まっている読込は依存のない範囲ごとに1回のbatchで
+まとめ、存在確認や1ファイルずつへ往復を分けない。32KiB・12ファイル到達時は未読範囲を報告して停止する。
 
 ## 自律実行
 
@@ -48,7 +51,8 @@ Project成果契約、Git ownership、secret、不変原資料、protected変更
 ## 差分判定
 
 意味ある差分だけを永続化し、既定はno-op、`create`より`update / merge / supersede`を選ぶ。AIの推論を
-利用者の決定として保存せず、訂正は`knowledge/KNOWLEDGE.md#訂正の伝播`まで完結する。
+利用者の決定として保存せず、訂正は`knowledge/KNOWLEDGE.md#訂正の伝播`まで完結する。context圧縮や
+状態更新で失う情報は、破棄の前に`knowledge/KNOWLEDGE.md#失う前に確定する`へ従って確定させる。
 新しいTool、Skill、恒久的な仕組み、抽象化、依存は原則追加しない。既存Ownerへの統合で目的を満たせず、
 新設が必要な場合だけ、追加前にOwnerへ目的、既存へ統合できない理由、維持コストを示して確認する。
 

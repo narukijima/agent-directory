@@ -5,9 +5,10 @@ set -euo pipefail
 # resolution isolated from the rest of the workspace validator so path and heading rules can
 # be tested without coupling them to Git or external-operation fixtures.
 # Usage: check-markdown-references.sh [<repo_root>]
-# Every tracked Markdown file is scanned. Immutable knowledge/raw/ records are never
-# scanned: they capture what was true at recording time, so resolution against the
-# current canon is not a valid requirement.
+# Every tracked Markdown file is scanned except two kinds. Immutable knowledge/raw/
+# records capture what was true at recording time, so resolution against the current
+# canon is not a valid requirement; projects/<name>/runs/ is retained history that no
+# agent reads by default, so it must not make verification grow with the log.
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo_root="${1:-$(cd "${script_dir}/../.." && pwd)}"
@@ -61,6 +62,9 @@ fi
 while IFS= read -r reference_md_rel; do
   [[ -n "$reference_md_rel" ]] || continue
   [[ "$reference_md_rel" != knowledge/raw/* ]] || continue # Immutable records; corrections land in wiki.
+  # projects/<name>/runs/ is retained history that is not read by default
+  # (projects/PROJECTS.md#基本構造): verification must not grow with it.
+  case "$reference_md_rel" in projects/*/runs/*) continue ;; esac
   reference_md_abs="$repo_root/$reference_md_rel"
   [[ -f "$reference_md_abs" ]] || continue
   while IFS= read -r markdown_reference; do
