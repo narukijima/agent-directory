@@ -46,8 +46,8 @@ Structural safetyをProvider非依存の正本として保つ。
 - 原資料を変更しない。
 - 状態変更を物理archiveで表さない。
 - Runtimeと外部操作は各Agent / Operator / Projectが所有する。
-- 新しいTool、Skill、恒久的仕組み、抽象化、依存は原則追加しない。既存Ownerへ統合できず、
-  新設が必要な場合だけ事前にOwnerへ確認する。
+- 新しいTool、Skill、恒久的仕組み、抽象化、依存は原則追加しない。既存Ownerへ統合できず、目的とOwnerが
+  一意で必要なら自律追加する。将来用の曖昧な追加はno-opとし、明確な依頼を再承認させない。
 
 ## Route
 
@@ -180,8 +180,7 @@ Core独自のpre-commit / pre-push hook、ack、receipt、approval layerは持�
 `tools/`は7ファイル固定で、実行Toolは3本、内部実装は2ファイルである。完全な一覧とCLIは
 [tools/TOOLS.md](tools/TOOLS.md)が所有する。
 
-新しいToolを追加する前に、既存Toolまたは対象Ownerへの統合を優先する。新設が不可避な場合は、
-追加前にOwner確認を得る。
+新しいToolは既存Toolまたは対象Ownerへの統合を優先し、必要性とOwnerが一意な場合だけ自律追加する。
 
 ## Remoteと公開
 
@@ -212,7 +211,7 @@ contract versionは`bash tools/validate-agent-directory.sh --version`が返す�
 |---|---|
 | [AGENTS.md](AGENTS.md) | 自己定義、Route、Context Loading、共通判断 |
 | [knowledge/KNOWLEDGE.md](knowledge/KNOWLEDGE.md) | Knowledge構造、不変規則、限定取得 |
-| [skills/SKILLS.md](skills/SKILLS.md) | Skill schema、選択、実行委譲、Owner確認 |
+| [skills/SKILLS.md](skills/SKILLS.md) | Skill schema、選択、実行委譲、自律新設境界 |
 | [projects/AGENTS.md](projects/AGENTS.md) | Project作業入口 |
 | [projects/PROJECTS.md](projects/PROJECTS.md) | 成果契約、Git ownership、attachment |
 | [projects/REPOSITORIES.md](projects/REPOSITORIES.md) | Independent registry |

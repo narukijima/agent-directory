@@ -15,8 +15,8 @@ root `skills/`はProject横断で再利用するSkillだけの正本とする。
 ## 共有Skillライブラリ
 
 Agent間で再利用する汎用Skillは、別リポジトリの [`agent-skills`](https://github.com/narukijima/agent-skills) が配布元である。
-このWorkspaceへSkillを標準で自動導入・自動同期はしない。必要なタスクで利用者が明示したときだけ、target側のimport
-transactionで`skills/<skill-name>/`をコピーし、取り込んだSkillをこのWorkspaceの正本にする。
+自動同期はしない。Runtime標準discoveryが現在のタスクに必要なSkillを一意に選び、信頼済みlocal配布元と未使用の
+targetが確定した場合は、target側transactionで自律importし、`skills/<skill-name>/`をWorkspace正本にする。
 
 ```bash
 bash tools/import-skill.sh <skill-name> --source /path/to/agent-skills
@@ -24,7 +24,7 @@ bash tools/import-skill.sh <skill-name> --source /path/to/agent-skills
 
 インポート先には `skills/<skill-name>/agents/upstream.yaml` が作られ、配布元repository、commit SHA、Skill version、
 インポート時刻を記録する。target側はfrontmatterをAgent Skills標準の6 fieldへ正規化し、CodexとClaude Codeの標準pathへ
-同じ正本のsymlinkを作る。既存Skillは上書きせず、更新時は上流との差分を確認してから明示的に再インポートする。
+同じ正本のsymlinkを作る。既存Skillは上書きせず、更新は上流との差分と採用対象が一意な場合だけ再importする。
 
 ## Runtime接続
 
@@ -98,8 +98,8 @@ metadata:
 
 ## 新規作成・更新
 
-- Skillの新設は既存Skillの更新・統合で目的を満たせない場合だけ候補とし、作成前にOwnerへ確認する。
-  明示的な新規Skill作成依頼はこの確認を満たす。将来使うかもしれないという理由では追加しない。
+- Skillの新設は現在のタスクに必要で、既存Skillへ統合できず、目的、出力契約、Ownerが一意な場合だけ自律実行する。
+  将来使うかもしれないという理由だけなら質問せずno-opとする。
 - `_template/`をコピーし、frontmatter、発動条件、手順、出力契約、Knowledge参照を置換する。
 - `_template/`自体はSkillではない。`SKILL.md`だけを持ち、空の下位フォルダを常設しない。
 - Skill固有の決定的処理はSkillの`candidates/`または`scripts/`が所有する。

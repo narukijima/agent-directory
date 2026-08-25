@@ -24,18 +24,19 @@ AIが自動でactiveへ戻さない。
 
 ## 人間が決める遷移
 
-次の遷移は利用者の意思決定を必要とする。意思決定の取得・approval方式はRuntimeとOperatorが所有し、
-Agent Directoryは確定した決定と状態遷移だけを正本へ記録する。
+次の遷移は利用者の意思決定を必要とする。現在の依頼または正本ですでに一意なら再確認しない。意思決定の
+取得・approval方式はRuntimeとOperatorが所有し、Agent Directoryは確定した決定と状態遷移だけを記録する。
 
 - mission、vision、目的、最終ゴール、継続的使命の変更。
 - `PROJECT.md`の成果契約、`PC-xx`、成功指標、完了条件、固定制約、判断原則、非ゴールの変更。
 - 新しい戦略、優先順位、予算、期限、品質と速度のような重要なトレードオフの決定。
-- Projectの新設、`paused`と`retired`への変更、再開、廃止、統合、Independent化、削除、物理移動。
+- `paused`と`retired`への変更、再開、廃止、統合、Independent化、削除、物理移動。
 
 次は確認を求めず実行し、事後に報告する。
 
 - 合格条件が検証済みで、次目標が正本から一意に決まるcontinuousの現在目標更新。
 - 全`PC-xx`の検証証拠が揃ったfiniteの`completed`化と、`STATE.md`の完了状態への更新。
+- 既存Ownerへ統合できず、目的、成果契約、Ownerが一意な最小Projectの新設。
 - 状態変化の同じ作業内での`STATE.md`反映と、対象検証後のscoped commit。
 
 ## 物理位置

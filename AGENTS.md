@@ -53,14 +53,14 @@ Project成果契約、Git ownership、secret、不変原資料、protected変更
 意味ある差分だけを永続化し、既定はno-op、`create`より`update / merge / supersede`を選ぶ。AIの推論を
 利用者の決定として保存せず、訂正は`knowledge/KNOWLEDGE.md#訂正の伝播`まで完結する。context圧縮や
 状態更新で失う情報は、破棄の前に`knowledge/KNOWLEDGE.md#失う前に確定する`へ従って確定させる。
-新しいTool、Skill、恒久的な仕組み、抽象化、依存は原則追加しない。既存Ownerへの統合で目的を満たせず、
-新設が必要な場合だけ、追加前にOwnerへ目的、既存へ統合できない理由、維持コストを示して確認する。
+新しいTool、Skill、恒久的な仕組み、抽象化、依存は原則追加しない。既存Ownerへ統合できず、目的、Owner、
+非ゴール、維持コストが依頼または正本から一意で新設が必要なら自律追加する。将来用の曖昧な新設はno-opとする。
 
 ## 人間へ上げる例外
 
 target / destination / credential、目的・契約、不可逆対象、lifecycle、secret、divergence、Single Writer、所有者、
 正本が一意でない場合だけ不足一点を確認する。詳細Ownerは`projects/PROJECTS.md`、`projects/LIFECYCLE.md`、
-`tools/TOOLS.md`。Generic Permissionを再承認させない。
+`tools/TOOLS.md`。明確な依頼は通常完了経路と必要な恒久追加を許可済みとし、Generic Permissionを再承認させない。
 
 ## 禁止事項
 

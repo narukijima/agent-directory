@@ -10,8 +10,8 @@ metadata:
 
 ## 発動条件
 
-- 利用者が「`<skill-name>`を使って」と明示したとき
-- <このSkillを選ぶべき依頼文の具体例を書く>
+- descriptionと依頼内容が一致し、Runtime標準discoveryが選択したとき
+- <Skill名を知らない利用者の依頼文を具体例として書く>
 
 ## 目的
 
