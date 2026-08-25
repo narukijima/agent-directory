@@ -104,8 +104,7 @@ subjects: [agent-directory, permissions]
 不変規則の例外は、credential、secret、個人情報、法的削除対象が原記録へ混入した場合の削除だけとする。
 通常の訂正・整理には使わず、訂正は`knowledge/KNOWLEDGE.md#訂正の伝播`に従う。
 
-- 混入したcredentialはrotateする。Git履歴からの除去が必要な場合、履歴書換の実行と承認は
-  Runtime / Operatorが所有する。
+- 混入したcredentialはrotateする。Git履歴書換はOwnerの例外承認、実行はRuntime / Operatorが担う。
 - `kind: observation`の新規recordに`# Raw erasure`、`## Reason`、`## Deleted paths`を置き、理由と全削除pathを残す。
   日時は`recorded_at`が持ち、秘密情報は含めない。
 - validatorへ`AGENT_ALLOW_RAW_ERASURE=<そのrecord path>`を渡す。変更とrenameは引き続き拒否する。
@@ -156,10 +155,10 @@ Root Knowledgeとして扱わない。昇格条件と昇格時の責務は`proje
 24KiBを超えるactiveなWikiページは、見出しと参照先を索引する`## Retrieval Map`節を持ち、
 全文読込なしで該当節へ到達できるようにする（上限64KiBは`tools/TOOLS.md#サイズ予算`）。
 
-閾値と処理結果が決定的な保守は、AIまたはToolが確認を求めず自動実行する。統合先が一意で
+閾値と処理結果が決定的な保守はAI AgentまたはToolが自律実行する。統合先が一意で
 情報損失がない統合とsupersedeも自律実行する。
 どのページを現在有効な正本とするかが一意に決まらない場合と、内容が矛盾する場合は、
-`AGENTS.md#人間へ上げる例外`として上げる。
+`AGENTS.md#責任領域`に従う。
 
 ### 原資料へ遡る条件
 
@@ -218,8 +217,8 @@ Wikiでは次を混ぜずに書く。
 出典のない事実主張を書かない。不確実性、反対証拠、適用範囲、有効期間を失わない。
 
 この区別はWikiに限らず、`STATE.md`、Project文書、Skillへの保存にも適用する。確定情報として
-扱えるのは、利用者が明示した判断と、Tool実行・検証の結果だけである。AIの推論・提案は、
-利用者が採用を明示するまで帰属付きの推論・仮説として保存する。
+扱えるのは、Ownerの本人判断と、Tool実行・検証の結果だけである。AIの推論・提案は、
+Ownerが採用するまで帰属付きの推論・仮説として保存する。
 
 ## 作成・更新・統合
 
@@ -243,7 +242,7 @@ Wikiでは次を混ぜずに書く。
 2. その事実のOwner正本を特定し、`update / merge / supersede`で反映する。
 3. 変更した正本のpathを参照する正本をpath検索で決定的に列挙し、直接依存だけを確認する。
    意味的に影響する依存だけを更新し、全Knowledgeを読み直さない。
-4. peer正本同士で結論が割れたら自動統合せず、`AGENTS.md#人間へ上げる例外`として上げる。
+4. peer正本同士で結論が割れたら自動統合せず、`AGENTS.md#責任領域`に従う。
 5. 参照整合を検証する。Runtime側cacheは正本からの派生に限定する。
 
 伝播を終えるまで訂正タスクを完了と報告しない。
@@ -259,7 +258,7 @@ Wikiでは次を混ぜずに書く。
 ## archive・retire・削除
 
 - `archived`は歴史照会だけ、`retired`は判断利用禁止とする。状態変更のために物理移動しない。
-- 非activeページの削除は、参照ゼロ、代替または保持先確認、利用者の明示承認が揃った場合だけ行う。
+- 非activeページの削除は、参照ゼロ、代替または保持先、Ownerの例外承認が揃った場合だけ行う。
 - `raw/`配下は削除しない（`#Secret・privacy削除の限定例外`だけを除く）。
 
 ## lint

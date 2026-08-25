@@ -5,11 +5,11 @@ Projectの状態遷移、完了、停止、廃止、削除を扱うときだけ�
 ## 状態
 
 - `active` — 進行中。通常検索の対象。
-- `paused` — 停止中。明示的な再開・監査以外では変更しない。
+- `paused` — 停止中。Ownerの再開決定または監査以外では変更しない。
 - `completed` — finiteの全完了条件を検証済み。追加作業を行わない。
 - `retired` — 利用者が廃止を決定済み。通常検索から除外する。
 
-continuousに`completed`は使わない。completed Projectの拡張は、新しいProjectまたは利用者が明示した次フェーズとして扱い、
+continuousに`completed`は使わない。completed Projectの拡張は、Ownerが決めた新しいProjectまたは次フェーズとして扱い、
 AIが自動でactiveへ戻さない。
 
 ## 状態遷移
@@ -19,20 +19,19 @@ AIが自動でactiveへ戻さない。
   `PROJECT.md#status`へ変更し、検証結果を現在の完了証拠へ更新する（`#status`は状態遷移作業を
   対象とする契約参照で、validatorが完了Projectに要求する形）。
 - continuousの現在目標は、合格条件が検証済みで、次目標が正本から一意に決まる場合だけAIが更新できる。
-- 次目標に新しい戦略、優先順位、予算、品質上のトレードオフが必要なら利用者へ確認する。
-- paused、retiredへの変更と再開は利用者の明示指示を必要とする。
+- 次目標に必要な新しい戦略、優先順位、予算、品質上のトレードオフはOwnerの最終方針に属する。
+- paused、retiredへの変更と再開はOwnerの最終方針に属する。
 
-## 人間が決める遷移
+## Ownerの責任領域
 
-次の遷移は利用者の意思決定を必要とする。現在の依頼または正本ですでに一意なら再確認しない。意思決定の
-取得・approval方式はRuntimeとOperatorが所有し、Agent Directoryは確定した決定と状態遷移だけを記録する。
+次の遷移はOwnerの目的、最終方針、本人判断、例外承認に属する。
 
 - mission、vision、目的、最終ゴール、継続的使命の変更。
 - `PROJECT.md`の成果契約、`PC-xx`、成功指標、完了条件、固定制約、判断原則、非ゴールの変更。
 - 新しい戦略、優先順位、予算、期限、品質と速度のような重要なトレードオフの決定。
 - `paused`と`retired`への変更、再開、廃止、統合、Independent化、削除、物理移動。
 
-次は確認を求めず実行し、事後に報告する。
+次はAI Agentの責任領域とする。
 
 - 合格条件が検証済みで、次目標が正本から一意に決まるcontinuousの現在目標更新。
 - 全`PC-xx`の検証証拠が揃ったfiniteの`completed`化と、`STATE.md`の完了状態への更新。
@@ -42,13 +41,13 @@ AIが自動でactiveへ戻さない。
 ## 物理位置
 
 検索除外のためにProjectを`_archive/`へ移動しない。completed、paused、retiredも元のパスに残し、状態で絞る。
-別パスへの移行が必要な場合は、すべての参照先、移行表、復旧方法を用意し、利用者の明示指示に基づいて行う。
+別パスへの移行が必要な場合は、すべての参照先、移行表、復旧方法を用意し、Ownerの最終方針に基づいて行う。
 移行表は新しい`knowledge/raw/internal/` recordとして残す。
 
 `--base <ref>`検査は、Gitのrename検出でProject物理移行と削除を区別し、移行の決定的な形だけを検査する
 （base側全ファイルの新パスへの対応、baseに存在しない移行先、`PROJECT.md`の`name`と新ディレクトリ名の一致、
 現行正本からの旧path残存参照ゼロ、paused / retiredでは状態遷移以外を持ち込まないこと）。
-利用者の明示指示という要件そのものはvalidatorが推論せず、本正本が所有する。
+移行の最終方針はOwner、決定的な形の検査はvalidatorが所有する。
 
 ## statusとIndependent repository
 
@@ -69,7 +68,7 @@ cloneが欠けている状態はstatusの表現ではなく、復旧途中のdeg
 Project削除は次をすべて満たす場合だけ行う。
 
 1. `status: retired`である。
-2. 利用者が一意なProject削除を決定しており、その決定を`PROJECT.md`の`deletion_approved: true`として
+2. Ownerが一意なProject削除を決定しており、その決定を`PROJECT.md`の`deletion_approved: true`として
    一度コミットしている。
 3. リポジトリ内からの参照がゼロである。
 4. 保持すべき成果物と監査証拠の保存先を`artifacts_retained_at: <repository-relative-path>`として記録している。
@@ -80,9 +79,9 @@ Independent Projectでは、この削除ゲートを通るまでcloneを先に�
 `projects/REPOSITORIES.md`のentry、`projects/.gitignore`のmanaged entry、Project cloneを一体として
 削除する。削除前に採用revisionと全local refがremoteから復旧可能であることを確認する。
 
-削除は、上記metadataを持つretired状態をbase commitに残した次の変更で行う。削除前にbase側の状態、承認、
+削除は、上記metadataを持つretired状態をbase commitに残した次の変更で行う。削除前にbase側の状態、削除決定、
 成果物保持先、現在の参照ゼロ、ディレクトリ全削除をGit差分と対象Project契約で確認する。
 このgateとpaused / retiredの変更禁止は`bash tools/validate-agent-directory.sh --base <ref>`が
-決定的に検査する。遷移の意思決定そのものはRuntime / Operatorが所有する。
+決定的に検査する。遷移の意思決定はOwnerの責任領域である。
 
 pausedやcompletedを「古い」「動きがない」という理由だけで削除しない。

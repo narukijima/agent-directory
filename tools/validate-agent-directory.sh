@@ -6,7 +6,7 @@ set -euo pipefail
 tool_root="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
 repo_root="$(cd "$tool_root/.." && pwd -P)"
 . "$tool_root/lib/project-registry.sh"
-contract_version='1.3.0'
+contract_version='1.4.0'
 strict=false
 full=false
 changed=false
@@ -1103,9 +1103,10 @@ if [[ "$actual_tools" != "$expected_tools" ]]; then
   diff -u <(printf '%s\n' "$expected_tools") <(printf '%s\n' "$actual_tools") >&2 || true
 fi
 
-for heading in '## 自己定義' '## 共通判断原則' '## Route' '## Context Loading' '## 自律実行' '## 差分判定' '## 人間へ上げる例外' '## 禁止事項' '## 参照順序'; do
+for heading in '## 自己定義' '## 共通判断原則' '## Route' '## Context Loading' '## 自律実行' '## 責任領域' '## 差分判定' '## 禁止事項' '## 参照順序'; do
   grep -Fqx "$heading" "$repo_root/AGENTS.md" || fail "AGENTS.md is missing heading: $heading"
 done
+grep -Fq '**Owner** — 目的、最終方針、本人判断、例外承認を持つ。' "$repo_root/AGENTS.md" || fail 'AGENTS.md lost the Owner responsibility contract'
 grep -Fq '新しいTool、Skill、恒久的な仕組み、抽象化、依存は原則追加しない' "$repo_root/AGENTS.md" || fail 'AGENTS.md lost the permanent-addition boundary'
 [[ "$(cat "$repo_root/CLAUDE.md")" == '@AGENTS.md' ]] || fail 'CLAUDE.md must only import the AGENTS.md canon'
 grep -Fq 'Skillの新設は現在のタスクに必要で' "$repo_root/skills/SKILLS.md" || fail 'skills/SKILLS.md lost the autonomous creation boundary'

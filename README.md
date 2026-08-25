@@ -45,9 +45,13 @@ Structural safetyをProvider非依存の正本として保つ。
 - 全件をLLMへ渡さず、active metadataから候補を最大5件へ絞る。
 - 原資料を変更しない。
 - 状態変更を物理archiveで表さない。
-- Runtimeと外部操作は各Agent / Operator / Projectが所有する。
 - 新しいTool、Skill、恒久的仕組み、抽象化、依存は原則追加しない。既存Ownerへ統合できず、目的とOwnerが
-  一意で必要なら自律追加する。将来用の曖昧な追加はno-opとし、明確な依頼を再承認させない。
+  一意で必要なら自律追加する。将来用の曖昧な追加はno-opとする。
+
+## 責任領域
+
+責任領域の正本は[AGENTS.md](AGENTS.md#責任領域)。Ownerは目的、最終方針、本人判断、例外承認を持ち、
+それ以外の通常判断と完了はAI Agentが担う。Runtime / Operatorは実行能力と環境を所有する。
 
 ## Route
 
@@ -99,7 +103,7 @@ agent-directory/
 ## RuntimeとProvider
 
 Runtime、Provider、認証、permission、machine-local setupは各Agent / Operatorが所有する。
-Agent Directory Coreはそれらを選択・変換・実行せず、共通Permission schema、approval engine、network gatewayを
+Agent Directory Coreはそれらを選択・変換・実行せず、共通Permission schemaやnetwork gatewayを
 持たない。`.codex/config.toml`と`.claude/settings.json`はnative設定の受け皿だけを残し、Runtime権限をoverrideしない。
 Auto / Manual、sandbox、Permission Profile、network、Browser / Computer Use、Git metadataの権限は各Runtimeと
 Operatorの設定をそのまま使う。配布済み`CLAUDE.md`は`@AGENTS.md`だけをimportする。Repository Knowledgeが正本で、
@@ -172,8 +176,7 @@ networkと外部AIを必要とせず、検証は作業Agent自身がsession内�
 [behavioral tests](tests/evals/README.md)は本repositoryの開発QAであり、導入済みWorkspaceのCore依存ではない。
 静的validatorでは判定できないRoute解釈を、保存済みtraceで検査する。
 
-commit、push、branch、PR、merge、approvalはGit、Runtime、Operator、対象Repositoryの標準機能が所有する。
-Core独自のpre-commit / pre-push hook、ack、receipt、approval layerは持たない。
+commit、push、branch、PR、mergeはGit、Runtime、Operator、対象Repositoryの標準機能を使う。
 
 ## Tool
 

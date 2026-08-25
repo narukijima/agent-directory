@@ -42,11 +42,14 @@ Runtimeを通さない。台帳、履歴、`runs/`、`docs/**`を一括読込せ
 通常経路は`Route → Target → Work → Verify`、書込Git rootはsessionごとに1つ。独立して完結するSkill実行は
 Runtime標準のSubagentへ委譲・並列化してよく、委譲基準、境界、Worker往復の最小contextは
 `skills/SKILLS.md#Skill実行の委譲`が所有する。
-Runtime、Provider、認証、permission mode、schedulerは各AgentとOperatorが所有し、本Coreは選択・設定・診断しない。
 失敗層を分け、同じfingerprintを状態・入力・経路の差分なしに再試行しない。
 
-実行許可、approval、外部操作の手順はRuntime、Operator、対象Projectが所有する。Coreはそれらを再包装せず、
-Project成果契約、Git ownership、secret、不変原資料、protected変更の構造的境界だけを検証する。
+## 責任領域
+
+- **Owner** — 目的、最終方針、本人判断、例外承認を持つ。
+- **AI Agent** — Ownerの責任領域を除く判断、設計、実行、検証、再試行、正本・状態更新、通常完了を担う。
+- **Runtime / Operator** — 実行能力、認証情報、権限、端末・session、外部操作機構を所有する。
+- **Canonical Owner** — 情報を保存する一意な正本であり、人間のOwnerとは別概念である。
 
 ## 差分判定
 
@@ -55,12 +58,6 @@ Project成果契約、Git ownership、secret、不変原資料、protected変更
 状態更新で失う情報は、破棄の前に`knowledge/KNOWLEDGE.md#失う前に確定する`へ従って確定させる。
 新しいTool、Skill、恒久的な仕組み、抽象化、依存は原則追加しない。既存Ownerへ統合できず、目的、Owner、
 非ゴール、維持コストが依頼または正本から一意で新設が必要なら自律追加する。将来用の曖昧な新設はno-opとする。
-
-## 人間へ上げる例外
-
-target / destination / credential、目的・契約、不可逆対象、lifecycle、secret、divergence、Single Writer、所有者、
-正本が一意でない場合だけ不足一点を確認する。詳細Ownerは`projects/PROJECTS.md`、`projects/LIFECYCLE.md`、
-`tools/TOOLS.md`。明確な依頼は通常完了経路と必要な恒久追加を許可済みとし、Generic Permissionを再承認させない。
 
 ## 禁止事項
 
@@ -71,8 +68,7 @@ target / destination / credential、目的・契約、不可逆対象、lifecycl
 - 一意な削除・移動だけを実行し、paused / retiredとProject削除は`projects/LIFECYCLE.md`に従う。
 - 下位`AGENTS.md`で上位規則・`PROJECT.md`を弱めない。
 
-上記の判断を支える安全核は`tools/SAFETY.md`の5項目だけとする。Git、commit、push、approvalは
-Runtime、Operator、対象Repositoryの標準機能を使い、Core独自のhookや承認層を持たない。
+上記の判断を支える安全核は`tools/SAFETY.md`の5項目だけとする。
 
 ## 詳細正本
 

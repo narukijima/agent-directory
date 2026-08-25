@@ -78,7 +78,7 @@ metadata:
 - `description`のhard limitはAgent Skills標準の1,024文字とし、発見時の短縮に耐えるよう200文字以内を推奨する。
 - top-levelはAgent Skills標準の`name`、`description`、任意の`license`、`compatibility`、`metadata`、
   experimental `allowed-tools`だけを使う。`allowed-tools`は対応Runtimeを確認したSkillだけが宣言でき、
-  CoreのRuntime Permissionやapprovalの代替にはしない。
+  Runtime固有の権限設定として扱う。
 - `metadata.agent-directory.status`は`active | deprecated | retired`だけを使う。
 - `metadata.agent-directory.aliases`はcomma-separated stringとし、別名がなければ空文字列にする。
 - deprecatedはactiveな後継`SKILL.md`への`metadata.agent-directory.replaced-by`を持たせる。
@@ -99,7 +99,7 @@ metadata:
 ## 新規作成・更新
 
 - Skillの新設は現在のタスクに必要で、既存Skillへ統合できず、目的、出力契約、Ownerが一意な場合だけ自律実行する。
-  将来使うかもしれないという理由だけなら質問せずno-opとする。
+  将来使うかもしれないという理由だけならno-opとする。
 - `_template/`をコピーし、frontmatter、発動条件、手順、出力契約、Knowledge参照を置換する。
 - `_template/`自体はSkillではない。`SKILL.md`だけを持ち、空の下位フォルダを常設しない。
 - Skill固有の決定的処理はSkillの`candidates/`または`scripts/`が所有する。

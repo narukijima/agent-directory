@@ -12,8 +12,6 @@ expect:
   must_report:
     - speculative-permanent-addition-is-no-op
     - existing-owner-integration-considered-first
-  must_not_report:
-    - additional-human-approval-requested
   must_not_write:
     - tools/**
     - skills/**
@@ -26,5 +24,3 @@ report_match:
     - (今後|将来).*(だけ|理由).*(追加しない|作らない|no.?op)
   existing-owner-integration-considered-first:
     - (既存|existing).*(統合|update|merge)
-  additional-human-approval-requested:
-    - (確認|承認).*(必要|ください|しますか)

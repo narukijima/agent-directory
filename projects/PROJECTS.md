@@ -34,7 +34,7 @@ Root Knowledge         = Projectを越えて再利用する確定知識
 1. 依頼か正本の明示相対パスを最優先する（未指定時の検索は`projects/AGENTS.md#着手`）。
    Project選択の単位は`PROJECT.md`であり、`docs/`配下を通常候補へ展開しない。
 2. 通常候補は`status: active`だけ。`paused`、`completed`、`retired`は明示参照、再開、監査、保守時だけ選ぶ。
-3. 候補メタデータだけで一意に選べず、選択で成果や安全性が変わる場合は利用者へ確認する。
+3. 候補メタデータだけで一意に選べず、選択で成果や安全性が変わる場合はOwnerの最終方針に従う。
 
 ## 基本構造
 
@@ -150,7 +150,7 @@ registryとignore projectionだけを書き、本体を変更するsessionはroo
 Agent Directoryはpush、PR、merge、branch cleanup、remote platform APIの実行Toolやworkflowを持たない。
 対象ProjectとRuntimeがremote操作を完了した後、Independent sessionは確定commit SHAだけをhandoffし、別のroot sessionが
 `projects/REPOSITORIES.md`の`revision`とignore projectionを更新する。Coreはlocal Git ownership、登録URL、採用revision、
-materialization整合を検証し、remote操作方法やapproval modeを規定しない。
+materialization整合を検証し、remote操作機構はRuntime / Operatorが所有する。
 
 ### Materialization境界
 
@@ -162,17 +162,17 @@ ignoreされたIndependent cloneを削除しうるため実行しない。
 
 EmbeddedからIndependentへの昇格は次の順で行う。
 
-1. 利用者がIndependent化と`repository_reason`を明示決定し、root Gitで移行前checkpointを確定する。
+1. OwnerがIndependent化と`repository_reason`を最終決定し、root Gitで移行前checkpointを確定する。
 2. remote repoを作成し、`projects/<name>/`をrootとするsessionで検証、commit、`origin`へ通常pushする。
 3. root indexから`projects/<name>/`配下を削除し、registry entryとmanaged entryを同じroot commitで
    追加する。
 4. validatorで二重正本とroot追跡の不在を確認する。
 
 履歴抽出は実益がある場合だけ行い、そのために平常時からrepoを分けない。
-登録のないnested repoまたはsubmoduleは追加、削除、ignore、submodule化せず、停止して利用者へ確認する。
+登録のないnested repoまたはsubmoduleは変更せず、Canonical Owner競合として`AGENTS.md#責任領域`に従う。
 
 IndependentからEmbeddedへの統合は自動既定にしない。`repository_reason`のどの根拠も現在成立しないことを
-監査し、利用者が明示指示した場合だけ実行する。その指示を再承認させない。停止中という理由だけで統合しない。
+監査し、Ownerの最終方針で実行する。停止中という理由だけで統合しない。
 
 ### 旧構造からの移行
 
@@ -226,8 +226,8 @@ mode: finite
 実行手順（読込順序、契約とPC-xxの特定、最小かつ完全な変更、検証、STATE更新、scoped commit、報告）は
 入口`projects/AGENTS.md#着手`と`projects/AGENTS.md#実行と完了`が所有する。
 
-`mode`、目的、ゴールまたは使命、完了条件または成功指標、判断原則、非ゴール、固定決定は、
-利用者が変更を明示した場合だけ変更する。
+`mode`、目的、ゴールまたは使命、完了条件または成功指標、判断原則、非ゴール、固定決定の変更は、
+Ownerの最終方針に属する。
 
 ## Project Criterion
 

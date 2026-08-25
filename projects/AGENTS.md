@@ -18,7 +18,7 @@
 
 ## 実行と完了
 
-- 成果契約内で最小かつ完全に変更する。契約変更は`projects/LIFECYCLE.md#人間が決める遷移`。
+- 成果契約内で最小かつ完全に変更する。契約変更は`projects/LIFECYCLE.md#Ownerの責任領域`。
 - `PROJECT.md`の検証を実行し、未実行を合格扱いしない。
 - 状態変化と同じ作業内で`STATE.md`を更新。
 - Project固有検証とroot validator（通常は`bash tools/validate-agent-directory.sh --changed`）を実行し、
