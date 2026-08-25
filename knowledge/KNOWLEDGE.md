@@ -27,14 +27,13 @@ knowledge/
     └── topics/            # 複数の根拠や判断を統合したKnowledge
 ```
 
-`raw/internal`、`raw/external`、`sources`、`topics`はいずれも正本である。sources/topicsには要約、判断、推論が
-含まれ、原資料から同一内容を再生成できない。Runtimeの検索index、snippet、製品側AIメモリは任意の派生cacheである。
-`knowledge/`直下と`wiki/`配下に領域説明用の`README.md`を置かない。構造の意味はこのファイルが所有する。
+四領域はいずれも正本で、sources/topicsは原資料から再生成できない判断も含む。Runtimeのindex、snippet、
+製品側AIメモリは派生cacheである。領域説明用`README.md`を増やさず、構造は本書が所有する。
 
 ## 保存先
 
-1. 利用者や運用内部で生まれた原文、判断、決定、仮説、観測は`raw/internal/`へ新規保存する。
-   形式は`KNOWLEDGE.md#内部原記録のRecord形式`に従う。
+1. 利用者や運用内部の原文、判断、決定、仮説、観測は`#内部原記録のRecord形式`で`raw/internal/`へ新規保存する。
+   会話全文を既定で残さず、確定した指示・決定・訂正・観測と必要最小限の個人情報だけを記録する。
 2. 論文、記事、契約、外部資料は取得元を記録し、内容を変えず`raw/external/`へ新規保存する。
 3. 1資料を読み解いたKnowledgeは`sources/`、複数資料・内部経験を統合したKnowledgeは`topics/`へ置く。
 
@@ -44,12 +43,9 @@ knowledge/
 → frontmatterへ状態を記録 → 必要ならINDEXの入口を更新
 ```
 
-成果物はProject、手順はSkillが所有する。製品側の永続メモリは正本から派生する任意のキャッシュであり、
-「メモリに覚えて」という依頼でも先にこの判定でリポジトリへ保存する。両者が矛盾したらリポジトリを優先する。
-リポジトリ内に製品側メモリ専用の並列記録領域を置かない。秘密情報はどちらにも保存しない。
-
-利用者は原文、判断、資料を提供し、知識の正しさを最終判断する。エージェントは分類、保存、ノート化、統合、
-状態管理、必要なINDEXの更新を行う。
+成果物はProject、手順はSkillが所有する。製品メモリは派生cacheであり、「覚えて」という依頼も先に本判定で
+保存する。矛盾時はリポジトリを優先し、並列記録領域を作らない。秘密情報はどちらにも保存しない。
+利用者が内容を最終判断し、エージェントが分類、保存、統合、状態と必要なINDEXを管理する。
 
 ## 失う前に確定する
 
@@ -80,20 +76,18 @@ subjects: [agent-directory, permissions]
 ---
 ```
 
-- ファイル名は`raw/internal/`直下の`YYYY-MM-DD-<lowercase-kebab>.md`とし、日付は`recorded_at`の日付と
-  一致させる。パスは恒久IDであり保存後にrenameしない。同日の衝突は保存前により具体的なslugで避ける。
+- ファイル名は直下の`YYYY-MM-DD-<lowercase-kebab>.md`。日付を`recorded_at`と一致させ、保存後にrenameしない。
 - `recorded_at`はtimezone offset付きISO 8601とする。時刻が分からない情報だけ`YYYY-MM-DD`の日付のみとする。
 - `kind`は次の7種だけを使う。`instruction`（運用指示）、`decision`（決定）、`preference`（好み・傾向）、
   `fact`（事実の陳述）、`observation`（観測・実行結果）、`hypothesis`（仮説）、`correction`（既存内部原記録の訂正）。
 - `subjects`は検索を補助する自由語の一行配列で1件以上持つ。階層taxonomyや別台帳を作らない。
-- `kind: correction`だけ`corrects`を必須とし、訂正対象の`knowledge/raw/internal/`配下recordへの
-  リポジトリ相対パスを書く。訂正対象が内部原記録に存在しない場合はcorrectionではなく通常のkindで保存する。
+- `kind: correction`だけ既存の訂正対象を`corrects`で示す。対象がなければ通常のkindを使う。
 - 上記以外のfrontmatter fieldを増やさない。
 - 本文は元の意味・原文・決定内容をそのまま残す。AIの一般化、後付けの解釈、推論、要約、Wiki用の結論を
   原記録へ混ぜない。それらはWiki側が所有する。
 
-この形式は内部原記録だけの契約である。`raw/external/`は取得した内容を変えないことを最優先とし、
-この形式を強制しない。
+この形式は内部原記録だけに適用する。`raw/external/`は取得内容を変えない。Gitに適さない大型binaryは外部保管し、
+取得元、checksum、取得日時、権利情報だけを原資料recordとして残す。
 
 ## 不変規則
 
@@ -112,9 +106,9 @@ subjects: [agent-directory, permissions]
 
 - 混入したcredentialはrotateする。Git履歴からの除去が必要な場合、履歴書換の実行と承認は
   Runtime / Operatorが所有する。
-- 削除の理由、日時、対象pathだけを、秘密情報を含まない新しい`raw/internal/` recordとして残す。
-- validatorは`AGENT_ALLOW_RAW_ERASURE=true`を明示した実行だけでrawの削除を許容する。
-  既存recordの変更とrenameはこの例外中も拒否する。
+- `kind: observation`の新規recordに`# Raw erasure`、`## Reason`、`## Deleted paths`を置き、理由と全削除pathを残す。
+  日時は`recorded_at`が持ち、秘密情報は含めない。
+- validatorへ`AGENT_ALLOW_RAW_ERASURE=<そのrecord path>`を渡す。変更とrenameは引き続き拒否する。
 
 ## Researchのライフサイクル
 

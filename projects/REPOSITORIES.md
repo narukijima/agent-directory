@@ -2,7 +2,7 @@
 
 Independent repositoryのattachment、役割、復旧情報だけを持つ。
 一般Projectの目的、成果契約、status、mode、現在状態は各Project自身の`PROJECT.md`と`STATE.md`が所有する。
-Owner Agentが開発する公開基盤製品のactive状態はOwner Agent rootが一元管理し、製品repositoryへ複製しない。
+公開基盤製品のactive状態はOwner Agent rootの一つのcontinuous Projectが所有し、製品repositoryへ複製しない。
 
 Project rootはEmbeddedもIndependentも`projects/<name>/`であり、pathはnameから自明なので保持しない。
 `projects/.gitignore`のmanaged blockはこの登録集合から導出する派生projectionであり、正本ではない。
@@ -24,8 +24,8 @@ Project rootはEmbeddedもIndependentも`projects/<name>/`であり、pathはnam
 - fieldは`repository_url`、`repository_reason`、`revision`を各1回持つ。`repository_role`は省略時
   `project`であり、公開基盤製品だけ`public-foundation`を明示する。他のfieldは追加しない。
 - `repository_url`は認証情報、query、fragment、`file://`、絶対・相対のローカルpathを含まない。
-  `git@host:owner/repository.git`、`ssh://git@host/owner/repository.git`、
-  `https://host/owner/repository.git`の形だけを使う。
+  `git@host:path.git`、`ssh://git@host/path.git`、`https://host/path.git`の形だけを使う。
+  pathは2 segment以上とし、nested namespaceを許容する。空segment、`.`、`..`は使わない。
 - `revision`はremoteへpush済みの40文字lowercase commit SHA。Independent sessionのhandoff後に
   root sessionだけが更新する。
 - `repository_default_branch`とpathは持たない。description、status、mode、現在目標を複製しない。

@@ -57,7 +57,7 @@ Structural safetyをProvider非依存の正本として保つ。
 | `skill` | 再利用手順・研究方法 | [skills/SKILLS.md](skills/SKILLS.md)と対象`SKILL.md` |
 | `project` | 固有作業・成果物・研究 | [projects/AGENTS.md](projects/AGENTS.md) |
 | `meta` | 構造、規約、Tool | 対象正本 |
-| `none` | 永続変更のない回答 | 追加ロードなし |
+| `none` | 永続化Ownerのない回答 | 原則追加ロードなし。明示Skillだけ実行時に読む |
 
 ## 構造
 
@@ -165,10 +165,8 @@ python3 tests/run-evals.py validate
 python3 tests/run-evals.py score --case tests/evals/fixtures/eval-runtime/case.yaml --trace tests/evals/fixtures/eval-runtime/pass.jsonl
 ```
 
-validatorは必須構造、frontmatter、サイズ、Project / Knowledge / Skill境界、Tool allowlist、script構文、
-Markdown参照、Independent Project整合を検査する。通常の作業終了時は`--changed`で変更targetだけを検査し、
-Project数に比例した固定費を払わない。`--base <ref>`はcommit済みを含むraw不変性、
-paused / retired Projectの変更禁止、Project削除gateをbase revisionとの差分で検査する。
+validatorは構造、schema、サイズ、所有境界、Tool、script、参照を検査する。`--changed`は対象を絞るが、
+HEADに対するraw不変性とProject lifecycleは常に検査する。`--base <ref>`は指定revisionからのcommit済み差分も検査する。
 `--self-test`はTool自身の回帰検査であり、Workspaceの内容を検査しないため通常運用では使わない。
 networkと外部AIを必要とせず、検証は作業Agent自身がsession内で完結させる。CIやHosted checkへ依存しない。
 [behavioral tests](tests/evals/README.md)は本repositoryの開発QAであり、導入済みWorkspaceのCore依存ではない。

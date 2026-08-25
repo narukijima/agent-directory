@@ -6,7 +6,7 @@ set -euo pipefail
 tool_root="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
 repo_root="$(cd "$tool_root/.." && pwd -P)"
 . "$tool_root/lib/project-registry.sh"
-contract_version='1.1.0'
+contract_version='1.2.0'
 strict=false
 full=false
 changed=false
@@ -382,6 +382,58 @@ validate_raw_internal_record() {
   ' "$file")
 }
 
+validate_raw_erasure_record() {
+  local root="$1" base="$2" record="$3" deleted_paths="$4" record_file kind
+  local reason declared_paths invalid_lines duplicate_paths expected_paths
+  if repo_path_is_unsafe "$record" || [[ "${record%/*}" != 'knowledge/raw/internal' || "$record" != *.md ]]; then
+    fail 'AGENT_ALLOW_RAW_ERASURE must name one direct knowledge/raw/internal/*.md record'
+    return 0
+  fi
+  record_file="$root/$record"
+  [[ -f "$record_file" ]] || {
+    fail "raw erasure audit record does not exist: $record"
+    return 0
+  }
+  if git -C "$root" cat-file -e "$base:$record" 2>/dev/null; then
+    fail "raw erasure audit record must be newly added against $base: $record"
+  fi
+  validate_raw_internal_record "$record_file"
+  kind="$(frontmatter_value "$record_file" kind)"
+  [[ "$kind" == 'observation' ]] || fail "$record must use kind: observation"
+  grep -Fqx '# Raw erasure' "$record_file" || fail "$record must contain # Raw erasure"
+  grep -Fqx '## Reason' "$record_file" || fail "$record must contain ## Reason"
+  grep -Fqx '## Deleted paths' "$record_file" || fail "$record must contain ## Deleted paths"
+  reason="$(awk '
+    $0 == "## Reason" { in_section = 1; next }
+    in_section && /^## / { exit }
+    in_section && NF { print }
+  ' "$record_file")"
+  [[ -n "$reason" ]] || fail "$record must state a non-empty erasure reason"
+  invalid_lines="$(awk '
+    $0 == "## Deleted paths" { in_section = 1; next }
+    in_section && /^## / { exit }
+    in_section && NF && $0 !~ /^- `knowledge\/raw\/(internal|external)\/[^`]+`$/ { print }
+  ' "$record_file")"
+  [[ -z "$invalid_lines" ]] || fail "$record Deleted paths must contain only repository-relative raw record bullets"
+  declared_paths="$(awk '
+    $0 == "## Deleted paths" { in_section = 1; next }
+    in_section && /^## / { exit }
+    in_section && /^- `knowledge\/raw\/(internal|external)\/[^`]+`$/ {
+      value = $0
+      sub(/^- `/, "", value)
+      sub(/`$/, "", value)
+      print value
+    }
+  ' "$record_file")"
+  [[ -n "$declared_paths" ]] || fail "$record must name every deleted raw record"
+  duplicate_paths="$(printf '%s\n' "$declared_paths" | LC_ALL=C sort | uniq -d)"
+  [[ -z "$duplicate_paths" ]] || fail "$record repeats a deleted raw path: $duplicate_paths"
+  expected_paths="$(printf '%s\n' "$deleted_paths" | LC_ALL=C sort)"
+  declared_paths="$(printf '%s\n' "$declared_paths" | LC_ALL=C sort)"
+  [[ "$declared_paths" == "$expected_paths" ]] || \
+    fail "$record Deleted paths do not exactly match raw deletions against $base"
+}
+
 require_headings() {
   local file="$1" label="$2" heading
   shift 2
@@ -389,6 +441,36 @@ require_headings() {
   for heading in "$@"; do
     grep -Fqx "## $heading" "$file" || fail "$label is missing required heading: ## $heading"
   done
+}
+
+reference_subheading_count() {
+  local file="$1" section="$2" subheading="$3"
+  awk -v section="## $section" -v subheading="### $subheading" '
+    $0 == section { in_section = 1; next }
+    in_section && /^## / { exit }
+    in_section && $0 == subheading { count++ }
+    END { print count + 0 }
+  ' "$file"
+}
+
+required_reference_count() {
+  local file="$1" section="$2"
+  awk -v section="## $section" '
+    $0 == section { in_section = 1; next }
+    in_section && /^## / { exit }
+    in_section && $0 == "### Required" { in_required = 1; next }
+    in_required && /^### / { in_required = 0 }
+    in_required && /^- / && $0 != "- なし" { count++ }
+    END { print count + 0 }
+  ' "$file"
+}
+
+validate_reference_section() {
+  local file="$1" label="$2" section="$3" required_count conditional_count
+  required_count="$(reference_subheading_count "$file" "$section" Required)"
+  conditional_count="$(reference_subheading_count "$file" "$section" Conditional)"
+  (( required_count == 1 )) || fail "$label must contain exactly one ### Required under ## $section"
+  (( conditional_count == 1 )) || fail "$label must contain exactly one ### Conditional under ## $section"
 }
 
 validate_skill_frontmatter() {
@@ -487,7 +569,7 @@ validate_tool_behaviors() {
   local locale_skill_dir locale_output reference_fixture reference_scope_output
   local raw_record_dir raw_record_output
   local raw_git_root raw_diff_output lifecycle_root lifecycle_output
-  local ownership_root ownership_output url_probe scope_probe
+  local ownership_root ownership_output url_probe scope_probe dispatch_root dispatch_output contract_output
 
   fixture_root="$(mktemp -d "${TMPDIR:-/tmp}/agent-directory-tool-test.XXXXXX")"
   tool_fixture_root="$fixture_root"
@@ -629,7 +711,8 @@ validate_tool_behaviors() {
   raw_diff_output="$( (check_raw_tree_diff "$raw_git_root" HEAD) 2>&1 )"
   printf '%s\n' "$raw_diff_output" | grep -Fq 'modified, deleted or renamed' || \
     fail 'check_raw_tree_diff accepted a committed raw record modification'
-  raw_diff_output="$( (AGENT_ALLOW_RAW_ERASURE=true check_raw_tree_diff "$raw_git_root" HEAD) 2>&1 )"
+  raw_diff_output="$( (AGENT_ALLOW_RAW_ERASURE=knowledge/raw/internal/unused.md \
+    check_raw_tree_diff "$raw_git_root" HEAD) 2>&1 )"
   printf '%s\n' "$raw_diff_output" | grep -Fq 'modified, deleted or renamed' || \
     fail 'the erasure exception must not allow raw record modification'
   git -C "$raw_git_root" checkout -q -- .
@@ -646,8 +729,26 @@ validate_tool_behaviors() {
   printf '%s\n' "$raw_diff_output" | grep -Fq 'modified, deleted or renamed' || \
     fail 'check_raw_tree_diff accepted a raw record deletion'
   raw_diff_output="$( (AGENT_ALLOW_RAW_ERASURE=true check_raw_tree_diff "$raw_git_root" HEAD) 2>&1 )"
+  printf '%s\n' "$raw_diff_output" | grep -Fq 'must name one direct knowledge/raw/internal' || \
+    fail 'the erasure exception accepted a boolean without an audit record'
+  printf '%s\n' '---' 'recorded_at: 2026-08-02' 'kind: observation' \
+    'subjects: [fixture, raw-erasure]' '---' '' '# Raw erasure' '' '## Reason' '' \
+    'The fixture record contains data that must be erased.' '' '## Deleted paths' '' \
+    '- `knowledge/raw/internal/wrong.md`' \
+    > "$raw_git_root/knowledge/raw/internal/2026-08-02-raw-erasure.md"
+  raw_diff_output="$( (AGENT_ALLOW_RAW_ERASURE=knowledge/raw/internal/2026-08-02-raw-erasure.md \
+    check_raw_tree_diff "$raw_git_root" HEAD) 2>&1 )"
+  printf '%s\n' "$raw_diff_output" | grep -Fq 'do not exactly match raw deletions' || \
+    fail 'the erasure exception accepted an audit record with the wrong deleted path'
+  printf '%s\n' '---' 'recorded_at: 2026-08-02' 'kind: observation' \
+    'subjects: [fixture, raw-erasure]' '---' '' '# Raw erasure' '' '## Reason' '' \
+    'The fixture record contains data that must be erased.' '' '## Deleted paths' '' \
+    '- `knowledge/raw/internal/2026-08-01-immutable.md`' \
+    > "$raw_git_root/knowledge/raw/internal/2026-08-02-raw-erasure.md"
+  raw_diff_output="$( (AGENT_ALLOW_RAW_ERASURE=knowledge/raw/internal/2026-08-02-raw-erasure.md \
+    check_raw_tree_diff "$raw_git_root" HEAD) 2>&1 )"
   [[ -z "$raw_diff_output" ]] || \
-    fail "the erasure exception must allow a pure raw deletion: $raw_diff_output"
+    fail "the erasure exception rejected a deletion with an exact new audit record: $raw_diff_output"
 
   # Lifecycle enforcement against a base revision: paused Projects reject normal
   # work, and Project deletion requires the committed base-side gate.
@@ -759,6 +860,65 @@ validate_tool_behaviors() {
   git -C "$lifecycle_root" reset -q --hard
   rm -rf "$lifecycle_root/projects/glacier"
 
+  # Public CLI dispatch: --changed must invoke lifecycle protection, while Project
+  # and Skill contracts must reject malformed dates, targets, IDs, and Required counts.
+  dispatch_root="$fixture_root/dispatch"
+  git clone -q "$repo_root" "$dispatch_root"
+  cp "$repo_root/tools/validate-agent-directory.sh" "$dispatch_root/tools/validate-agent-directory.sh"
+  cp "$repo_root/tools/lib/project-registry.sh" "$dispatch_root/tools/lib/project-registry.sh"
+  cp -R "$repo_root/tests/evals/fixtures/protect-paused-project/projects/market-scan" \
+    "$dispatch_root/projects/market-scan"
+  mkdir -p "$dispatch_root/projects/market-scan/outputs"
+  printf 'baseline\n' > "$dispatch_root/projects/market-scan/outputs/report.md"
+  git -C "$dispatch_root" add -A
+  git -C "$dispatch_root" commit -qm 'Add paused dispatch fixture'
+  printf 'forbidden\n' >> "$dispatch_root/projects/market-scan/outputs/report.md"
+  dispatch_output="$(bash "$dispatch_root/tools/validate-agent-directory.sh" --changed 2>&1 || true)"
+  printf '%s\n' "$dispatch_output" | grep -Fq 'was paused at HEAD' || \
+    fail '--changed did not dispatch lifecycle protection against HEAD'
+  git -C "$dispatch_root" checkout -q -- projects/market-scan/outputs/report.md
+
+  cp -R "$repo_root/tests/evals/fixtures/active-project/projects/market-scan" \
+    "$dispatch_root/projects/contract-check"
+  sed 's/^name: market-scan$/name: contract-check/; s/PC-01/PC-07/g' \
+    "$dispatch_root/projects/contract-check/PROJECT.md" > "$dispatch_root/projects/contract-check/PROJECT.md.tmp"
+  mv "$dispatch_root/projects/contract-check/PROJECT.md.tmp" "$dispatch_root/projects/contract-check/PROJECT.md"
+  sed 's/^updated_at: .*/updated_at: 2026-02-30/; s/PC-01/PC-07/g' \
+    "$dispatch_root/projects/contract-check/STATE.md" > "$dispatch_root/projects/contract-check/STATE.md.tmp"
+  mv "$dispatch_root/projects/contract-check/STATE.md.tmp" "$dispatch_root/projects/contract-check/STATE.md"
+  printf '%s\n' '対象契約: `PROJECT.md#PC-07`' >> "$dispatch_root/projects/contract-check/STATE.md"
+  awk '
+    $0 == "## 使用するKnowledge" { in_knowledge = 1 }
+    in_knowledge && $0 == "## 使用するSkill" { in_knowledge = 0 }
+    in_knowledge && $0 == "- なし" {
+      for (i = 1; i <= 7; i++) print "- `knowledge/wiki/topics/ref-" i ".md`"
+      next
+    }
+    { print }
+  ' "$dispatch_root/projects/contract-check/PROJECT.md" > "$dispatch_root/projects/contract-check/PROJECT.md.tmp"
+  mv "$dispatch_root/projects/contract-check/PROJECT.md.tmp" "$dispatch_root/projects/contract-check/PROJECT.md"
+  cp -R "$repo_root/tests/evals/fixtures/delegate-independent-skills/skills/competitor-scan" \
+    "$dispatch_root/skills/competitor-scan"
+  mkdir -p "$dispatch_root/.agents/skills" "$dispatch_root/.claude/skills"
+  ln -s ../../skills/competitor-scan "$dispatch_root/.agents/skills/competitor-scan"
+  ln -s ../../skills/competitor-scan "$dispatch_root/.claude/skills/competitor-scan"
+  awk '
+    $0 == "## 使用するKnowledge" { in_knowledge = 1 }
+    in_knowledge && $0 == "- なし" {
+      for (i = 1; i <= 4; i++) print "- `knowledge/wiki/topics/ref-" i ".md`"
+      next
+    }
+    { print }
+  ' "$dispatch_root/skills/competitor-scan/SKILL.md" > "$dispatch_root/skills/competitor-scan/SKILL.md.tmp"
+  mv "$dispatch_root/skills/competitor-scan/SKILL.md.tmp" "$dispatch_root/skills/competitor-scan/SKILL.md"
+  contract_output="$(bash "$dispatch_root/tools/validate-agent-directory.sh" 2>&1 || true)"
+  for scope_probe in 'must define PC-01' 'updated_at is not a real date' \
+    'must contain exactly one valid 対象契約' 'exceeds the 6-entry combined Required reference limit' \
+    'exceeds the 3-entry Required Knowledge limit'; do
+    printf '%s\n' "$contract_output" | grep -Fq "$scope_probe" || \
+      fail "validator lost a Project or Skill contract check: $scope_probe"
+  done
+
   # Canonical Ownership: dual ownership by root Git and an unregistered nested
   # Project Git are both violations.
   ownership_root="$fixture_root/ownership"
@@ -785,7 +945,7 @@ validate_tool_behaviors() {
   # Repository URL contract: canonical shapes pass, credential-bearing and
   # non-canonical URLs are rejected.
   for url_probe in 'git@example.com:owner/repo.git' 'ssh://git@example.com/owner/repo.git' \
-    'https://example.com/owner/repo.git'; do
+    'https://example.com/owner/repo.git' 'https://example.com/group/team/repo.git'; do
     agent_repository_url_is_rejected "$url_probe" && \
       fail "agent_repository_url_is_rejected rejected a canonical URL shape: $url_probe"
   done
@@ -793,7 +953,11 @@ validate_tool_behaviors() {
     'https://user:pass@example.com/owner/repo.git' 'ssh://git:pass@example.com/owner/repo.git' \
     'https://example.com/owner/repo.git?token=x' 'https://example.com/owner/repo.git#frag' \
     'git://example.com/owner/repo.git' 'file:///srv/repo.git' 'http://example.com/owner/repo.git' \
-    '/srv/local/repo.git' '../relative/repo' 'https://example.com' 'git@example.com:/abs/path'; do
+    '/srv/local/repo.git' '../relative/repo' 'https://example.com' 'git@example.com:/abs/path' \
+    'https://example.com/x' 'ssh://someone@example.com/owner/repo.git' \
+    'git@other@example.com:owner/repo.git' 'https://example.com/owner/repo' \
+    'https://example.com/owner/.git' 'https://example.com/owner//repo.git' \
+    'https://example.com/owner/../repo.git'; do
     agent_repository_url_is_rejected "$url_probe" || \
       fail 'agent_repository_url_is_rejected accepted a forbidden repository URL'
   done
@@ -1033,7 +1197,7 @@ done < <(find "$repo_root/knowledge/raw/internal" -mindepth 1 \
 
 validate_skill_library() {
   local skills_parent="$1" agents_adapter="$2" claude_adapter="$3"
-  local skill_dir skill_file skill_name skill_status replacement replacement_status bytes
+  local skill_dir skill_file skill_name skill_status replacement replacement_status bytes required_count
   for skill_dir in "$repo_root/$skills_parent"/*; do
     [[ -d "$skill_dir" ]] || continue
     [[ "${skill_dir##*/}" != '_template' ]] || continue
@@ -1049,6 +1213,10 @@ validate_skill_library() {
     skill_name="$(frontmatter_value "$skill_file" name)"
     [[ "$skill_name" == "${skill_dir##*/}" ]] || fail "${skill_file#"$repo_root"/} name must match its directory"
     [[ -n "$(frontmatter_value "$skill_file" description)" ]] || fail "${skill_file#"$repo_root"/} is missing description"
+    validate_reference_section "$skill_file" "${skill_file#"$repo_root"/}" '使用するKnowledge'
+    required_count="$(required_reference_count "$skill_file" '使用するKnowledge')"
+    (( required_count <= 3 )) || \
+      fail "${skill_file#"$repo_root"/} exceeds the 3-entry Required Knowledge limit: $required_count"
     validate_skill_adapter "$skill_name" "$agents_adapter"
     validate_skill_adapter "$skill_name" "$claude_adapter"
     skill_status="$(frontmatter_metadata_value "$skill_file" agent-directory.status)"
@@ -1112,6 +1280,7 @@ for project_dir in "$repo_root"/projects/*; do
     validate_status_file "$project_dir/PROJECT.md" 'active|paused|completed|retired'
     project_status=''
     project_pc_ids=$'\n'
+    project_pc_count=0
     if [[ -f "$project_dir/PROJECT.md" ]]; then
       check_frontmatter_unique "$project_dir/PROJECT.md"
       [[ "$(frontmatter_value "$project_dir/PROJECT.md" name)" == "$project_name" ]] || \
@@ -1129,6 +1298,7 @@ for project_dir in "$repo_root"/projects/*; do
           continue
         fi
         pc_id="${BASH_REMATCH[1]}"
+        project_pc_count=$((project_pc_count + 1))
         case "$project_pc_ids" in
           *$'\n'"$pc_id"$'\n'*) fail "projects/$project_name/PROJECT.md has a duplicate PC-ID: $pc_id" ;;
         esac
@@ -1148,14 +1318,37 @@ for project_dir in "$repo_root"/projects/*; do
         '') fail "projects/$project_name/PROJECT.md is missing frontmatter mode" ;;
         *) fail "projects/$project_name/PROJECT.md has invalid mode: $project_mode" ;;
       esac
+      (( project_pc_count >= 1 )) || \
+        fail "projects/$project_name/PROJECT.md must define at least one PC-ID"
+      case "$project_pc_ids" in
+        *$'\nPC-01\n'*) ;;
+        *) fail "projects/$project_name/PROJECT.md must define PC-01" ;;
+      esac
       require_headings "$project_dir/PROJECT.md" "projects/$project_name/PROJECT.md" \
         目的 判断原則 非ゴール 制約・固定決定 品質基準 入力 使用するKnowledge 使用するSkill 成果物 検証方法
+      validate_reference_section "$project_dir/PROJECT.md" "projects/$project_name/PROJECT.md" '使用するKnowledge'
+      validate_reference_section "$project_dir/PROJECT.md" "projects/$project_name/PROJECT.md" '使用するSkill'
+      project_required_count=$((
+        $(required_reference_count "$project_dir/PROJECT.md" '使用するKnowledge') +
+        $(required_reference_count "$project_dir/PROJECT.md" '使用するSkill')
+      ))
+      (( project_required_count <= 6 )) || \
+        fail "projects/$project_name/PROJECT.md exceeds the 6-entry combined Required reference limit: $project_required_count"
     fi
     if [[ -f "$project_dir/STATE.md" ]]; then
       check_frontmatter_unique "$project_dir/STATE.md"
+      state_updated_at="$(frontmatter_value "$project_dir/STATE.md" updated_at)"
+      if [[ ! "$state_updated_at" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]]; then
+        fail "projects/$project_name/STATE.md updated_at must be YYYY-MM-DD"
+      elif ! date_is_real "$state_updated_at"; then
+        fail "projects/$project_name/STATE.md updated_at is not a real date: $state_updated_at"
+      fi
       require_headings "$project_dir/STATE.md" "projects/$project_name/STATE.md" \
         現在の到達点 現在の目標 目標の合格条件 検証結果 未完了・ブロッカー 現在有効な決定 失敗・却下済み 次の一手
       check_size "projects/$project_name/STATE.md" 8192 "projects/$project_name/STATE.md"
+      state_target_count="$(grep -Ec '^対象契約: `PROJECT\.md#(PC-[0-9]{2,}|status)`$' "$project_dir/STATE.md" || true)"
+      (( state_target_count == 1 )) || \
+        fail "projects/$project_name/STATE.md must contain exactly one valid 対象契約"
       while IFS= read -r state_pc; do
         [[ -n "$state_pc" ]] || continue
         case "$project_pc_ids" in
@@ -1186,22 +1379,28 @@ done
 # (knowledge/KNOWLEDGE.md#不変規則) — Core documents directly under knowledge/raw/ and
 # structural .gitkeep placeholders are not records. Deletion is tolerated only under the
 # canonical privacy/security erasure exception
-# (knowledge/KNOWLEDGE.md#Secret・privacy削除の限定例外), which the operator asserts
-# explicitly with AGENT_ALLOW_RAW_ERASURE=true; modification and rename stay rejected
-# even then because raw paths are permanent IDs.
+# (knowledge/KNOWLEDGE.md#Secret・privacy削除の限定例外), which names a new audit
+# record through AGENT_ALLOW_RAW_ERASURE. Modification and rename stay rejected.
 check_raw_tree_diff() {
-  local root="$1" base="$2" allow_erasure="${AGENT_ALLOW_RAW_ERASURE:-false}" raw_mutations
-  raw_mutations="$(git -C "$root" diff --name-status -M "$base" -- \
-    knowledge/raw/internal knowledge/raw/external | \
-    LC_ALL=C awk -F'\t' -v allow_erasure="$allow_erasure" '
+  local root="$1" base="$2" erasure_record="${AGENT_ALLOW_RAW_ERASURE:-}" raw_diff raw_mutations deleted_paths
+  raw_diff="$(git -C "$root" diff --name-status -M "$base" -- \
+    knowledge/raw/internal knowledge/raw/external)"
+  raw_mutations="$(printf '%s\n' "$raw_diff" | \
+    LC_ALL=C awk -F'\t' -v erasure_record="$erasure_record" '
       $2 ~ /(^|\/)\.gitkeep$/ { next }
       $1 == "A" { next }
-      $1 == "D" && allow_erasure == "true" { next }
+      $1 == "D" && erasure_record != "" { next }
       { print }
     ')"
   if [[ -n "$raw_mutations" ]]; then
     fail "immutable knowledge/raw records are modified, deleted or renamed against $base"
     printf '%s\n' "$raw_mutations" >&2
+  fi
+  deleted_paths="$(printf '%s\n' "$raw_diff" | LC_ALL=C awk -F'\t' '
+    $1 == "D" && $2 !~ /(^|\/)\.gitkeep$/ { print $2 }
+  ')"
+  if [[ -n "$deleted_paths" && -n "$erasure_record" ]]; then
+    validate_raw_erasure_record "$root" "$base" "$erasure_record" "$deleted_paths"
   fi
 }
 
@@ -1343,7 +1542,16 @@ check_lifecycle_diff() {
         fi
         ;;
     esac
-  done < <(git -C "$root" ls-tree --name-only "$base:projects" 2>/dev/null)
+  done < <(git -C "$root" diff --name-status -M "$base" -- projects | \
+    LC_ALL=C awk -F'\t' '
+      {
+        path = $2
+        if (index(path, "projects/") != 1) next
+        sub(/^projects\//, "", path)
+        sub(/\/.*/, "", path)
+        if (path != "") print path
+      }
+    ' | LC_ALL=C sort -u)
 }
 
 # Canonical Ownership: registry entries must be structurally valid, the root Git must
@@ -1409,12 +1617,14 @@ if git -C "$repo_root" rev-parse --show-toplevel >/dev/null 2>&1; then
 
   if git -C "$repo_root" rev-parse --verify HEAD >/dev/null 2>&1; then
     check_raw_tree_diff "$repo_root" HEAD
+    check_lifecycle_diff "$repo_root" HEAD
   fi
 
   if [[ -n "$base_ref" ]]; then
     if ! git -C "$repo_root" rev-parse --verify --quiet "$base_ref^{commit}" >/dev/null 2>&1; then
       fail "--base does not resolve to a commit: $base_ref"
-    else
+    elif [[ "$(git -C "$repo_root" rev-parse "$base_ref^{commit}")" != \
+            "$(git -C "$repo_root" rev-parse HEAD)" ]]; then
       check_raw_tree_diff "$repo_root" "$base_ref"
       check_lifecycle_diff "$repo_root" "$base_ref"
     fi

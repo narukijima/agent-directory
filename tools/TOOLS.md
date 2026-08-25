@@ -42,14 +42,13 @@ bash tools/validate-agent-directory.sh [--strict] [--full] [--changed] [--self-t
   [--bootstrap-status] [--version]
 ```
 
-- 通常: 必須構造、frontmatter、Project / Knowledge / Skill schema、registry整合、Independent二重所有、
-  Tool allowlist、script構文、HEADに対するraw不変性（`raw/internal/`と`raw/external/`の原記録。
-  `knowledge/raw/`直下のCore文書と構造保持用placeholderは対象外）を検査
+- 通常: 必須構造、schema、registry、Git ownership、Tool、script構文、HEADに対するraw不変性と
+  Project lifecycleを検査（raw直下のCore文書と構造保持用placeholderは対象外）
 - `--changed`: 作業ツリーで変更したProject / Knowledge / Skillだけへ対象別検査を絞るFast Path。
   workspace全体に比例しない構造検査は常に実行する。変更がmeta正本へ届く場合、削除・renameを含む場合、
   Git作業ツリーでない場合は全体検査へ戻す。変更targetを参照するtargetもscopeへ含める
-- `--base <ref>`: 指定revisionから現在までの差分で、commit済みを含むraw不変性、paused / retired Projectの
-  変更禁止、Project削除gateを追加検査。Gitのrename検出で`projects/LIFECYCLE.md#物理位置`の
+- `--base <ref>`: HEAD検査に加え、指定revisionから現在までのcommit済みraw・lifecycle差分を追加検査。
+  Gitのrename検出で`projects/LIFECYCLE.md#物理位置`の
   明示的なProject物理移行を削除と区別する
 - `--strict`: 導入済みWorkspaceとして自己定義placeholderを拒否
 - `--full`: 全Markdown参照（`projects/<name>/runs/`は対象外）とIndependent Project整合を追加
@@ -57,8 +56,8 @@ bash tools/validate-agent-directory.sh [--strict] [--full] [--changed] [--self-t
 - `--bootstrap-status`: `template|deployed`だけを返す
 - `--version`: contract versionだけを返す
 
-rawの削除は`knowledge/KNOWLEDGE.md#Secret・privacy削除の限定例外`に限り、
-`AGENT_ALLOW_RAW_ERASURE=true`を明示した実行だけが許容する。
+rawの削除は`knowledge/KNOWLEDGE.md#Secret・privacy削除の限定例外`に限る。
+`AGENT_ALLOW_RAW_ERASURE=knowledge/raw/internal/<new-erasure-record>.md`で今回追加する監査recordを指定する。
 
 公開テンプレートmainは自己定義placeholderを意図的に持つため、製品自身の検証は`--full --self-test`を使う。
 consumer導入後は、通常の作業終了時に`--changed`、契約・構造を変更したときと定期点検で`--strict --full`を使う。

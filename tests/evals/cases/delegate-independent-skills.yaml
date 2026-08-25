@@ -7,6 +7,7 @@ request: |
   Skill実行を委譲して並列に進め、統合した結果だけを報告して。永続成果物は不要です。
 
 expect:
+  # noneは永続化Ownerがないという意味。依頼が明示したSkillは実行手段として読む。
   route: none
   must_delegate:
     - competitor-scan

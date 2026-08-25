@@ -119,8 +119,8 @@ Independentでは`projects/<name>/**`のすべて（契約、状態、個別`AGE
 `PROJECT.md`や`STATE.md`のコピーを残さず、同じ契約と状態を二つのGitへ複製しない。
 
 Owner Agentが開発する公開基盤製品だけはregistryの`repository_role: public-foundation`で明示する。
-これは一般Projectではなく、製品repositoryが公開目的、仕様、repository-local規約、検証、配布文書を所有し、
-Owner Agent rootが製品横断の現在目標、優先順位、相互影響、次の一手、採用revision、handoff状態を一元管理する。
+製品repositoryは公開目的、仕様、repository-local規約、検証、配布文書を所有し、Owner Agent rootの一つの
+continuous Projectが製品横断の現在目標、優先順位、相互影響、次の一手、採用revision、handoff状態を所有する。
 製品repositoryへOwner Agent固有の`PROJECT.md` / `STATE.md`を置かず、同じactive状態を二つのGitへ複製しない。
 一般利用者のProject契約と混同せず、この役割のrepositoryは`meta` Routeで扱う。
 

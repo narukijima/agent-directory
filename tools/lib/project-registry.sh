@@ -64,10 +64,23 @@ agent_registry_records() {
 }
 
 # Return success when a repository URL must be rejected. The registry allows only the
-# canonical shapes from projects/REPOSITORIES.md#entry形式 — `git@host:owner/repo.git`,
-# `ssh://git@host/owner/repo.git`, `https://host/owner/repo.git` — with no credential,
+# canonical shapes from projects/REPOSITORIES.md#entry形式 — `git@host:path.git`,
+# `ssh://git@host/path.git`, `https://host/path.git` — with no credential and a
+# path of at least two segments. Nested namespaces are allowed. There is no
 # query, fragment, port, or local path. Local absolute paths are accepted only when the
 # explicit second argument is true (isolated validator fixtures).
+agent_repository_path_is_rejected() {
+  local path="$1"
+  [[ -n "$path" && "$path" == */* && "$path" == *.git ]] || return 0
+  case "$path" in
+    /*|*/|*/.git|*//*|*'\'*) return 0 ;;
+  esac
+  case "/$path/" in
+    *'/../'*|*'/./'*) return 0 ;;
+  esac
+  return 1
+}
+
 agent_repository_url_is_rejected() {
   local url="$1"
   local allow_local="${2:-false}"
@@ -91,7 +104,7 @@ agent_repository_url_is_rejected() {
       case "$host" in
         ''|*@*|*:*) return 0 ;; # https carries no userinfo (tokens included) and no port
       esac
-      [[ -n "$path" ]] || return 0
+      agent_repository_path_is_rejected "$path" && return 0
       return 1
       ;;
     ssh://*)
@@ -103,9 +116,9 @@ agent_repository_url_is_rejected() {
         *@*) userinfo="${host%%@*}"; host="${host#*@}" ;;
         *) return 0 ;;
       esac
-      case "$userinfo" in ''|*:*|*@*) return 0 ;; esac
+      [[ "$userinfo" == 'git' ]] || return 0
       case "$host" in ''|*:*|*@*) return 0 ;; esac
-      [[ -n "$path" ]] || return 0
+      agent_repository_path_is_rejected "$path" && return 0
       return 1
       ;;
     *://*) return 0 ;; # file, git, http and every other scheme
@@ -115,9 +128,9 @@ agent_repository_url_is_rejected() {
       [[ "$rest" == *:* ]] || return 0
       host="${rest%%:*}"
       path="${rest#*:}"
-      case "$userinfo" in ''|*:*|*/*|*@*) return 0 ;; esac
+      [[ "$userinfo" == 'git' ]] || return 0
       case "$host" in ''|*/*|*@*) return 0 ;; esac
-      case "$path" in ''|/*) return 0 ;; esac
+      agent_repository_path_is_rejected "$path" && return 0
       return 1
       ;;
     *) return 0 ;;
@@ -134,7 +147,7 @@ agent_registry_entry_error() {
     *) printf '`%s` has an invalid repository_reason: %s\n' "$name" "${reason:-<empty>}"; return 0 ;;
   esac
   if agent_repository_url_is_rejected "$url" "$allow_local"; then
-    printf '`%s` repository_url must be credential-free git@host:path, ssh://git@host/path or https://host/path without query, fragment or local path\n' "$name"
+    printf '`%s` repository_url must be credential-free git@host:path.git, ssh://git@host/path.git or https://host/path.git without query, fragment, port or local path\n' "$name"
     return 0
   fi
   if [[ ! "$revision" =~ ^[0-9a-f]{40}$ ]]; then
