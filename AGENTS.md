@@ -25,7 +25,7 @@
 | `skill` | 再利用手順・研究方法 | `skills/SKILLS.md`と対象`SKILL.md` |
 | `project` | 固有作業・成果物・研究 | `projects/AGENTS.md` |
 | `meta` | 構造、規約、Tool | 対象領域の正本と変更対象 |
-| `none` | 永続化Ownerのない回答 | 原則追加ロードなし。明示Skillだけ実行時に読む |
+| `none` | 永続化Ownerのない回答 | 原則追加ロードなし。Runtimeが選んだSkillは実行時に読む |
 
 ## Context Loading
 

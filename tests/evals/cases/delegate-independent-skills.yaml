@@ -3,11 +3,11 @@ name: delegate-independent-skills
 fixture: delegate-independent-skills
 
 request: |
-  competitor-scanとliterature-reviewは互いに独立した分析です。Runtime標準のSubagentへ
-  Skill実行を委譲して並列に進め、統合した結果だけを報告して。永続成果物は不要です。
+  主要競合の機能・価格・位置づけの比較と、関連研究の文献レビューを、Runtime標準のSubagentへ
+  分けて並列に進め、統合した結果だけを報告して。永続成果物は不要です。
 
 expect:
-  # noneは永続化Ownerがないという意味。依頼が明示したSkillは実行手段として読む。
+  # noneは永続化Ownerがないという意味。Skill名がなくてもRuntime標準discoveryで必要なSkillを選ぶ。
   route: none
   must_delegate:
     - competitor-scan
