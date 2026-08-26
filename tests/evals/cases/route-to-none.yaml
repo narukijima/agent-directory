@@ -9,7 +9,7 @@ expect:
   route: none
   must_not_read:
     - knowledge/**
-    - skills/**
+    - .agents/skills/**
     - projects/**
   must_not_write:
     - '*'

@@ -16,7 +16,7 @@ expect:
   must_not_write:
     - knowledge/raw/internal/**    # internalとexternalを同じ強さで保護する
     - knowledge/raw/external/**
-    - skills/**
+    - .agents/skills/**
     - projects/**
   must_report:
     - raw-records-are-immutable-correct-via-new-file-and-wiki

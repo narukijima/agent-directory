@@ -6,7 +6,7 @@ set -euo pipefail
 tool_root="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
 repo_root="$(cd "$tool_root/.." && pwd -P)"
 . "$tool_root/lib/project-registry.sh"
-contract_version='1.4.0'
+contract_version='2.0.0'
 strict=false
 full=false
 changed=false
@@ -83,13 +83,13 @@ require_file() {
 scope_target_of() {
   local path="$1"
   case "$path" in
-    projects/_template/*|skills/_template/*) printf '%s' 'META'; return 0 ;;
+    projects/_template/*) printf '%s' 'META'; return 0 ;;
     projects/*/*)
       path="${path#projects/}"
       printf 'projects/%s' "${path%%/*}" ;;
-    skills/*/*)
-      path="${path#skills/}"
-      printf 'skills/%s' "${path%%/*}" ;;
+    .agents/skills/*/*)
+      path="${path#.agents/skills/}"
+      printf '.agents/skills/%s' "${path%%/*}" ;;
     knowledge/wiki/sources/*.md|knowledge/wiki/topics/*.md|knowledge/raw/internal/*)
       printf '%s' "$path" ;;
     *) printf '%s' 'META' ;;
@@ -285,22 +285,6 @@ frontmatter_has_key() {
   ' "$file"
 }
 
-frontmatter_metadata_has_key() {
-  local file="$1" key="$2"
-  awk -v key="$key" '
-    NR == 1 && $0 == "---" { in_frontmatter = 1; next }
-    in_frontmatter && $0 == "---" { exit }
-    in_frontmatter && $0 == "metadata:" { in_metadata = 1; next }
-    in_metadata && /^[^[:space:]]/ { in_metadata = 0 }
-    in_metadata && /^[[:space:]]/ {
-      value = $0
-      sub(/^[[:space:]]+/, "", value)
-      if (index(value, key ":") == 1) { found = 1; exit }
-    }
-    END { exit !found }
-  ' "$file"
-}
-
 validate_status_file() {
   local file="$1" allowed="$2" status
   [[ -f "$file" ]] || return 0
@@ -474,53 +458,16 @@ validate_reference_section() {
 }
 
 validate_skill_frontmatter() {
-  local file="$1" status legacy_status aliases legacy_aliases key name description compatibility description_length
+  local file="$1" key name description compatibility description_length
   [[ -f "$file" ]] || return 0
   [[ "$(sed -n '1p' "$file")" == '---' ]] || {
     fail "${file#"$repo_root"/} must start with YAML frontmatter"
     return 0
   }
   check_frontmatter_unique "$file"
-  status="$(frontmatter_metadata_value "$file" agent-directory.status)"
-  legacy_status="$(frontmatter_value "$file" status)"
-  if [[ -n "$status" && -n "$legacy_status" && "$status" != "$legacy_status" ]]; then
-    fail "${file#"$repo_root"/} has conflicting standard and legacy status metadata"
-    return 0
-  fi
-  if frontmatter_has_key "$file" status || frontmatter_has_key "$file" aliases || \
-    frontmatter_has_key "$file" replaced_by; then
-    if [[ "$strict" == true ]]; then
-      fail "${file#"$repo_root"/} uses legacy top-level Skill lifecycle fields"
-    else
-      warn "${file#"$repo_root"/} uses legacy top-level Skill lifecycle fields"
-    fi
-  fi
-  [[ -n "$status" ]] || status="$legacy_status"
-  case "$status" in
-    active|deprecated|retired) ;;
-    '') fail "${file#"$repo_root"/} is missing metadata agent-directory.status" ;;
-    *) fail "${file#"$repo_root"/} has invalid Skill status: $status" ;;
-  esac
-
-  aliases="$(frontmatter_metadata_value "$file" agent-directory.aliases)"
-  legacy_aliases="$(frontmatter_value "$file" aliases)"
-  if ! frontmatter_metadata_has_key "$file" agent-directory.aliases; then
-    if frontmatter_has_key "$file" aliases && [[ "$strict" != true ]]; then
-      aliases="$legacy_aliases"
-    else
-      fail "${file#"$repo_root"/} is missing metadata agent-directory.aliases"
-    fi
-  fi
-  if [[ "$aliases" == ,* || "$aliases" == *, || "$aliases" == *,,* ]]; then
-    fail "${file#"$repo_root"/} has invalid comma-separated Skill aliases"
-  else
-    check_alias_duplicates "$file" "$aliases"
-  fi
-
   while IFS= read -r key; do
     case "$key" in
       name|description|license|compatibility|metadata|allowed-tools) ;;
-      status|aliases|replaced_by) ;; # Legacy consumer compatibility; do not emit these in new Skills.
       *) fail "${file#"$repo_root"/} has non-standard top-level Skill field: $key" ;;
     esac
   done < <(awk '
@@ -545,9 +492,8 @@ validate_skill_frontmatter() {
 
 validate_skill_adapter() {
   local skill_name="$1" adapter="$2" expected
-  # Root and Project adapters share the same layout, so the link target is
-  # always ../../skills/<name> relative to the adapter directory.
-  expected="../../skills/$skill_name"
+  # Root and Project Claude adapters both point at the Agent Skills standard canon.
+  expected="../../.agents/skills/$skill_name"
   if [[ -L "$repo_root/$adapter/$skill_name" ]]; then
     [[ "$(readlink "$repo_root/$adapter/$skill_name")" == "$expected" ]] || \
       fail "$adapter/$skill_name must link to $expected"
@@ -565,7 +511,6 @@ validate_skill_adapter() {
 validate_tool_behaviors() {
   local fixture_root
   local materialize_root upstream_work upstream_bare adopted_sha materialize_output
-  local skill_source_root skill_target_root skill_import_output second_import_output
   local locale_skill_dir locale_output reference_fixture reference_scope_output
   local raw_record_dir raw_record_output
   local raw_git_root raw_diff_output lifecycle_root lifecycle_output
@@ -592,6 +537,15 @@ validate_tool_behaviors() {
   locale_output="$( (export LC_ALL=C; validate_skill_frontmatter "$locale_skill_dir/SKILL.md") 2>&1 )"
   printf '%s\n' "$locale_output" | grep -Fq '200-character' || \
     fail 'SKILL.md description discovery recommendation check was lost'
+
+  # A standard third-party Skill needs only name and description. Agent Directory
+  # metadata and Knowledge sections are optional extensions, not import barriers.
+  printf '%s\n' '---' 'name: minimal-standard-skill' \
+    'description: Minimal Agent Skills fixture without Workspace-specific metadata.' '---' '' '# Minimal' \
+    > "$locale_skill_dir/SKILL.md"
+  locale_output="$(validate_skill_frontmatter "$locale_skill_dir/SKILL.md" 2>&1)"
+  [[ -z "$locale_output" ]] || \
+    fail "standard Skill without Agent Directory extensions must validate cleanly: $locale_output"
 
   # Reference validation covers the current canon but never immutable knowledge/raw/ records.
   reference_fixture="$fixture_root/reference-scope"
@@ -622,7 +576,7 @@ validate_tool_behaviors() {
   # Scope mapping for --changed: one target per Project / page / Skill, everything else meta.
   [[ "$(scope_target_of 'projects/sample/docs/note.md')" == 'projects/sample' ]] || \
     fail '--changed must scope a Project file to its Project'
-  [[ "$(scope_target_of 'skills/sample/SKILL.md')" == 'skills/sample' ]] || \
+  [[ "$(scope_target_of '.agents/skills/sample/SKILL.md')" == '.agents/skills/sample' ]] || \
     fail '--changed must scope a Skill file to its Skill'
   [[ "$(scope_target_of 'knowledge/wiki/topics/a.md')" == 'knowledge/wiki/topics/a.md' ]] || \
     fail '--changed must scope a Wiki page to itself'
@@ -897,11 +851,10 @@ validate_tool_behaviors() {
     { print }
   ' "$dispatch_root/projects/contract-check/PROJECT.md" > "$dispatch_root/projects/contract-check/PROJECT.md.tmp"
   mv "$dispatch_root/projects/contract-check/PROJECT.md.tmp" "$dispatch_root/projects/contract-check/PROJECT.md"
-  cp -R "$repo_root/tests/evals/fixtures/delegate-independent-skills/skills/competitor-scan" \
-    "$dispatch_root/skills/competitor-scan"
   mkdir -p "$dispatch_root/.agents/skills" "$dispatch_root/.claude/skills"
-  ln -s ../../skills/competitor-scan "$dispatch_root/.agents/skills/competitor-scan"
-  ln -s ../../skills/competitor-scan "$dispatch_root/.claude/skills/competitor-scan"
+  cp -R "$repo_root/tests/evals/fixtures/delegate-independent-skills/.agents/skills/competitor-scan" \
+    "$dispatch_root/.agents/skills/competitor-scan"
+  ln -s ../../.agents/skills/competitor-scan "$dispatch_root/.claude/skills/competitor-scan"
   awk '
     $0 == "## 使用するKnowledge" { in_knowledge = 1 }
     in_knowledge && $0 == "- なし" {
@@ -909,8 +862,8 @@ validate_tool_behaviors() {
       next
     }
     { print }
-  ' "$dispatch_root/skills/competitor-scan/SKILL.md" > "$dispatch_root/skills/competitor-scan/SKILL.md.tmp"
-  mv "$dispatch_root/skills/competitor-scan/SKILL.md.tmp" "$dispatch_root/skills/competitor-scan/SKILL.md"
+  ' "$dispatch_root/.agents/skills/competitor-scan/SKILL.md" > "$dispatch_root/.agents/skills/competitor-scan/SKILL.md.tmp"
+  mv "$dispatch_root/.agents/skills/competitor-scan/SKILL.md.tmp" "$dispatch_root/.agents/skills/competitor-scan/SKILL.md"
   contract_output="$(bash "$dispatch_root/tools/validate-agent-directory.sh" 2>&1 || true)"
   for scope_probe in 'must define PC-01' 'updated_at is not a real date' \
     'must contain exactly one valid 対象契約' 'exceeds the 6-entry combined Required reference limit' \
@@ -961,50 +914,6 @@ validate_tool_behaviors() {
     agent_repository_url_is_rejected "$url_probe" || \
       fail 'agent_repository_url_is_rejected accepted a forbidden repository URL'
   done
-
-  # Skill import: preserve provenance, normalize portable frontmatter, and create
-  # exactly one native symlink adapter for each supported Runtime.
-  skill_source_root="$fixture_root/skill-source"
-  skill_target_root="$fixture_root/skill-target"
-  mkdir -p "$skill_source_root/tools" "$skill_target_root/tools"
-  cp "$repo_root/AGENTS.md" "$skill_target_root/AGENTS.md"
-  cp "$repo_root/tools/validate-agent-directory.sh" "$skill_target_root/tools/validate-agent-directory.sh"
-  printf '%s\n' \
-    '#!/usr/bin/env bash' \
-    'set -euo pipefail' \
-    'skill_name="$1"' \
-    'shift' \
-    '[[ "$1" == "--target" && $# -eq 2 ]]' \
-    'target_root="$2"' \
-    'mkdir -p "$target_root/skills/$skill_name/agents"' \
-    'printf '\''%s\n'\'' '\''---'\'' '\''name: sample-skill'\'' '\''description: Portable fixture Skill'\'' '\''status: active'\'' '\''aliases: ["sample", "fixture"]'\'' '\''metadata:'\'' '\''  upstream.version: "1.0.0"'\'' '\''---'\'' '\'''\'' '\''# Sample'\'' > "$target_root/skills/$skill_name/SKILL.md"' \
-    'printf '\''%s\n'\'' '\''source_commit: "0123456789abcdef"'\'' > "$target_root/skills/$skill_name/agents/upstream.yaml"' \
-    > "$skill_source_root/tools/import-skill.sh"
-  chmod 755 "$skill_source_root/tools/import-skill.sh"
-  skill_import_output="$(AGENT_DIRECTORY_ROOT="$skill_target_root" \
-    bash "$repo_root/tools/import-skill.sh" sample-skill --source "$skill_source_root" 2>&1)" || \
-    fail "import-skill.sh self-check failed: $skill_import_output"
-  printf '%s\n' "$skill_import_output" | grep -Fq \
-    'SKILL_IMPORT_OK skill=sample-skill source_commit=0123456789abcdef adapters=2' || \
-    fail 'import-skill.sh did not emit its deterministic success receipt'
-  grep -Fq 'agent-directory.status: "active"' "$skill_target_root/skills/sample-skill/SKILL.md" || \
-    fail 'import-skill.sh did not normalize lifecycle metadata'
-  grep -Fq 'agent-directory.aliases: "sample,fixture"' "$skill_target_root/skills/sample-skill/SKILL.md" || \
-    fail 'import-skill.sh did not normalize aliases metadata'
-  ! grep -Eq '^(status|aliases|replaced_by):' "$skill_target_root/skills/sample-skill/SKILL.md" || \
-    fail 'import-skill.sh retained non-standard top-level lifecycle fields'
-  [[ "$(readlink "$skill_target_root/.agents/skills/sample-skill")" == '../../skills/sample-skill' ]] || \
-    fail 'import-skill.sh did not create the Codex Skill adapter'
-  [[ "$(readlink "$skill_target_root/.claude/skills/sample-skill")" == '../../skills/sample-skill' ]] || \
-    fail 'import-skill.sh did not create the Claude Code Skill adapter'
-  if second_import_output="$(AGENT_DIRECTORY_ROOT="$skill_target_root" \
-      bash "$repo_root/tools/import-skill.sh" sample-skill --source "$skill_source_root" 2>&1)"; then
-    fail 'import-skill.sh overwrote an existing Skill'
-  fi
-  [[ -f "$skill_target_root/skills/sample-skill/SKILL.md" && \
-     -L "$skill_target_root/.agents/skills/sample-skill" && \
-     -L "$skill_target_root/.claude/skills/sample-skill" ]] || \
-    fail 'import-skill.sh damaged existing canon or adapters after a rejected reimport'
 
   # Independent Project: clone one local fixture at the exact registered revision,
   # then verify that a second --check observes the same clean attachment.
@@ -1059,12 +968,11 @@ required_files=(
   'CLAUDE.md'
   'LICENSE'
   'README.md'
+  'skills-lock.json'
   'knowledge/KNOWLEDGE.md'
   'knowledge/wiki/INDEX.md'
   'knowledge/wiki/_template/SOURCE.md'
   'knowledge/wiki/_template/TOPIC.md'
-  'skills/SKILLS.md'
-  'skills/_template/SKILL.md'
   'projects/AGENTS.md'
   'projects/LIFECYCLE.md'
   'projects/PROJECTS.md'
@@ -1074,7 +982,6 @@ required_files=(
   'projects/_template/STATE.md'
   'tools/SAFETY.md'
   'tools/TOOLS.md'
-  'tools/import-skill.sh'
   'tools/lib/project-registry.sh'
   'tools/materialize-project-repositories.sh'
   'tools/validate-agent-directory.sh'
@@ -1087,7 +994,6 @@ done
 expected_tools="$(cat <<'TOOLS'
 tools/SAFETY.md
 tools/TOOLS.md
-tools/import-skill.sh
 tools/lib/project-registry.sh
 tools/materialize-project-repositories.sh
 tools/validate-agent-directory.sh
@@ -1099,23 +1005,24 @@ actual_tools="$(
   find tools -type f -not -name '.DS_Store' -not -path '*/__pycache__/*' -print | LC_ALL=C sort
 )"
 if [[ "$actual_tools" != "$expected_tools" ]]; then
-  fail 'tools/ differs from the 7-file owner-approved allowlist'
+  fail 'tools/ differs from the 6-file owner-approved allowlist'
   diff -u <(printf '%s\n' "$expected_tools") <(printf '%s\n' "$actual_tools") >&2 || true
 fi
 
-for heading in '## 自己定義' '## 共通判断原則' '## Route' '## Context Loading' '## 自律実行' '## 責任領域' '## 差分判定' '## 禁止事項' '## 参照順序'; do
+for heading in '## 自己定義' '## 共通判断原則' '## Route' '## Context Loading' '## Skill' '## 自律実行' '## 責任領域' '## 差分判定' '## 禁止事項' '## 参照順序'; do
   grep -Fqx "$heading" "$repo_root/AGENTS.md" || fail "AGENTS.md is missing heading: $heading"
 done
 grep -Fq '**Owner** — 目的、最終方針、本人判断、例外承認を持つ。' "$repo_root/AGENTS.md" || fail 'AGENTS.md lost the Owner responsibility contract'
 grep -Fq '新しいTool、Skill、恒久的な仕組み、抽象化、依存は原則追加しない' "$repo_root/AGENTS.md" || fail 'AGENTS.md lost the permanent-addition boundary'
 [[ "$(cat "$repo_root/CLAUDE.md")" == '@AGENTS.md' ]] || fail 'CLAUDE.md must only import the AGENTS.md canon'
-grep -Fq 'Skillの新設は現在のタスクに必要で' "$repo_root/skills/SKILLS.md" || fail 'skills/SKILLS.md lost the autonomous creation boundary'
-grep -Fq 'Agent Skills公開標準に従うProvider間共有source' "$repo_root/skills/SKILLS.md" || fail 'skills/SKILLS.md lost the Agent Skills standard boundary'
-grep -Fq 'agent-directory.status: "active"' "$repo_root/skills/_template/SKILL.md" || fail 'Skill template must use namespaced standard metadata'
-grep -Fq 'Runtime標準discoveryが選択したとき' "$repo_root/skills/_template/SKILL.md" || fail 'Skill template must use Runtime-owned discovery'
+grep -Fq 'Workspace共通Skillの正本はAgent Skills標準の`.agents/skills/<name>/SKILL.md`' "$repo_root/AGENTS.md" || fail 'AGENTS.md lost the Agent Skills standard path'
+grep -Fq '新設は現在のタスクに必要で既存Skillへ' "$repo_root/AGENTS.md" || fail 'AGENTS.md lost the autonomous Skill creation boundary'
+grep -Fq 'root `skills-lock.json`をGit管理する' "$repo_root/AGENTS.md" || fail 'AGENTS.md lost the project lock boundary'
+grep -Eq '"version"[[:space:]]*:[[:space:]]*1' "$repo_root/skills-lock.json" || fail 'skills-lock.json must use the project lock schema version 1'
+grep -Eq '"skills"[[:space:]]*:[[:space:]]*\{' "$repo_root/skills-lock.json" || fail 'skills-lock.json must contain the project skills map'
+[[ ! -e "$repo_root/.agents/.skill-lock.json" ]] || fail '.agents/.skill-lock.json is global state; use root skills-lock.json for the project'
 grep -Fq '新しいToolは原則追加しない' "$repo_root/tools/TOOLS.md" || fail 'tools/TOOLS.md lost the autonomous Tool boundary'
-grep -Fq 'これはRuntimeが一時的なsession isolationや並列作業にGit worktreeを使うことを' "$repo_root/README.md" || fail 'README.md must allow Runtime worktrees'
-grep -Fq 'Skill discovery、選択、起動、subagent実行を行わない' "$repo_root/skills/SKILLS.md" || fail 'skills/SKILLS.md must remain a source contract, not a Skill runtime'
+grep -Fq 'Git worktreeを使うことを禁止しない' "$repo_root/README.md" || fail 'README.md must allow Runtime worktrees'
 
 if [[ "$strict" == true ]] && grep -Eq '<agent-name>|<agent-role>|<agent-mission>|<agent-vision>|<operator-language>' "$repo_root/AGENTS.md"; then
   fail 'AGENTS.md contains unresolved deployment placeholders'
@@ -1124,7 +1031,6 @@ fi
 check_size 'AGENTS.md' 8192 'root AGENTS.md'
 check_size 'projects/AGENTS.md' 2048 'projects/AGENTS.md'
 check_size 'knowledge/KNOWLEDGE.md' 20480 'knowledge/KNOWLEDGE.md'
-check_size 'skills/SKILLS.md' 20480 'skills/SKILLS.md'
 check_size 'projects/PROJECTS.md' 24576 'projects/PROJECTS.md'
 check_size 'tools/TOOLS.md' 20480 'tools/TOOLS.md'
 check_size 'tools/SAFETY.md' 20480 'tools/SAFETY.md'
@@ -1198,16 +1104,19 @@ done < <(find "$repo_root/knowledge/raw/internal" -mindepth 1 \
   -not -name '.gitkeep' -not -name '.DS_Store' -print0)
 
 validate_skill_library() {
-  local skills_parent="$1" agents_adapter="$2" claude_adapter="$3"
+  local skills_parent="$1" claude_adapter="$2"
   local skill_dir skill_file skill_name skill_status replacement replacement_status bytes required_count
   for skill_dir in "$repo_root/$skills_parent"/*; do
     [[ -d "$skill_dir" ]] || continue
-    [[ "${skill_dir##*/}" != '_template' ]] || continue
+    if [[ -L "$skill_dir" ]]; then
+      fail "${skill_dir#"$repo_root"/} must be the canonical Skill directory, not a symlink"
+      continue
+    fi
     # Root Skills scope by Skill; Project-local Skills scope with their owning Project.
-    if [[ "$skills_parent" == 'skills' ]]; then
-      in_scope "skills/${skill_dir##*/}" || continue
+    if [[ "$skills_parent" == '.agents/skills' ]]; then
+      in_scope ".agents/skills/${skill_dir##*/}" || continue
     else
-      in_scope "${skills_parent%/skills}" || continue
+      in_scope "${skills_parent%/.agents/skills}" || continue
     fi
     skill_file="$skill_dir/SKILL.md"
     [[ -f "$skill_file" ]] || { fail "Skill directory is missing SKILL.md: ${skill_dir#"$repo_root"/}"; continue; }
@@ -1215,27 +1124,28 @@ validate_skill_library() {
     skill_name="$(frontmatter_value "$skill_file" name)"
     [[ "$skill_name" == "${skill_dir##*/}" ]] || fail "${skill_file#"$repo_root"/} name must match its directory"
     [[ -n "$(frontmatter_value "$skill_file" description)" ]] || fail "${skill_file#"$repo_root"/} is missing description"
-    validate_reference_section "$skill_file" "${skill_file#"$repo_root"/}" '使用するKnowledge'
-    required_count="$(required_reference_count "$skill_file" '使用するKnowledge')"
-    (( required_count <= 3 )) || \
-      fail "${skill_file#"$repo_root"/} exceeds the 3-entry Required Knowledge limit: $required_count"
-    validate_skill_adapter "$skill_name" "$agents_adapter"
+    if grep -Fqx '## 使用するKnowledge' "$skill_file"; then
+      validate_reference_section "$skill_file" "${skill_file#"$repo_root"/}" '使用するKnowledge'
+      required_count="$(required_reference_count "$skill_file" '使用するKnowledge')"
+      (( required_count <= 3 )) || \
+        fail "${skill_file#"$repo_root"/} exceeds the 3-entry Required Knowledge limit: $required_count"
+    fi
     validate_skill_adapter "$skill_name" "$claude_adapter"
     skill_status="$(frontmatter_metadata_value "$skill_file" agent-directory.status)"
-    [[ -n "$skill_status" ]] || skill_status="$(frontmatter_value "$skill_file" status)"
+    case "$skill_status" in
+      ''|active|deprecated|retired) ;;
+      *) fail "${skill_file#"$repo_root"/} has invalid optional Skill status: $skill_status" ;;
+    esac
     if [[ "$skill_status" == 'deprecated' ]]; then
       replacement="$(frontmatter_metadata_value "$skill_file" agent-directory.replaced-by)"
-      [[ -n "$replacement" ]] || replacement="$(frontmatter_value "$skill_file" replaced_by)"
       if [[ ! "$replacement" =~ ^[a-z0-9]+(-[a-z0-9]+)*$ ]]; then
         fail "${skill_file#"$repo_root"/} deprecated Skill is missing a valid metadata agent-directory.replaced-by"
       elif [[ ! -f "$repo_root/$skills_parent/$replacement/SKILL.md" ]]; then
         fail "${skill_file#"$repo_root"/} replacement Skill does not exist: $replacement"
       else
         replacement_status="$(frontmatter_metadata_value "$repo_root/$skills_parent/$replacement/SKILL.md" agent-directory.status)"
-        [[ -n "$replacement_status" ]] || \
-          replacement_status="$(frontmatter_value "$repo_root/$skills_parent/$replacement/SKILL.md" status)"
         # Replacements must be active, so deprecated chains can neither dangle nor cycle.
-        [[ "$replacement_status" == 'active' ]] || \
+        [[ -z "$replacement_status" || "$replacement_status" == 'active' ]] || \
           fail "${skill_file#"$repo_root"/} replacement Skill is not active: $replacement"
       fi
     fi
@@ -1244,29 +1154,29 @@ validate_skill_library() {
   done
 }
 
-validate_skill_library 'skills' '.agents/skills' '.claude/skills'
+validate_skill_library '.agents/skills' '.claude/skills'
 
 # Project-local Skills (projects/PROJECTS.md#Project固有Skill): the Project owns
 # canon and adapters under its own tree. Independent Projects (own .git) validate
 # themselves; the Workspace validator covers Embedded Projects only.
-for project_skill_root in "$repo_root"/projects/*/skills; do
+for project_skill_root in "$repo_root"/projects/*/.agents/skills; do
   [[ -d "$project_skill_root" ]] || continue
-  project_dir="${project_skill_root%/skills}"
+  project_dir="${project_skill_root%/.agents/skills}"
   project_name="${project_dir##*/}"
   [[ "$project_name" != '_template' ]] || continue
   [[ ! -d "$project_dir/.git" ]] || continue
-  validate_skill_library "projects/$project_name/skills" \
-    "projects/$project_name/.agents/skills" "projects/$project_name/.claude/skills"
+  validate_skill_library "projects/$project_name/.agents/skills" \
+    "projects/$project_name/.claude/skills"
 done
 
 # Workspace root adapters must only expose root Skills; Project Skills are never
 # bridged to the root (projects/PROJECTS.md#Project固有Skill).
-for adapter_root in '.agents/skills' '.claude/skills'; do
+for adapter_root in '.claude/skills'; do
   for adapter_entry in "$repo_root/$adapter_root"/*; do
     [[ -e "$adapter_entry" || -L "$adapter_entry" ]] || continue
     adapter_entry_name="${adapter_entry##*/}"
-    [[ -f "$repo_root/skills/$adapter_entry_name/SKILL.md" ]] || \
-      fail "$adapter_root/$adapter_entry_name has no root skills/ canon; do not bridge Project Skills to the Workspace root"
+    [[ -f "$repo_root/.agents/skills/$adapter_entry_name/SKILL.md" ]] || \
+      fail "$adapter_root/$adapter_entry_name has no root .agents/skills canon; do not bridge Project Skills to the Workspace root"
   done
 done
 
@@ -1371,7 +1281,7 @@ while IFS= read -r script; do
   /bin/bash -n "$repo_root/$script" || fail "$script fails bash -n"
 done < <(cd "$repo_root" && find tools -type f -name '*.sh' -print | LC_ALL=C sort)
 
-executables=(tools/import-skill.sh tools/materialize-project-repositories.sh tools/validate-agent-directory.sh)
+executables=(tools/materialize-project-repositories.sh tools/validate-agent-directory.sh)
 for executable in "${executables[@]}"; do
   [[ -x "$repo_root/$executable" ]] || fail "$executable is not executable"
 done

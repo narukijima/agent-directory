@@ -8,13 +8,12 @@ expect:
   must_read:
     - AGENTS.md
     - tools/TOOLS.md
-    - skills/SKILLS.md
   must_report:
     - speculative-permanent-addition-is-no-op
     - existing-owner-integration-considered-first
   must_not_write:
     - tools/**
-    - skills/**
+    - .agents/skills/**
   must_not_run:
     - git add
     - git commit

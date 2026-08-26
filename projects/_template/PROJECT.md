@@ -71,7 +71,7 @@ mode: finite
 ### Conditional
 
 - 条件: <追加の手順が必要になる条件>
-  参照: `skills/<skill-name>/SKILL.md`
+  参照: `.agents/skills/<skill-name>/SKILL.md`
 
 ## 成果物
 

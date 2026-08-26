@@ -31,8 +31,8 @@ Ownership、Structural safetyを、Provider非依存の正本として保つ。
 
 1. Agent 1体につき1つcopyまたはcloneする。
 2. [AGENTS.md](AGENTS.md)の自己定義placeholderを置換する。
-3. 共有Skillは`bash tools/import-skill.sh <name> --source /path/to/agent-skills`で取り込む。
-   固有SkillとProjectだけを、それぞれの`_template/`から作る。
+3. 外部Skillは`npx skills add <owner/repository> --skill <name> --agent codex --agent claude-code --yes`で取り込み、
+   固有SkillはRuntime標準の作成機能で`.agents/skills/`へ直接作る。
 4. Agent固有の環境変数を、追跡しないroot `.env`へ置く。Runtime、Provider、認証、permissionは、
    そのAgentの環境で設定する。
 5. `bash tools/validate-agent-directory.sh --strict --full`を実行する。
@@ -59,7 +59,7 @@ Ownership、Structural safetyを、Provider非依存の正本として保つ。
 | Route | 対象 | 入口 |
 |---|---|---|
 | `knowledge` | 取り込み、照会、統合 | [knowledge/KNOWLEDGE.md](knowledge/KNOWLEDGE.md) |
-| `skill` | 再利用手順、研究方法 | [skills/SKILLS.md](skills/SKILLS.md)と対象`SKILL.md` |
+| `skill` | 再利用手順、研究方法 | [.agents/skills/](.agents/skills/)の対象`SKILL.md` |
 | `project` | 固有作業、成果物、研究 | [projects/AGENTS.md](projects/AGENTS.md) |
 | `meta` | 構造、規約、Tool | 対象正本 |
 | `none` | 永続化Ownerのない回答 | 原則として追加ロードなし。Runtimeが選んだSkillは実行時に読む |
@@ -71,7 +71,8 @@ agent-directory/
 ├── AGENTS.md
 ├── CLAUDE.md                    # @AGENTS.mdだけのClaude Code bridge
 ├── README.md
-├── .agents/skills/              # Codex用Skill bridgeの空の受け皿
+├── .agents/skills/              # Agent Skills標準のWorkspace正本
+├── skills-lock.json             # project scopeで導入した外部Skillのlock
 ├── .claude/
 │   ├── skills/                  # Claude Code用Skill bridgeの空の受け皿
 │   └── settings.json            # 権限overrideを持たないnative設定
@@ -81,9 +82,6 @@ agent-directory/
 │   ├── KNOWLEDGE.md
 │   ├── raw/{internal,external}/
 │   └── wiki/{INDEX.md,_template,sources,topics}/
-├── skills/
-│   ├── SKILLS.md
-│   └── _template/
 ├── projects/
 │   ├── AGENTS.md
 │   ├── PROJECTS.md
@@ -98,7 +96,7 @@ agent-directory/
 └── tools/
     ├── TOOLS.md
     ├── SAFETY.md
-    └── 実行Tool 3本 + 内部実装2ファイル
+    └── 実行Tool 2本 + 内部実装2ファイル
 ```
 
 ## RuntimeとProvider
@@ -114,24 +112,21 @@ Agent固有の環境変数は、root `.env`を既定の未追跡な注入面と�
 OS共有、Keychain、外部secret storeを必須にしない。別の注入面が必要なRuntimeでは、
 そのAgent / Operatorが明示的に選択する。
 
-`skills/`はPortableなSkill sourceであり、発見、選択、起動を行うRuntimeではない。
-利用するRuntimeの標準配置（Codexの`.agents/skills/`、Claude Codeの`.claude/skills/`）から、
-必要なSkill directoryだけをper-Skill symlinkで`skills/<name>/`へ接続する。
-同じ規則、Skill本文、references、scriptsをProvider固有pathへ複製しない。
+Workspace共通Skillは、Agent Skills標準のproject pathである`.agents/skills/<name>/`をそのまま正本にする。
+Claude Code用`.claude/skills/<name>`は同じ正本へのsymlinkだけを持ち、Skill本文、references、scriptsを複製しない。
 
 ```bash
-ln -s ../../skills/<skill-name> .agents/skills/<skill-name>
-ln -s ../../skills/<skill-name> .claude/skills/<skill-name>
+npx skills add <owner/repository> --skill <skill-name> --agent codex --agent claude-code --yes
 ```
 
-Skill実行はRootの直列実行に限らない。独立して完結するSkill workは、CodexやClaude Codeが標準で提供する
-Subagent実行へ委譲し、並列化してよい。委譲基準、Worker往復の最小context、並列とSingle Writerの境界は、
-[skills/SKILLS.md](skills/SKILLS.md)の「Skill実行の委譲」が所有する。
-Coreは独自のorchestrator、queue、worker manager、DAG管理を持たない。
+project scopeの標準lockはroot `skills-lock.json`であり、Git管理する。ホーム用の
+`~/.agents/.skill-lock.json`はglobal installの状態なのでWorkspaceへコピーしない。Workspace自身が作るfirst-party
+Skillは外部依存ではないためlock不要で、Runtime標準のSkill作成機能または`npx skills init`で直接
+`.agents/skills/<name>/SKILL.md`を作る。独自templateとimport wrapperは持たない。
 
-両RuntimeのSkill受け皿は、空の構造だけをtemplateに含める。Skill実体、偽の`SKILL.md`、`_template` linkは置かない。
-同名のlinkは、`tools/import-skill.sh`が共有Skillをimportするときにだけ作る。
-固有Skillを`_template/`から作る場合も、追加するのは同じ2本のper-Skill linkだけである。
+Skillの発見、選択、起動、Subagent実行はRuntimeが所有する。独立して完結するSkill workはRuntime標準Subagentへ
+委譲・並列化してよいが、Coreは独自のorchestrator、queue、worker manager、DAG管理を持たない。境界の正本は
+[AGENTS.md](AGENTS.md#skill)とする。
 
 ## ProjectとGit
 
@@ -158,7 +153,7 @@ bash tools/materialize-project-repositories.sh --project <name>
 
 明示パスを検索より優先する。Runtime標準のファイル検索を使うのはtarget未指定のKnowledge照会だけであり、
 `knowledge/wiki/sources/`と`knowledge/wiki/topics/`のactive候補を最大5件へ絞る。
-Projectは`projects/<name>/`を、Skill sourceは`skills/<name>/SKILL.md`を直接使う。
+Projectは`projects/<name>/`を、Skill sourceは`.agents/skills/<name>/SKILL.md`を直接使う。
 検索結果や製品側memoryを正本の代わりにしない。予算はbyte数だけでなく往復回数にも適用し、
 pathが決まっている読み込みは1回のbatchへまとめる。
 
@@ -201,16 +196,16 @@ Coreが持つのは、Git ownership、repositoryとrevisionによる再現性、
 
 - Bash 3.2以上（macOS標準`/bin/bash`互換。Tool全体をBash 3.2で検証する）
 - Git 2.x
-- Python 3（`tools/import-skill.sh`のfrontmatter正規化と`tests/run-evals.py`だけが使う）
+- Python 3（`tests/run-evals.py`だけが使う）
 - validatorとbehavioral testはnetworkを使わない
-- Skill importはnetworkを使わず、`--source`には信頼済みのlocal repositoryを指定する
-  （信頼境界は`tools/TOOLS.md#Skill import`）
+- 外部Skillの取得と更新は標準`skills` CLIが所有し、取得元の信頼性は導入前に確認する。
 - Independent Projectのmaterializationは、remote URLをcloneまたはfetchする場合だけ、
   networkと実行環境の標準Git認証を必要とする
 
 ## Version
 
-contract versionは`bash tools/validate-agent-directory.sh --version`が返す（現在は`1.1.0`）。
+contract versionは`bash tools/validate-agent-directory.sh --version`が返す（現在は`2.0.0`）。
+[1.xからの移行](docs/migrations/2.0.0.md)では、Skill正本を`.agents/skills/`へ一度だけ移す。
 採用versionはGit tag（`v<version>`）で固定する。schemaとvalidator契約のbreaking changeではversionを上げ、
 そのときだけ移行手順を`docs`として添える。自動migrationや更新managerは持たない。
 
@@ -220,7 +215,7 @@ contract versionは`bash tools/validate-agent-directory.sh --version`が返す�
 |---|---|
 | [AGENTS.md](AGENTS.md) | 自己定義、Route、Context Loading、共通判断 |
 | [knowledge/KNOWLEDGE.md](knowledge/KNOWLEDGE.md) | Knowledge構造、不変規則、限定取得 |
-| [skills/SKILLS.md](skills/SKILLS.md) | Skill schema、選択、実行委譲、自律新設境界 |
+| [AGENTS.md](AGENTS.md#skill) | Skill配置、標準lock、実行委譲、自律新設境界 |
 | [projects/AGENTS.md](projects/AGENTS.md) | Project作業入口 |
 | [projects/PROJECTS.md](projects/PROJECTS.md) | 成果契約、Git ownership、attachment |
 | [projects/REPOSITORIES.md](projects/REPOSITORIES.md) | Independent registry |

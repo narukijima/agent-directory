@@ -1,6 +1,6 @@
 # TOOLS.md — Core Tool契約
 
-`tools/`はPortable Canonの構造検証、Skill import、Independent Project再現だけを所有する。
+`tools/`はPortable Canonの構造検証とIndependent Project再現だけを所有する。
 shell、検索、Runtime Skill、Git / GitHub操作、認証、backup、PR、deploy、publishを再包装しない。
 
 ## 原則
@@ -16,24 +16,10 @@ shell、検索、Runtime Skill、Git / GitHub操作、認証、backup、PR、dep
 | Tool | 所有する処理 | 所有しない処理 |
 |---|---|---|
 | `validate-agent-directory.sh` | Workspace schemaと構造的不変条件 | Runtime / Provider診断 |
-| `import-skill.sh` | provenance付きSkill import、標準frontmatter、native symlink | discovery、invocation、自動同期 |
 | `materialize-project-repositories.sh` | registry URL / revisionからIndependent cloneを再現・検査 | remote作成、push、merge |
 
 内部実装は`lib/project-registry.sh`と`validator/check-markdown-references.sh`の2ファイルである。
-説明正本2ファイルを含め、`tools/`は7ファイル固定。
-
-## Skill import
-
-```bash
-bash tools/import-skill.sh <skill-name> --source /path/to/agent-skills
-```
-
-配布元のprovenance付きimporterで一時領域へcopyし、Agent Skills標準frontmatterへ正規化してから
-`skills/<name>/`へ確定する。同じtransactionで`.agents/skills/<name>`と`.claude/skills/<name>`のsymlinkを作る。
-既存Skill、既存adapter、配布元の未commit変更を上書きせず、networkやRuntimeを起動しない。
-
-importは配布元の`tools/import-skill.sh`を実行する。これが信頼境界であり、`--source`には内容を確認済みの
-信頼できるlocal repositoryだけを指定する。sandboxや署名検証は持たない。
+説明正本2ファイルを含め、`tools/`は6ファイル固定。
 
 ## Validator
 
@@ -95,7 +81,7 @@ frontmatter key、または`**<target>**`形式の定義項目とする。
 |---|---:|
 | root `AGENTS.md` | 8KiB |
 | `projects/AGENTS.md` / Project個別`AGENTS.md` | 2KiB |
-| `knowledge/KNOWLEDGE.md` / `skills/SKILLS.md` / `tools/*.md` | 20KiB |
+| `knowledge/KNOWLEDGE.md` / `tools/*.md` | 20KiB |
 | `projects/PROJECTS.md` | 24KiB |
 | `STATE.md` / `knowledge/wiki/INDEX.md` | 8KiB |
 | active Wiki | 64KiB。24KiB超はRetrieval Map必須 |

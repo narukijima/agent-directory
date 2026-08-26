@@ -9,13 +9,12 @@ expect:
   route: skill
   must_read:
     - AGENTS.md
-    - skills/SKILLS.md
-    - skills/literature-review/SKILL.md    # descriptionだけでsource更新を判断しない
+    - .agents/skills/literature-review/SKILL.md    # descriptionだけでsource更新を判断しない
   may_write:
-    - skills/literature-review/**
+    - .agents/skills/literature-review/**
     - .tmp/**
   must_not_write:
     - knowledge/raw/internal/**
     - knowledge/raw/external/**
     - projects/**
-    - skills/_template/**
+    - skills-lock.json

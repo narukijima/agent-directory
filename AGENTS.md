@@ -22,7 +22,7 @@
 | Route | 対象 | 入口 |
 |---|---|---|
 | `knowledge` | 取り込み、照会、統合 | `knowledge/KNOWLEDGE.md` |
-| `skill` | 再利用手順・研究方法 | `skills/SKILLS.md`と対象`SKILL.md` |
+| `skill` | 再利用手順・研究方法 | `.agents/skills/<name>/SKILL.md` |
 | `project` | 固有作業・成果物・研究 | `projects/AGENTS.md` |
 | `meta` | 構造、規約、Tool | 対象領域の正本と変更対象 |
 | `none` | 永続化Ownerのない回答 | 原則追加ロードなし。Runtimeが選んだSkillは実行時に読む |
@@ -37,11 +37,23 @@ Runtimeを通さない。台帳、履歴、`runs/`、`docs/**`を一括読込せ
 予算はbyte数だけでなく往復回数にも適用する。pathが決まっている読込は依存のない範囲ごとに1回のbatchで
 まとめ、存在確認や1ファイルずつへ往復を分けない。32KiB・12ファイル到達時は未読範囲を報告して停止する。
 
+## Skill
+
+Workspace共通Skillの正本はAgent Skills標準の`.agents/skills/<name>/SKILL.md`とし、別のroot `skills/`や
+作成templateを持たない。Claude Code用`.claude/skills/<name>`は同じ正本へのsymlinkだけを持つ。
+外部Skillは標準CLIでproject scopeへ導入し、root `skills-lock.json`をGit管理する。ホーム用
+`~/.agents/.skill-lock.json`をWorkspaceへコピーしない。Workspace自身が作るSkillには外部依存lockを要求しない。
+
+Skillは`name`と`description`を必須とし、その他はAgent Skills標準の任意fieldだけを使う。Runtimeが発見、選択、
+起動、invocation policyを所有し、実行主体は対象`SKILL.md`を最後まで読む。新設は現在のタスクに必要で既存Skillへ
+統合できず、目的、出力契約、Ownerが一意な場合だけ行う。独立して完結するSkill workはRuntime標準Subagentへ
+委譲してよいが、SkillごとのAgent定義、Core独自のorchestrator、queue、schedulerは追加しない。並列書込は
+対象が互いに素で`tools/SAFETY.md`のSingle Writer境界に反しない場合だけ許す。
+
 ## 自律実行
 
 通常経路は`Route → Target → Work → Verify`、書込Git rootはsessionごとに1つ。独立して完結するSkill実行は
-Runtime標準のSubagentへ委譲・並列化してよく、委譲基準、境界、Worker往復の最小contextは
-`skills/SKILLS.md#Skill実行の委譲`が所有する。
+上記の境界でRuntime標準のSubagentへ委譲・並列化してよい。
 失敗層を分け、同じfingerprintを状態・入力・経路の差分なしに再試行しない。
 
 ## 責任領域
@@ -72,6 +84,7 @@ Runtime標準のSubagentへ委譲・並列化してよく、委譲基準、境�
 
 ## 詳細正本
 
+- Skill: 本文`## Skill`と対象`.agents/skills/<name>/SKILL.md`
 - Project: `projects/PROJECTS.md`、`projects/LIFECYCLE.md`
 - Tool: `tools/TOOLS.md`
 - Safety: `tools/SAFETY.md`

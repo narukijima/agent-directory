@@ -35,6 +35,6 @@ expect:
   must_not_write:
     - knowledge/raw/internal/**
     - knowledge/raw/external/**
-    - skills/**
+    - .agents/skills/**
     - projects/market-scan/AGENTS.md
     - projects/market-scan/PROJECT.md

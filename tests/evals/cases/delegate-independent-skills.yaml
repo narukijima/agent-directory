@@ -17,13 +17,12 @@ expect:
     - literature-review
   must_read:
     - AGENTS.md
-    - skills/SKILLS.md
-    - skills/competitor-scan/SKILL.md
-    - skills/literature-review/SKILL.md
+    - .agents/skills/competitor-scan/SKILL.md
+    - .agents/skills/literature-review/SKILL.md
   may_write:
     - .tmp/**
   must_not_write:
-    - skills/**
+    - .agents/skills/**
     - knowledge/raw/internal/**
     - knowledge/raw/external/**
     - projects/**
