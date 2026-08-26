@@ -205,9 +205,10 @@ Coreが持つのは、Git ownership、repositoryとrevisionによる再現性、
 ## Version
 
 contract versionは`bash tools/validate-agent-directory.sh --version`が返す（現在は`2.0.0`）。
-[1.xからの移行](docs/migrations/2.0.0.md)では、Skill正本を`.agents/skills/`へ一度だけ移す。
+1.xから2.0では、Skill正本を`skills/<name>/`から`.agents/skills/<name>/`へ一度だけ移し、外部Skillは
+root `skills-lock.json`で管理する。ホームの`~/.agents/.skill-lock.json`はWorkspaceへ移さない。
 採用versionはGit tag（`v<version>`）で固定する。schemaとvalidator契約のbreaking changeではversionを上げ、
-そのときだけ移行手順を`docs`として添える。自動migrationや更新managerは持たない。
+移行要点をこの節へ統合する。自動migrationや更新managerは持たない。
 
 ## 正本
 

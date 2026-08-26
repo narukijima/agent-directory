@@ -991,6 +991,9 @@ for path in "${required_files[@]}"; do
   require_file "$path"
 done
 
+[[ ! -d "$repo_root/docs" ]] || \
+  fail 'root docs/ has no Canonical Owner; Project documents belong under projects/<name>/docs/'
+
 expected_tools="$(cat <<'TOOLS'
 tools/SAFETY.md
 tools/TOOLS.md
